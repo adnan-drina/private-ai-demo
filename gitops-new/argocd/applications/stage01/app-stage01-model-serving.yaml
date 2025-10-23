@@ -38,6 +38,7 @@ spec:
       - CreateNamespace=true
       - PruneLast=true
       - RespectIgnoreDifferences=true
+      - Replace=true  # Delete and recreate resources when patching fails (immutable fields)
       # ServerSideApply removed - causes managedFields conflicts for better handling of existing resources
     
     retry:

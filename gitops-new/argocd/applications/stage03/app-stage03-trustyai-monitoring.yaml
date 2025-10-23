@@ -23,6 +23,7 @@ spec:
       - CreateNamespace=true
       - PruneLast=true
       - RespectIgnoreDifferences=true
+      - Replace=true  # Delete and recreate resources when patching fails (immutable fields)
       - ApplyOutOfSyncOnly=true
       # ServerSideApply removed - causes managedFields conflicts
     retry:
