@@ -1,0 +1,107 @@
+---
+apiVersion: llamastack.io/v1alpha1
+kind: LlamaStackDistribution
+metadata:
+  name: llama-stack
+  namespace: private-ai-demo
+  labels:
+    app: llama-stack
+    app.kubernetes.io/name: llama-stack
+    app.kubernetes.io/component: orchestration
+    app.kubernetes.io/part-of: llama-stack
+    app.openshift.io/runtime: python
+    component: rag
+  annotations:
+    # OpenShift topology: Show connections to models, MCP servers, and Milvus
+    app.openshift.io/connects-to: '[{"apiVersion":"apps/v1","kind":"Deployment","name":"database-mcp"},{"apiVersion":"apps/v1","kind":"Deployment","name":"slack-mcp"},{"apiVersion":"apps/v1","kind":"Deployment","name":"milvus-standalone"}]'
+    openshift.io/display-name: "Llama Stack Orchestrator"
+    description: "Central orchestrator for agents, inference, RAG, and tool runtime"
+spec:
+  replicas: 1
+  
+  server:
+    # Use Red Hat's official Llama Stack image
+    distribution:
+      image: "quay.io/redhat-et/llama:vllm-0.2.7"
+    
+    containerSpec:
+      name: llamastack
+      port: 8321
+      
+      env:
+        # Configuration file path
+        - name: LLAMA_STACK_CONFIG
+          value: "/config/run.yaml"
+        
+        # Data persistence paths
+        - name: SQLITE_STORE_DIR
+          value: "/data"
+        - name: SQLITE_DB_PATH
+          value: "/data/metadata.db"
+        
+        # vLLM Model Endpoints (dynamically injected by deploy.sh)
+        - name: MISTRAL_QUANTIZED_URL
+          value: "${MISTRAL_QUANTIZED_URL}"
+        - name: MISTRAL_FULL_URL
+          value: "${MISTRAL_FULL_URL}"
+        - name: VLLM_API_TOKEN
+          value: "fake"
+        
+        # Milvus connection (from ai-infrastructure)
+        - name: MILVUS_HOST
+          value: "milvus-standalone.ai-infrastructure.svc.cluster.local"
+        - name: MILVUS_PORT
+          value: "19530"
+        
+        # Logging
+        - name: LLAMA_STACK_LOGGING
+          value: "all=info"
+        
+        # OpenTelemetry Configuration (Observability)
+        - name: OTEL_SERVICE_NAME
+          value: "llama-stack"
+        - name: OTEL_SERVICE_NAMESPACE
+          value: "private-ai-demo"
+        - name: OTEL_TRACES_EXPORTER
+          value: "console"  # Change to "otlp" when Tempo is deployed
+        - name: OTEL_METRICS_EXPORTER
+          value: "prometheus"
+        - name: OTEL_PYTHON_LOG_CORRELATION
+          value: "true"
+        - name: OTEL_PROPAGATORS
+          value: "tracecontext,baggage"
+        # Tempo endpoint (uncomment when Tempo is deployed)
+        # - name: OTEL_EXPORTER_OTLP_ENDPOINT
+        #   value: "http://tempo-distributor.openshift-distributed-tracing.svc:4317"
+      
+      # Command-line arguments
+      args:
+        - "--yaml-config"
+        - "/config/run.yaml"
+      
+      resources:
+        requests:
+          memory: "2Gi"
+          cpu: "1"
+        limits:
+          memory: "4Gi"
+          cpu: "2"
+    
+    # Pod-level overrides for volumes
+    podOverrides:
+      serviceAccountName: rag-workload-sa
+      
+      volumes:
+        - name: config
+          configMap:
+            name: llamastack-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: llamastack-data
+      
+      volumeMounts:
+        - name: config
+          mountPath: /config
+          readOnly: true
+        - name: data
+          mountPath: /data

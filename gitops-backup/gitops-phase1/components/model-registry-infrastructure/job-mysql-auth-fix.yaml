@@ -1,0 +1,69 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mysql-auth-fix
+  namespace: rhoai-model-registries
+  labels:
+    app: mysql-auth-fix
+    component: database-setup
+  annotations:
+    description: "One-time job to configure MySQL authentication for MLMD compatibility"
+spec:
+  backoffLimit: 5
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: mysql-client
+        image: docker.io/mysql:8.0
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -e
+          echo "════════════════════════════════════════════════════════"
+          echo "MySQL Authentication Fix for MLMD Compatibility"
+          echo "════════════════════════════════════════════════════════"
+          echo ""
+          echo "Waiting for MySQL to be ready..."
+          until mysql -h mysql.rhoai-model-registries.svc.cluster.local -u root -p${MYSQL_ROOT_PASSWORD} -e "SELECT 1" > /dev/null 2>&1; do
+            echo "  MySQL not ready, waiting... ($(date))"
+            sleep 3
+          done
+          
+          echo ""
+          echo "✅ MySQL is ready!"
+          echo ""
+          echo "Configuring mysql_native_password authentication..."
+          mysql -h mysql.rhoai-model-registries.svc.cluster.local -u root -p${MYSQL_ROOT_PASSWORD} <<EOF
+          -- User is already created by MySQL env vars, just fix authentication method
+          ALTER USER 'mlops'@'%' IDENTIFIED WITH mysql_native_password BY '${MYSQL_PASSWORD}';
+          FLUSH PRIVILEGES;
+          
+          -- Verify authentication method
+          SELECT user, host, plugin FROM mysql.user WHERE user='mlops';
+          EOF
+          
+          echo ""
+          echo "✅ Authentication method updated successfully!"
+          echo ""
+          echo "Verification:"
+          mysql -h mysql.rhoai-model-registries.svc.cluster.local -u mlops -p${MYSQL_PASSWORD} -e "SELECT 'Connection successful!' as Status, DATABASE() as CurrentDB;"
+          
+          echo ""
+          echo "════════════════════════════════════════════════════════"
+          echo "MySQL is now ready for Model Registry!"
+          echo "════════════════════════════════════════════════════════"
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-credentials
+              key: root-password
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-credentials
+              key: password
+

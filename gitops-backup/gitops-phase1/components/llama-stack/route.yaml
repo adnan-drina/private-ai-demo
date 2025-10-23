@@ -1,0 +1,18 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: llamastack
+  namespace: private-ai-demo
+  labels:
+    app: llama-stack
+    component: rag
+spec:
+  to:
+    kind: Service
+    name: llamastack
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+

@@ -1,0 +1,28 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-from-private-ai-demo
+  namespace: rhoai-model-registries
+  labels:
+    app: model-registry
+    component: networking
+spec:
+  podSelector:
+    matchLabels:
+      app: private-ai-model-registry
+  policyTypes:
+  - Ingress
+  ingress:
+  # Allow traffic from private-ai-demo namespace (for registration jobs)
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: private-ai-demo
+    ports:
+    - protocol: TCP
+      port: 8080  # REST API
+    - protocol: TCP
+      port: 9090  # gRPC API
+
+

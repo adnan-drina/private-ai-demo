@@ -1,0 +1,56 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+metadata:
+  name: trustyai-llama-stack-provider
+  annotations:
+    config.kubernetes.io/local-config: "true"
+
+resources:
+  - serviceaccount.yaml
+  - role.yaml
+  - rolebinding.yaml
+  - deployment.yaml
+  - service.yaml
+
+# TrustyAI LM-Eval Provider for Llama Stack
+# 
+# Purpose:
+#   Integrate TrustyAI LM-Eval as an evaluation provider in Llama Stack,
+#   enabling unified API access for inference, RAG, agents, and evaluation.
+#
+# Architecture:
+#   User → Llama Stack → TrustyAI Provider → TrustyAI Operator → LMEvalJob
+#
+# Benefits:
+#   - Unified API for all AI operations
+#   - Programmatic evaluation triggering
+#   - Consistent configuration management
+#   - Red Hat-aligned implementation
+#
+# Dependencies:
+#   - TrustyAI Operator (must be enabled in DataScienceCluster)
+#   - Llama Stack (gitops/components/llama-stack)
+#   - vLLM models from Stage 1 (inference endpoints)
+#   - HuggingFace token secret (huggingface-token)
+#
+# Configuration:
+#   After deploying this component, update Llama Stack's configmap.yaml:
+#   1. Add 'eval' to apis list
+#   2. Add trustyai-lmeval provider configuration
+#   3. Restart Llama Stack deployment
+#
+# Usage:
+#   from llama_stack_client import LlamaStackClient
+#   
+#   client = LlamaStackClient(base_url="http://llama-stack:8321")
+#   result = client.eval.evaluate(
+#       task_config={"type": "benchmark", "benchmarks": ["arc_easy"]},
+#       model="mistral-24b-quantized"
+#   )
+#
+# References:
+#   - https://github.com/trustyai-explainability/llama-stack-provider-lmeval
+#   - /docs/TRUSTYAI-NEXT-PHASE-PLAN.md (Phase 2)
+#   - /gitops/components/trustyai-llama-stack-provider/README.md
+

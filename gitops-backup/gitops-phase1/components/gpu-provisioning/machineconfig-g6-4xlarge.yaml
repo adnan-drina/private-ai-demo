@@ -1,0 +1,91 @@
+---
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  name: 99-worker-gpu-g6-4xlarge
+  labels:
+    machineconfiguration.openshift.io/role: worker-gpu
+    gpu.openshift.io/instance-type: g6-4xlarge
+spec:
+  config:
+    ignition:
+      version: 3.2.0
+    storage:
+      files:
+        # Instance-specific GPU configuration for g6.4xlarge
+        - path: /etc/gpu-instance-config.yaml
+          mode: 0644
+          overwrite: true
+          contents:
+            inline: |
+              # g6.4xlarge GPU Configuration
+              # Instance: g6.4xlarge
+              # GPUs: 1x NVIDIA L4 (24GB)
+              # vCPUs: 16
+              # Memory: 64 GB
+              # Storage: NVMe SSD
+              # Network: Up to 25 Gbps
+              
+              instance_type: g6.4xlarge
+              gpu_count: 1
+              gpu_model: NVIDIA-L4
+              gpu_memory_per_device: 24576  # MB
+              total_gpu_memory: 24576  # MB
+              
+              # Optimal settings for single GPU
+              nvidia_driver_settings:
+                persistence_mode: 1
+                compute_mode: 0  # Default (multiple contexts)
+                power_limit: 72  # Watts (L4 TDP)
+              
+              # CRI-O configuration for GPU
+              crio_settings:
+                max_container_log_size: 10Mi
+                pids_limit: 4096
+              
+              # Resource allocation recommendations
+              recommended_limits:
+                # For vLLM workloads
+                vllm:
+                  gpu: "1"
+                  memory: "24Gi"
+                  cpu: "8"
+                  gpu_memory_utilization: "0.90"
+                  max_model_len: 32768
+              
+              # Monitoring and logging
+              monitoring:
+                dcgm_exporter: true
+                nvidia_smi_interval: 60s
+                log_level: info
+        
+        # Tuning parameters specific to single-GPU workloads
+        - path: /etc/sysctl.d/99-g6-4xlarge-gpu.conf
+          mode: 0644
+          overwrite: true
+          contents:
+            inline: |
+              # g6.4xlarge Specific Tuning
+              # Optimized for single-GPU inference workloads
+              
+              # CPU scheduling for GPU workloads
+              kernel.sched_rt_runtime_us = -1
+              
+              # Memory settings for 64GB RAM
+              vm.dirty_ratio = 10
+              vm.dirty_background_ratio = 5
+              
+              # File descriptor limits for inference serving
+              fs.file-max = 524288
+        
+        # SystemD drop-in for kubelet with GPU-specific settings
+        - path: /etc/systemd/system/kubelet.service.d/20-gpu-g6-4xlarge.conf
+          mode: 0644
+          overwrite: true
+          contents:
+            inline: |
+              [Service]
+              Environment="KUBELET_GPU_ARGS=--feature-gates=DevicePlugins=true"
+              Environment="NVIDIA_VISIBLE_DEVICES=all"
+              Environment="NVIDIA_DRIVER_CAPABILITIES=compute,utility,video"
+

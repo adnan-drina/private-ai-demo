@@ -1,0 +1,86 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: download-mistral-24b
+  namespace: private-ai-demo
+  labels:
+    app: model-downloader
+    model: mistral-24b
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: downloader
+        image: python:3.11-slim
+        resources:
+          requests:
+            memory: "8Gi"
+            cpu: "2"
+          limits:
+            memory: "12Gi"
+            cpu: "4"
+        env:
+        - name: HOME
+          value: /models/.local
+        - name: HF_HOME
+          value: /models/mistral-24b/.cache/huggingface
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: huggingface-token
+              key: HF_TOKEN
+        - name: MODEL_ID
+          value: "mistralai/Mistral-Small-24B-Instruct-2501"
+        - name: TARGET_DIR
+          value: "/models/mistral-24b"
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        command:
+          - python3
+          - -u
+          - -c
+          - |
+            import os
+            import time
+            
+            print(f"[{time.strftime('%H:%M:%S')}] 🚀 Downloading Mistral 24B Full Model", flush=True)
+            print(f"[{time.strftime('%H:%M:%S')}] Model: {os.environ['MODEL_ID']}", flush=True)
+            print(f"[{time.strftime('%H:%M:%S')}] Size: ~43GB", flush=True)
+            print(f"[{time.strftime('%H:%M:%S')}] Target: {os.environ['TARGET_DIR']}", flush=True)
+            print("", flush=True)
+            
+            print(f"[{time.strftime('%H:%M:%S')}] 📦 Installing huggingface_hub...", flush=True)
+            os.system("pip install huggingface_hub==0.23.0 --user -q")
+            print(f"[{time.strftime('%H:%M:%S')}] ✅ Dependencies installed", flush=True)
+            print("", flush=True)
+            
+            from huggingface_hub import snapshot_download
+            
+            print(f"[{time.strftime('%H:%M:%S')}] 📥 Starting download...", flush=True)
+            
+            try:
+                snapshot_download(
+                    repo_id=os.environ['MODEL_ID'],
+                    local_dir=os.environ['TARGET_DIR'],
+                    token=os.environ['HF_TOKEN'],
+                    resume_download=True,
+                    max_workers=4,
+                    local_dir_use_symlinks=False
+                )
+                print(f"[{time.strftime('%H:%M:%S')}] ✅ Download complete!", flush=True)
+            except Exception as e:
+                print(f"[{time.strftime('%H:%M:%S')}] ❌ Download failed: {e}", flush=True)
+                exit(1)
+            
+            print(f"[{time.strftime('%H:%M:%S')}] 📊 Verifying files:", flush=True)
+            os.system(f"du -sh {os.environ['TARGET_DIR']} && ls -la {os.environ['TARGET_DIR']}")
+            print(f"[{time.strftime('%H:%M:%S')}] 🎉 Model ready!", flush=True)
+        volumeMounts:
+          - name: models
+            mountPath: /models
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: mistral-24b-pvc

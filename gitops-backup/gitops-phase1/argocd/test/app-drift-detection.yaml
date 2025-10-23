@@ -1,0 +1,146 @@
+---
+# ArgoCD Application for Drift Detection
+# Purpose: Monitor current private-ai-demo deployment and identify drift
+# Phase: 1 (Baseline Analysis)
+# Red Hat Best Practice: Use annotation tracking (not label tracking)
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: private-ai-demo-drift-test
+  namespace: openshift-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+  labels:
+    app.kubernetes.io/name: private-ai-demo-drift-test
+    app.kubernetes.io/part-of: private-ai-demo
+    gitops.ownedBy: platform-team
+spec:
+  # Project: Using default for now, will create custom projects in Phase 2
+  project: default
+  
+  # Source: Current GitOps structure (before refactoring)
+  source:
+    repoURL: https://github.com/adnan-drina/private-ai-demo.git
+    targetRevision: gitops-refactoring-clean
+    path: gitops
+    
+    # Kustomize configuration
+    kustomize:
+      # Use annotation tracking (Red Hat best practice)
+      commonAnnotations:
+        argocd.argoproj.io/tracking-id: private-ai-demo-drift-test
+  
+  # Destination: private-ai-demo namespace
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: private-ai-demo
+  
+  # Sync Policy: MANUAL for drift detection
+  # We want to SEE differences, not auto-fix them
+  syncPolicy:
+    # Manual sync - no automation during testing
+    automated: null
+    
+    # Sync options
+    syncOptions:
+      - CreateNamespace=false  # Namespace should already exist
+      - PruneLast=true         # Delete resources last (safety)
+      - RespectIgnoreDifferences=true
+      - ApplyOutOfSyncOnly=true  # Only apply resources that are out of sync
+    
+    # Retry strategy for failed syncs
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  
+  # Ignore differences for known dynamic fields
+  # Red Hat Best Practice: Reduce false positives from operator-managed resources
+  ignoreDifferences:
+    # Ignore HPA-managed replica counts
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas
+    
+    # Ignore StatefulSet replicas (can be managed by operators)
+    - group: apps
+      kind: StatefulSet
+      jsonPointers:
+        - /spec/replicas
+    
+    # Ignore timestamps and resource versions
+    - group: "*"
+      kind: "*"
+      managedFieldsManagers:
+        - kube-controller-manager
+      jsonPointers:
+        - /metadata/resourceVersion
+        - /metadata/generation
+        - /metadata/creationTimestamp
+        - /metadata/managedFields
+    
+    # Ignore Knative revisions (KServe creates these)
+    - group: serving.knative.dev
+      kind: Revision
+      jqPathExpressions:
+        - .metadata.ownerReferences
+    
+    # Ignore KServe InferenceService status (managed by operator)
+    - group: serving.kserve.io
+      kind: InferenceService
+      jsonPointers:
+        - /status
+    
+    # Ignore Service annotations added by operators
+    - group: ""
+      kind: Service
+      jsonPointers:
+        - /metadata/annotations/kubectl.kubernetes.io~1last-applied-configuration
+    
+    # Ignore PVC storage class dynamic provisioning
+    - group: ""
+      kind: PersistentVolumeClaim
+      jsonPointers:
+        - /spec/volumeName
+        - /status
+    
+    # Ignore KServe-managed Routes in istio-system
+    # KServe automatically creates Routes for InferenceServices
+    # These are operator-managed and should not be tracked in GitOps
+    - group: route.openshift.io
+      kind: Route
+      name: mistral-24b-private-ai-demo
+      namespace: istio-system
+      jsonPointers:
+        - /spec
+        - /status
+    
+    - group: route.openshift.io
+      kind: Route
+      name: mistral-24b-quantized-private-ai-demo
+      namespace: istio-system
+      jsonPointers:
+        - /spec
+        - /status
+  
+  # Health assessment configuration
+  info:
+    - name: Description
+      value: |
+        Drift detection for private-ai-demo namespace.
+        This application monitors the current deployment and identifies
+        differences between Git and cluster state.
+    
+    - name: Phase
+      value: "Phase 1: Baseline Analysis"
+    
+    - name: Red Hat Alignment
+      value: "Using annotation tracking (best practice)"
+    
+    - name: Documentation
+      value: "gitops/argocd/test/README.md"
+---
+

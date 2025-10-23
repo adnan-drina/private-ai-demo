@@ -1,0 +1,34 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: private-ai-demo
+
+# Common labels applied to all resources
+commonLabels:
+  app.kubernetes.io/part-of: private-ai-demo
+  stage: "01"
+  managed-by: argocd
+
+# Resources in deployment order
+resources:
+  # 1. Namespace and base infrastructure
+  - base-namespace
+  - base-secrets
+  
+  # 2. vLLM Serving Infrastructure
+  - vllm
+  
+  # 3. Model Loading Jobs
+  - model-loader
+  
+  # 4. Benchmarking Infrastructure
+  - benchmarking
+  
+  # 5. Workbench (Notebooks)
+  - workbench
+
+# Configuration for all resources
+configurations:
+  - kustomizeconfig.yaml
+

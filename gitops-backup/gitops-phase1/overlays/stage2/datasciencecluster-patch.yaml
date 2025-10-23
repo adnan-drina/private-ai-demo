@@ -1,0 +1,12 @@
+---
+# Stage 2: Enable Workbenches (JupyterLab)
+# Note: Model Registry is already enabled from Stage 1
+apiVersion: datasciencecluster.opendatahub.io/v1
+kind: DataScienceCluster
+metadata:
+  name: default-dsc
+spec:
+  components:
+    workbenches:
+      managementState: Managed  # Stage 2: Enable JupyterLab workbenches for RAG demos
+

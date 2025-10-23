@@ -1,0 +1,225 @@
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: docling-process-correct
+  namespace: private-ai-demo
+  labels:
+    app: docling-rag-pipeline
+    component: docling-processing
+spec:
+  description: |
+    Process all PDFs using Docling service (CORRECT API - async with polling).
+    Uses the proper async flow: submit → poll → get result.
+  
+  params:
+    - name: scenario
+      type: string
+      description: "Scenario name"
+    
+    - name: docling-url
+      type: string
+      description: "Docling service URL"
+      default: "http://shared-docling-service.ai-infrastructure.svc:5001"
+  
+  workspaces:
+    - name: documents
+      description: "Workspace with PDFs and output"
+      mountPath: /workspace/documents
+  
+  steps:
+    - name: process-all-pdfs
+      image: python:3.11-slim
+      env:
+        - name: PYTHONUNBUFFERED
+          value: "1"
+      script: |
+        #!/usr/bin/env python3
+        import os
+        import json
+        import time
+        from pathlib import Path
+        
+        # Install required packages
+        import subprocess
+        subprocess.check_call(['pip', 'install', '-q', 'requests'])
+        
+        import requests
+        
+        print("=" * 60)
+        print("  Docling PDF Processing (Correct Async)")
+        print("=" * 60)
+        print()
+        
+        scenario = "$(params.scenario)"
+        docling_url = "$(params.docling-url)"
+        
+        input_dir = Path(f"/workspace/documents/scenario2-{scenario}")
+        output_dir = Path(f"/workspace/documents/processed/scenario2-{scenario}")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        print(f"Scenario: {scenario}")
+        print(f"Docling URL: {docling_url}")
+        print(f"Input: {input_dir}")
+        print(f"Output: {output_dir}")
+        print()
+        
+        # Process all PDFs
+        pdf_files = list(input_dir.glob("*.pdf"))
+        print(f"📁 Found {len(pdf_files)} PDF files")
+        print()
+        
+        total_processed = 0
+        total_failed = 0
+        
+        for pdf_file in pdf_files:
+            basename = pdf_file.stem
+            print(f"📄 Processing: {pdf_file.name}")
+            print(f"   Size: {pdf_file.stat().st_size / (1024*1024):.1f} MB")
+            
+            try:
+                # Step 1: Submit to Docling
+                print(f"   🚀 Submitting to Docling...")
+                
+                with open(pdf_file, 'rb') as f:
+                    files = {'files': (pdf_file.name, f, 'application/pdf')}
+                    response = requests.post(
+                        f"{docling_url}/v1/convert/file",
+                        files=files,
+                        timeout=300  # 5 minutes for large PDFs
+                    )
+                
+                # Extract task ID from response
+                if response.status_code == 200:
+                    # Might return task_id directly
+                    try:
+                        result = response.json()
+                        task_id = result.get('task_id')
+                    except:
+                        # Or might return in headers
+                        task_id = response.headers.get('X-Task-Id')
+                    
+                    if not task_id:
+                        # Try parsing response text
+                        print(f"   Response: {response.text[:200]}")
+                        task_id = None
+                else:
+                    print(f"   ❌ HTTP {response.status_code}: {response.text[:200]}")
+                    total_failed += 1
+                    print()
+                    continue
+                
+                if not task_id:
+                    # If no task_id, it's synchronous - extract from response
+                    try:
+                        result = response.json()
+                        # Try multiple possible locations for markdown
+                        markdown = (
+                            result.get('markdown') or
+                            result.get('content') or
+                            result.get('document', {}).get('md_content') or
+                            result.get('document', {}).get('markdown') or
+                            ''
+                        )
+                        if markdown:
+                            md_file = output_dir / f"{basename}.md"
+                            with open(md_file, 'w') as f:
+                                f.write(markdown)
+                            print(f"   ✅ Saved directly: {md_file.name}")
+                            total_processed += 1
+                        else:
+                            print(f"   ⚠️  No content in direct response")
+                            total_failed += 1
+                    except:
+                        print(f"   ❌ No task_id and cannot parse response")
+                        total_failed += 1
+                    print()
+                    continue
+                
+                print(f"   ✅ Task ID: {task_id}")
+                
+                # Step 2: Poll for completion
+                print(f"   ⏳ Polling for completion...")
+                max_attempts = 60  # 5 minutes
+                completed = False
+                
+                for attempt in range(max_attempts):
+                    time.sleep(5)
+                    
+                    status_response = requests.get(
+                        f"{docling_url}/v1/status/poll/{task_id}",
+                        timeout=10
+                    )
+                    
+                    if status_response.status_code == 200:
+                        status = status_response.json()
+                        state = status.get('status', status.get('state', 'unknown'))
+                        
+                        if state in ['completed', 'success', 'done']:
+                            completed = True
+                            print(f"   ✅ Processing complete!")
+                            break
+                        elif state in ['failed', 'error']:
+                            print(f"   ❌ Processing failed: {status}")
+                            break
+                        else:
+                            if attempt % 6 == 0:
+                                print(f"   ⏳ Status: {state} (attempt {attempt+1}/{max_attempts})")
+                    else:
+                        if attempt % 6 == 0:
+                            print(f"   ⏳ Waiting... (attempt {attempt+1}/{max_attempts})")
+                
+                if not completed:
+                    print(f"   ❌ Timeout or failed")
+                    total_failed += 1
+                    print()
+                    continue
+                
+                # Step 3: Get result
+                print(f"   📥 Fetching result...")
+                result_response = requests.get(
+                    f"{docling_url}/v1/result/{task_id}",
+                    timeout=30
+                )
+                
+                if result_response.status_code == 200:
+                    result = result_response.json()
+                    markdown = result.get('markdown', result.get('content', ''))
+                    
+                    if markdown:
+                        md_file = output_dir / f"{basename}.md"
+                        with open(md_file, 'w') as f:
+                            f.write(markdown)
+                        
+                        response_file = output_dir / f"{basename}-response.json"
+                        with open(response_file, 'w') as f:
+                            json.dump(result, f, indent=2)
+                        
+                        print(f"   ✅ Saved: {md_file.name} ({len(markdown)} chars)")
+                        total_processed += 1
+                    else:
+                        print(f"   ⚠️  No content in result")
+                        print(f"   Keys: {list(result.keys())}")
+                        total_failed += 1
+                else:
+                    print(f"   ❌ Failed to get result: {result_response.status_code}")
+                    total_failed += 1
+                    
+            except Exception as e:
+                print(f"   ❌ Error: {e}")
+                total_failed += 1
+            
+            print()
+        
+        print(f"✅ Processing complete!")
+        print(f"   Processed: {total_processed}")
+        print(f"   Failed: {total_failed}")
+        
+        # Write result
+        with open("$(results.count.path)", 'w') as f:
+            f.write(str(total_processed))
+  
+  results:
+    - name: count
+      description: "Number of documents processed"
+

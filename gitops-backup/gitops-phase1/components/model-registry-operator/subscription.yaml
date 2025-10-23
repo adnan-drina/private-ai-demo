@@ -1,0 +1,15 @@
+---
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: model-registry-operator
+  namespace: openshift-operators
+  labels:
+    app: model-registry-operator
+spec:
+  channel: fast
+  name: model-registry-operator
+  source: community-operators
+  sourceNamespace: openshift-marketplace
+  installPlanApproval: Automatic
+

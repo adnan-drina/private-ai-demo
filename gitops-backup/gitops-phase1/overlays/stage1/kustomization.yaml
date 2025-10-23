@@ -1,0 +1,31 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: stage1-sovereign-ai
+  annotations:
+    description: "Stage 1: Sovereign AI - Efficient inference with vLLM and Model Registry"
+
+# Base resources
+resources:
+  # Platform
+  - ../../base/platform
+  - ../../base/namespace
+  - ../../base/vllm
+
+# Kustomize Components (composable)
+components:
+  # Stage 1 components
+  - ../../components/gpu-provisioning
+  - ../../components/model-registry-infrastructure
+  - ../../components/model-loader
+  - ../../components/benchmarking
+  - ../../components/rbac
+
+# Stage 1 patches - Enable Model Registry in DSC
+patches:
+  - path: datasciencecluster-patch.yaml
+    target:
+      kind: DataScienceCluster
+      name: default-dsc
+

@@ -1,0 +1,86 @@
+---
+# AppProject for Stage 01: Model Serving
+# Purpose: Isolate Stage 01 resources and define RBAC
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: stage01-model-serving
+  namespace: openshift-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"  # Create projects before apps
+  labels:
+    stage: "01"
+    component: model-serving
+spec:
+  description: "Stage 01: Model Serving with vLLM (Quantized & Full Precision Models)"
+  
+  # Source repositories allowed for this project
+  sourceRepos:
+    - 'https://github.com/adnan-drina/private-ai-demo.git'
+    - '*'  # Allow any repo (can be restricted in production)
+  
+  # Destinations where apps can be deployed
+  destinations:
+    - namespace: private-ai-demo
+      server: https://kubernetes.default.svc
+    - namespace: model-registry
+      server: https://kubernetes.default.svc
+  
+  # Cluster-scoped resources allowed
+  clusterResourceWhitelist:
+    - group: ''
+      kind: Namespace
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRole
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRoleBinding
+    - group: machine.openshift.io
+      kind: MachineSet
+    - group: machineconfiguration.openshift.io
+      kind: MachineConfig
+  
+  # Namespace-scoped resources allowed
+  namespaceResourceWhitelist:
+    - group: ''
+      kind: ConfigMap
+    - group: ''
+      kind: Secret
+    - group: ''
+      kind: Service
+    - group: ''
+      kind: ServiceAccount
+    - group: ''
+      kind: PersistentVolumeClaim
+    - group: ''
+      kind: LimitRange
+    - group: ''
+      kind: ResourceQuota
+    - group: apps
+      kind: Deployment
+    - group: batch
+      kind: Job
+    - group: serving.kserve.io
+      kind: InferenceService
+    - group: serving.kserve.io
+      kind: ServingRuntime
+    - group: rbac.authorization.k8s.io
+      kind: Role
+    - group: rbac.authorization.k8s.io
+      kind: RoleBinding
+    - group: kubeflow.org
+      kind: Notebook
+    - group: route.openshift.io
+      kind: Route
+  
+  # Orphaned resources policy
+  orphanedResources:
+    warn: true
+  
+  # Sync windows (optional - can restrict sync times)
+  # syncWindows:
+  #   - kind: allow
+  #     schedule: '* * * * *'
+  #     duration: 24h
+  #     applications:
+  #       - '*'
+

@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: benchmark-quantized-results
+  namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/name: benchmark-storage
+    app.kubernetes.io/component: benchmarking
+    app.kubernetes.io/part-of: benchmark-testing
+  annotations:
+    description: "Persistent storage for quantized model benchmark results"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  volumeMode: Filesystem
+

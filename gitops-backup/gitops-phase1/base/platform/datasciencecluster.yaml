@@ -1,0 +1,41 @@
+---
+# Base DataScienceCluster configuration
+# This is the foundation that all stages build upon
+apiVersion: datasciencecluster.opendatahub.io/v1
+kind: DataScienceCluster
+metadata:
+  name: default-dsc
+  labels:
+    app.kubernetes.io/name: datasciencecluster
+    app.kubernetes.io/part-of: private-ai-demo
+spec:
+  components:
+    # Core component - always enabled
+    dashboard:
+      managementState: Managed
+    
+    # All other components start as Removed
+    # Each stage will enable what it needs via patches
+    codeflare:
+      managementState: Removed
+    datasciencepipelines:
+      managementState: Removed
+    kserve:
+      managementState: Managed  # Required for vLLM InferenceServices
+    kueue:
+      managementState: Removed
+    modelmeshserving:
+      managementState: Removed
+    ray:
+      managementState: Removed
+    trainingoperator:
+      managementState: Removed
+    trustyai:
+      managementState: Removed
+    workbenches:
+      managementState: Removed
+    
+    # Stage-specific components (enabled via overlays)
+    modelregistry:
+      managementState: Removed  # Enabled in Stage 1
+

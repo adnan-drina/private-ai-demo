@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: redhat-ai-base
+
+# Base resources - essential for any deployment
+resources:
+  - namespace
+  - vllm
+
+# Common labels applied to all resources
+commonLabels:
+  app.kubernetes.io/part-of: redhat-ai-demo
+  app.kubernetes.io/managed-by: kustomize
+
+# Common annotations
+commonAnnotations:
+  documentation: "https://github.com/your-org/vllm-demo"
+

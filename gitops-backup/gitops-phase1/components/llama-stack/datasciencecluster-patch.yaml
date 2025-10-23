@@ -1,0 +1,18 @@
+# Llama Stack Operator Activation via DataScienceCluster Patch
+#
+# This is the official Red Hat method for activating the Llama Stack Operator
+# as documented in:
+# https://docs.redhat.com/en/documentation/red_hat_openshift_ai_cloud_service/1/html/working_with_rag/deploying-a-rag-stack-in-a-data-science-project_rag#activating-the-llama-stack-operator_deploying-a-rag-stack
+#
+# Apply this patch using:
+#   oc patch datasciencecluster default-dsc --type=merge --patch-file datasciencecluster-patch.yaml
+#
+# Or use the one-liner:
+#   oc patch datasciencecluster default-dsc --type=merge \
+#     -p '{"spec":{"components":{"llamastackoperator":{"managementState":"Managed"}}}}'
+
+spec:
+  components:
+    llamastackoperator:
+      managementState: Managed
+
