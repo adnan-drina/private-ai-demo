@@ -106,6 +106,17 @@ spec:
       jsonPointers:
         - /spec/volumeName
         - /status
+    
+    # Ignore KServe-managed Routes in istio-system
+    # KServe automatically creates Routes for InferenceServices
+    # These are operator-managed and should not be tracked in GitOps
+    - group: route.openshift.io
+      kind: Route
+      namespace: istio-system
+      jsonPointers:
+        - /spec/host
+        - /spec/to/name
+        - /status
   
   # Health assessment configuration
   info:
