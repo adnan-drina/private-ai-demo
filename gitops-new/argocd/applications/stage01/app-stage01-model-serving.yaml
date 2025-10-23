@@ -38,7 +38,7 @@ spec:
       - CreateNamespace=true
       - PruneLast=true
       - RespectIgnoreDifferences=true
-      - ApplyOutOfSyncOnly=true
+      - ServerSideApply=true  # Use server-side apply for better handling of existing resources
     
     retry:
       limit: 3
