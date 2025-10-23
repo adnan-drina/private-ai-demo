@@ -112,10 +112,18 @@ spec:
     # These are operator-managed and should not be tracked in GitOps
     - group: route.openshift.io
       kind: Route
+      name: mistral-24b-private-ai-demo
       namespace: istio-system
       jsonPointers:
-        - /spec/host
-        - /spec/to/name
+        - /spec
+        - /status
+    
+    - group: route.openshift.io
+      kind: Route
+      name: mistral-24b-quantized-private-ai-demo
+      namespace: istio-system
+      jsonPointers:
+        - /spec
         - /status
   
   # Health assessment configuration
