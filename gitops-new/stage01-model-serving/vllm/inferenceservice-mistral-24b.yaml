@@ -50,6 +50,7 @@ spec:
       - --enable-chunked-prefill
       - --enable-prefix-caching
       - --trust-remote-code
+      - --disable-custom-all-reduce  # Required for PCIe-only multi-GPU (>2)
     # Node placement for g6.12xlarge (4 GPU node)
     nodeSelector:
       node.kubernetes.io/instance-type: g6.12xlarge
