@@ -21,7 +21,7 @@ spec:
   # Source: Current GitOps structure (before refactoring)
   source:
     repoURL: https://github.com/adnan-drina/private-ai-demo.git
-    targetRevision: gitops-refactoring
+    targetRevision: gitops-refactoring-clean
     path: gitops
     
     # Kustomize configuration
