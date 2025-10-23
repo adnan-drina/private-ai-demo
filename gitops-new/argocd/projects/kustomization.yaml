@@ -4,8 +4,7 @@ kind: Kustomization
 
 resources:
   - appproject-stage01.yaml
-  # Future stages will be added here:
-  # - appproject-stage02.yaml
-  # - appproject-stage03.yaml
-  # - appproject-stage04.yaml
+  - appproject-stage02.yaml
+  - appproject-stage03.yaml
+  - appproject-stage04.yaml
 

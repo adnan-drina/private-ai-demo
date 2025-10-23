@@ -1,0 +1,29 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: stage02-rag-llama-stack
+  namespace: openshift-gitops
+spec:
+  description: Stage 02 - Model Alignment with RAG + Llama Stack
+  sourceRepos:
+    - '*' # Allow all repos, refine later for production
+  destinations:
+    - namespace: private-ai-demo
+      server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+    - group: ''
+      kind: Namespace
+    - group: ''
+      kind: PersistentVolumeClaim
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'
+  roles:
+    - name: stage02-admin
+      description: Admin access to Stage 02 resources
+      policies:
+        - p, proj:stage02-rag-llama-stack:stage02-admin, applications, *, stage02-rag-llama-stack/*, allow
+      groups:
+        - stage02-admins # Placeholder for RBAC groups
+

@@ -7,29 +7,25 @@ namespace: private-ai-demo
 # Common labels applied to all resources
 commonLabels:
   app.kubernetes.io/part-of: private-ai-demo
-  stage: "01"
+  stage: "02"
   managed-by: argocd
 
 # Resources in deployment order
 resources:
-  # 1. Namespace and base infrastructure
-  - base-namespace
-  - base-secrets
+  # 1. Llama Stack distribution
+  - llama-stack
   
-  # 2. MinIO (Object storage for models and artifacts)
-  - minio
+  # 2. Milvus vector database
+  - milvus
   
-  # 3. vLLM Serving Infrastructure
-  - vllm
+  # 3. Docling operator (for PDF processing)
+  - docling
   
-  # 4. Model Loading Jobs
-  - model-loader
+  # 4. Document ingestion pipelines
+  - pipelines
   
-  # 5. Benchmarking Infrastructure
-  - benchmarking
-  
-  # 6. Workbench (Notebooks)
-  - workbench
+  # 5. RAG demonstration notebooks
+  - notebooks
 
 # Configuration for all resources
 configurations:

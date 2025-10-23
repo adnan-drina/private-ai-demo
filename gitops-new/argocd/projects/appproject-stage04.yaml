@@ -1,0 +1,29 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: stage04-mcp-integration
+  namespace: openshift-gitops
+spec:
+  description: Stage 04 - Model Integration with MCP + Agentic AI
+  sourceRepos:
+    - '*' # Allow all repos, refine later for production
+  destinations:
+    - namespace: private-ai-demo
+      server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+    - group: ''
+      kind: Namespace
+    - group: ''
+      kind: PersistentVolumeClaim
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'
+  roles:
+    - name: stage04-admin
+      description: Admin access to Stage 04 resources
+      policies:
+        - p, proj:stage04-mcp-integration:stage04-admin, applications, *, stage04-mcp-integration/*, allow
+      groups:
+        - stage04-admins # Placeholder for RBAC groups
+

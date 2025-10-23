@@ -1,0 +1,26 @@
+---
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  name: rag-ingestion-eu-ai-act-simple
+  namespace: private-ai-demo
+  labels:
+    app: docling-rag-pipeline
+    scenario: eu-ai-act
+spec:
+  pipelineRef:
+    name: rag-document-ingestion-simple
+  
+  params:
+    - name: scenario
+      value: "eu-ai-act"
+  
+  workspaces:
+    - name: documents-pvc
+      persistentVolumeClaim:
+        claimName: rag-documents-pvc
+  
+  timeouts:
+    pipeline: "1h"
+
+

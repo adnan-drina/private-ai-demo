@@ -1,0 +1,31 @@
+---
+# Kustomize configuration for label propagation
+nameReference:
+- kind: ConfigMap
+  version: v1
+  fieldSpecs:
+  - path: spec/volumes/configMap/name
+    kind: Pod
+  - path: spec/containers/envFrom/configMapRef/name
+    kind: Pod
+
+- kind: Secret
+  version: v1
+  fieldSpecs:
+  - path: spec/volumes/secret/secretName
+    kind: Pod
+  - path: spec/containers/envFrom/secretRef/name
+    kind: Pod
+
+- kind: Service
+  version: v1
+  fieldSpecs:
+  - path: spec/serviceName
+    kind: StatefulSet
+
+- kind: ServiceAccount
+  version: v1
+  fieldSpecs:
+  - path: spec/serviceAccountName
+    kind: Pod
+

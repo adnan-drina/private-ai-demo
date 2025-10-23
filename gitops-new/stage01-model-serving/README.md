@@ -23,7 +23,18 @@ Stage 01 provides the foundation for serving large language models with high per
 - **Resource Quotas**: GPU limits and resource management
 - **RBAC**: Service accounts and role bindings
 
-### 2. vLLM Serving
+### 2. MinIO Object Storage
+- **MinIO Server**: S3-compatible storage for models and artifacts
+- **PVC**: Persistent storage for MinIO data (10Gi)
+- **Route**: External access to MinIO console
+- **Use Cases**:
+  - Store downloaded model weights as backup
+  - Archive benchmark test results from GuideLLM
+  - Store evaluation results from TrustyAI
+  - Persist training artifacts and checkpoints
+  - S3-compatible API for integration with ML tools
+
+### 3. vLLM Serving
 - **ServingRuntime**: vLLM CUDA runtime configuration
 - **InferenceServices**: KServe resources for model endpoints
 - **PVCs**: Persistent storage for downloaded models

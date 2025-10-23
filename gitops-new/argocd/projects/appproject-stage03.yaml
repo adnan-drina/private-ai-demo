@@ -1,0 +1,33 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: stage03-trustyai-monitoring
+  namespace: openshift-gitops
+spec:
+  description: Stage 03 - Model Monitoring with TrustyAI + Observability
+  sourceRepos:
+    - '*' # Allow all repos, refine later for production
+  destinations:
+    - namespace: private-ai-demo
+      server: https://kubernetes.default.svc
+    - namespace: grafana-operator-system
+      server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+    - group: ''
+      kind: Namespace
+    - group: 'operators.coreos.com'
+      kind: Subscription
+    - group: 'operators.coreos.com'
+      kind: OperatorGroup
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'
+  roles:
+    - name: stage03-admin
+      description: Admin access to Stage 03 resources
+      policies:
+        - p, proj:stage03-trustyai-monitoring:stage03-admin, applications, *, stage03-trustyai-monitoring/*, allow
+      groups:
+        - stage03-admins # Placeholder for RBAC groups
+

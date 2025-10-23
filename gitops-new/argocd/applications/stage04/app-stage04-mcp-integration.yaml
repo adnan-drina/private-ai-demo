@@ -1,0 +1,66 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: stage04-mcp-integration
+  namespace: openshift-gitops
+  annotations:
+    argocd.argoproj.io/tracking-method: Annotation
+spec:
+  project: stage04-mcp-integration # Use the dedicated AppProject
+  source:
+    repoURL: https://github.com/adnan-drina/private-ai-demo.git # Will be updated dynamically
+    targetRevision: feature/gitops-phase2-refactoring # Current branch
+    path: gitops-new/stage04-mcp-integration # Path to Stage 04 manifests
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: private-ai-demo # Target namespace for deployment
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: false
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+      - RespectIgnoreDifferences=true
+      - ApplyOutOfSyncOnly=true
+      - ServerSideApply=true  # Use server-side apply
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  ignoreDifferences:
+    # Ignore HPA-managed replica counts
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas
+    
+    # Ignore PVC dynamic provisioning
+    - group: ""
+      kind: PersistentVolumeClaim
+      jsonPointers:
+        - /spec/volumeName
+        - /spec/volumeMode
+        - /status
+    
+    # Ignore managed fields metadata
+    - group: "*"
+      kind: "*"
+      jsonPointers:
+        - /metadata/managedFields
+        - /metadata/resourceVersion
+        - /metadata/generation
+  
+  info:
+    - name: Description
+      value: |
+        Stage 04: Model Integration with MCP + Agentic AI
+        - PostgreSQL database for equipment metadata
+        - MCP Database server for equipment queries
+        - MCP Slack server for notifications
+        - ACME Agent (Quarkus) for orchestration
+        - Integration demo notebook
+

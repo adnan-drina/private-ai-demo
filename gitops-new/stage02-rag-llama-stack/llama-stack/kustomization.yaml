@@ -1,0 +1,48 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: llama-stack
+  annotations:
+    config.kubernetes.io/local-config: "true"
+
+# NOTE: LlamaStack Operator Activation
+# The operator must be activated via DataScienceCluster patch.
+# This is handled by the deploy script using:
+#   oc patch datasciencecluster default-dsc --type merge \
+#     --patch '{"spec":{"components":{"llamastack":{"managementState":"Managed"}}}}'
+# 
+# See: datasciencecluster-patch.yaml for reference
+# This is a ONE-TIME cluster-level operation, not a component deployment.
+
+resources:
+  - serviceaccount.yaml  # RBAC for Llama Stack pods
+  - configmap.yaml
+  - pvc.yaml
+  - llamastack-distribution.yaml
+  - service.yaml
+  - route.yaml
+  - servicemonitor.yaml  # Prometheus metrics collection
+
+# Llama Stack Component for RAG
+# Official Red Hat OpenShift AI RAG runtime
+#
+# Features:
+#   - Integration with existing Mistral vLLM model from Stage 1
+#   - Milvus vector database connection
+#   - Sentence-transformers embeddings
+#   - Unified RAG API
+#
+# Reference:
+#   https://docs.redhat.com/en/documentation/red_hat_openshift_ai_cloud_service/1/html/working_with_rag
+#
+# Important Notes:
+#   - Llama Stack is Technology Preview in OpenShift AI
+#   - Operator must be activated in OpenShift AI dashboard first
+#   - Depends on Milvus component
+#   - Integrates with Stage 1 vLLM models
+#
+# API Endpoint:
+#   http://llama-stack.private-ai-demo.svc:8321
+#   External: https://llama-stack-rag-private-ai-demo.apps.<cluster>
+

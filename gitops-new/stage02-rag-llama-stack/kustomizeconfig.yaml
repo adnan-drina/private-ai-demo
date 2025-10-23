@@ -1,0 +1,49 @@
+---
+# Kustomize configuration for label propagation
+# This ensures commonLabels are properly applied to all resources
+nameReference:
+- kind: ConfigMap
+  version: v1
+  fieldSpecs:
+  - path: spec/volumes/configMap/name
+    kind: Pod
+  - path: spec/containers/envFrom/configMapRef/name
+    kind: Pod
+  - path: spec/template/spec/volumes/configMap/name
+    kind: Deployment
+  - path: spec/template/spec/containers/envFrom/configMapRef/name
+    kind: Deployment
+
+- kind: Secret
+  version: v1
+  fieldSpecs:
+  - path: spec/volumes/secret/secretName
+    kind: Pod
+  - path: spec/containers/envFrom/secretRef/name
+    kind: Pod
+  - path: spec/template/spec/volumes/secret/secretName
+    kind: Deployment
+  - path: spec/template/spec/containers/envFrom/secretRef/name
+    kind: Deployment
+
+- kind: Service
+  version: v1
+  fieldSpecs:
+  - path: spec/serviceName
+    kind: StatefulSet
+  - path: spec/rules/http/backend/service/name
+    group: networking.k8s.io
+    kind: Ingress
+
+- kind: ServiceAccount
+  version: v1
+  fieldSpecs:
+  - path: spec/serviceAccountName
+    kind: Pod
+  - path: spec/template/spec/serviceAccountName
+    kind: Deployment
+  - path: spec/template/spec/serviceAccountName
+    kind: StatefulSet
+  - path: spec/template/spec/serviceAccountName
+    kind: Job
+

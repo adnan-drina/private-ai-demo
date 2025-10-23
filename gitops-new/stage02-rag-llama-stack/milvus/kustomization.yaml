@@ -1,0 +1,35 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: milvus
+  annotations:
+    config.kubernetes.io/local-config: "true"
+
+resources:
+  - pvc.yaml
+  - deployment.yaml
+  - service.yaml
+
+# Milvus Vector Database Component
+# Official vector database for Red Hat OpenShift AI RAG workloads
+# 
+# Features:
+#   - Standalone mode (single instance)
+#   - Embedded etcd for metadata
+#   - Local storage for vectors
+#   - gRPC API on port 19530
+#   - Prometheus metrics on port 9091
+#   - IBM Granite embeddings (768 dimensions)
+#
+# Deployment Pattern:
+#   - Deployed in private-ai-demo namespace (demo isolation)
+#   - For production, consider ai-infrastructure (shared service)
+#
+# Reference:
+#   https://docs.redhat.com/en/documentation/red_hat_openshift_ai_cloud_service/1/html/working_with_rag
+#
+# Connection:
+#   Host: milvus-standalone.private-ai-demo.svc.cluster.local
+#   Port: 19530 (gRPC)
+

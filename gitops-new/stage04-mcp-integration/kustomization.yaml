@@ -7,29 +7,22 @@ namespace: private-ai-demo
 # Common labels applied to all resources
 commonLabels:
   app.kubernetes.io/part-of: private-ai-demo
-  stage: "01"
+  stage: "04"
   managed-by: argocd
 
 # Resources in deployment order
 resources:
-  # 1. Namespace and base infrastructure
-  - base-namespace
-  - base-secrets
+  # 1. PostgreSQL database
+  - postgresql
   
-  # 2. MinIO (Object storage for models and artifacts)
-  - minio
+  # 2. MCP Servers (Database, Slack)
+  - mcp-servers
   
-  # 3. vLLM Serving Infrastructure
-  - vllm
+  # 3. ACME Agent (Quarkus application)
+  - acme-agent
   
-  # 4. Model Loading Jobs
-  - model-loader
-  
-  # 5. Benchmarking Infrastructure
-  - benchmarking
-  
-  # 6. Workbench (Notebooks)
-  - workbench
+  # 4. Integration demonstration notebooks
+  - notebooks
 
 # Configuration for all resources
 configurations:
