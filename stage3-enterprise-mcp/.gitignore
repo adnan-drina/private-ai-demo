@@ -1,0 +1,83 @@
+# Environment Configuration
+# Never commit secrets, tokens, or passwords!
+.env
+.env.local
+.env.*.local
+
+# BUT: env.demo-values is committed (shows actual demo config)
+# It's safe because real secrets should be in .env (git-ignored)
+!env.demo-values
+
+# Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# Quarkus
+.quarkus/
+quarkus.log
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.project
+.classpath
+.settings/
+bin/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.venv/
+venv/
+ENV/
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*~
+*.orig
+
+# Build artifacts
+*.jar
+*.war
+*.ear
+*.class
+
+# Application specific
+/data/*.csv.bak
+

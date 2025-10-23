@@ -1,0 +1,56 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+metadata:
+  name: observability
+  annotations:
+    config.kubernetes.io/local-config: "true"
+
+# Observability Component - Red Hat Pattern
+# Complete observability stack following Red Hat's lls-observability architecture
+# Reference: https://github.com/rh-ai-quickstart/lls-observability
+#
+# Architecture:
+#   Applications → OTLP → OTEL Collector → Prometheus endpoint → Grafana
+#
+# Components:
+#   Phase 1: Operators
+#     - OpenTelemetry Operator (Red Hat)
+#     - Grafana Operator (Community)
+#
+#   Phase 2: Observability Infrastructure
+#     - OTEL Collector (minimal config, Prometheus exporter)
+#     - Grafana instance (Operator-managed)
+#     - GrafanaDatasource (OTEL Collector endpoint)
+#     - GrafanaDashboard (Llama Stack Overview)
+#     - PodMonitor (metrics collection)
+#
+# Prerequisites:
+#   - OpenShift User Workload Monitoring must be enabled (see deploy.sh)
+#   - Operators must be installed first (via deploy.sh)
+#
+# Deployment Order:
+#   1. Operators (otel-operator.yaml, grafana-operator.yaml)
+#   2. OTEL Collector (otel-collector.yaml)
+#   3. Grafana + Datasource + Dashboard
+#   4. PodMonitor
+
+resources:
+  # Phase 1: Operators (deployed via deploy.sh, documented here for reference)
+  # - otel-operator.yaml
+  # - grafana-operator.yaml
+  
+  # Phase 2: Observability Infrastructure
+  - otel-collector.yaml              # OpenTelemetry Collector (minimal config)
+  - grafana-instance.yaml            # Grafana instance + Route
+  - grafana-datasource.yaml          # Datasource pointing to OTEL Collector
+  - grafana-dashboard.yaml           # Llama Stack Overview dashboard (basic)
+  - grafana-dashboard-enhanced.yaml  # Llama Stack Overview - Enhanced (15 panels)
+  - grafana-dashboard-ai-metrics.yaml # AI/ML Performance - vLLM & GPU (14 panels)
+  - grafana-dashboard-eval-results.yaml # TrustyAI Model Quality - Evaluation Results (9 panels)
+  - podmonitor.yaml                  # Metrics collection for Llama Stack
+  - pushgateway.yaml                 # Prometheus Pushgateway for batch job metrics (eval, benchmark)
+
+# Note: Operators are installed separately via deploy.sh to ensure proper sequencing
+# All other components are deployed via Kustomize for full reproducibility
+

@@ -1,0 +1,57 @@
+# Exclude internal documentation and archives
+_archive/
+
+# Environment files with secrets (keep templates)
+**/.env
+!**/.env.template
+!**/env.template
+
+# Build artifacts - Java/Maven
+**/target/
+**/*.jar
+**/*.war
+**/*.ear
+**/*.class
+
+# Build artifacts - Python
+**/__pycache__/
+**/*.py[cod]
+**/*.so
+**/.venv/
+**/.venv_*/
+**/venv/
+**/*.egg-info/
+**/dist/
+**/build/
+
+# IDE files
+**/.idea/
+**/.vscode/
+**/.eclipse/
+**/.project
+**/.classpath
+**/.settings/
+
+# OS files
+**/.DS_Store
+**/Thumbs.db
+
+# Kubernetes secrets
+**/secrets.yaml
+**/secret.yaml
+
+# Log files
+**/*.log
+**/logs/
+
+# Temporary deployment files
+**/.tmp-*.yaml
+**/.tmp-*.yml
+
+
+# Generated notebooks (source of truth is templates/)
+stage2-private-data-rag/notebooks/*.ipynb
+stage2-private-data-rag/notebooks/[0-9][0-9]-*.ipynb
+
+# Internal documentation (not for GitHub)
+docs/

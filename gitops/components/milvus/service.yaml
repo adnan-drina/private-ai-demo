@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: milvus-standalone
+  namespace: private-ai-demo
+  labels:
+    app: milvus
+    app.kubernetes.io/name: milvus
+    app.kubernetes.io/component: vector-database
+    app.kubernetes.io/part-of: rag
+    component: vector-db
+spec:
+  type: ClusterIP
+  ports:
+  - port: 19530
+    targetPort: 19530
+    protocol: TCP
+    name: grpc
+  - port: 9091
+    targetPort: 9091
+    protocol: TCP
+    name: metrics
+  selector:
+    app: milvus
+

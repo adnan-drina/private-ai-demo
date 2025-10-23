@@ -1,0 +1,26 @@
+#####
+# This Dockerfile is used to build the Quarkus application in JVM mode
+# 
+# Build the image: podman build -f src/main/docker/Dockerfile.jvm -t acme-lithoops-agent:latest .
+# Run the container: podman run -i --rm -p 8080:8080 acme-lithoops-agent:latest
+#####
+FROM registry.access.redhat.com/ubi8/openjdk-17:1.20
+
+ENV LANGUAGE='en_US:en'
+
+# Copy dependencies (layered for better caching)
+COPY --chown=185 target/quarkus-app/lib/ /deployments/lib/
+COPY --chown=185 target/quarkus-app/*.jar /deployments/
+COPY --chown=185 target/quarkus-app/app/ /deployments/app/
+COPY --chown=185 target/quarkus-app/quarkus/ /deployments/quarkus/
+
+# Copy telemetry data
+COPY --chown=185 src/main/resources/data/ /deployments/data/
+
+EXPOSE 8080
+USER 185
+ENV JAVA_OPTS_APPEND="-Dquarkus.http.host=0.0.0.0 -Djava.util.logging.manager=org.jboss.logmanager.LogManager"
+ENV JAVA_APP_JAR="/deployments/quarkus-run.jar"
+
+ENTRYPOINT [ "/opt/jboss/container/java/run/run-java.sh" ]
+

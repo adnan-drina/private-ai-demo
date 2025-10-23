@@ -1,0 +1,96 @@
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: prepare-documents
+  namespace: private-ai-demo
+  labels:
+    app: docling-rag-pipeline
+    component: preparation
+spec:
+  description: |
+    Prepare the workspace for document processing.
+    Verifies that source PDFs exist and creates necessary directories.
+  
+  params:
+    - name: scenario
+      type: string
+      description: "Scenario name"
+    
+    - name: documents
+      type: array
+      description: "List of document filenames to verify"
+  
+  workspaces:
+    - name: documents
+      description: "Workspace with source PDFs"
+      mountPath: /workspace/documents
+  
+  steps:
+    - name: prepare
+      image: registry.access.redhat.com/ubi8/ubi-minimal:latest
+      script: |
+        #!/bin/bash
+        set -e
+        
+        echo "=========================================="
+        echo "  Document Preparation"
+        echo "=========================================="
+        echo ""
+        echo "Scenario: $(params.scenario)"
+        echo ""
+        
+        # Define directories
+        INPUT_DIR="/workspace/documents/scenario2-$(params.scenario)"
+        PROCESSED_DIR="/workspace/documents/processed/scenario2-$(params.scenario)"
+        CHUNKED_DIR="/workspace/documents/chunked/scenario2-$(params.scenario)"
+        
+        # Create output directories
+        echo "📁 Creating output directories..."
+        mkdir -p "${PROCESSED_DIR}"
+        mkdir -p "${CHUNKED_DIR}"
+        echo "  ✅ ${PROCESSED_DIR}"
+        echo "  ✅ ${CHUNKED_DIR}"
+        echo ""
+        
+        # Verify input directory exists
+        if [ ! -d "${INPUT_DIR}" ]; then
+          echo "❌ Error: Input directory not found: ${INPUT_DIR}"
+          exit 1
+        fi
+        
+        echo "✅ Input directory exists: ${INPUT_DIR}"
+        echo ""
+        
+        # Verify each document
+        echo "📄 Verifying documents..."
+        FOUND_COUNT=0
+        
+        # List all PDF files (using ls instead of find for compatibility)
+        cd "${INPUT_DIR}"
+        for pdf_file in *.pdf; do
+          if [ -f "${pdf_file}" ]; then
+            SIZE=$(du -h "${pdf_file}" | cut -f1)
+            echo "  ✅ ${pdf_file} (${SIZE})"
+            FOUND_COUNT=$((FOUND_COUNT + 1))
+          fi
+        done
+        
+        echo ""
+        echo "Summary: Found ${FOUND_COUNT} documents"
+        
+        if [ "${FOUND_COUNT}" = "0" ]; then
+          echo "❌ Error: No documents found!"
+          exit 1
+        fi
+        
+        echo ""
+        echo "✅ Preparation complete!"
+        
+        # Write result
+        echo "${FOUND_COUNT}" > $(results.documents-found.path)
+  
+  results:
+    - name: documents-found
+      description: "Number of documents found"
+

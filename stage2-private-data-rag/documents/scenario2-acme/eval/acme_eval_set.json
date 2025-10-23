@@ -1,0 +1,88 @@
+{
+  "name": "ACME LithoOps Copilot Evaluation Set",
+  "version": "1.0",
+  "description": "Evaluation questions for ACME lithography RAG system covering calibration, limits, troubleshooting, and predictive maintenance",
+  "target_pass_rate": 0.75,
+  "questions": [
+    {
+      "id": "acme-001",
+      "category": "calibration",
+      "query": "What is the DFO calibration procedure for the L-900 EUV tool? What are the key steps?",
+      "expected_docs": ["ACME_01"],
+      "expected_citations": ["§3", "§4"],
+      "pass_criteria": "Mentions DFO calibration steps, tool L-900, includes section references"
+    },
+    {
+      "id": "acme-002",
+      "category": "limits",
+      "query": "What are the dose UCL and overlay UCL limits for PX-7 product on M1 layer?",
+      "expected_docs": ["ACME_02"],
+      "expected_citations": ["§SPC"],
+      "pass_criteria": "Provides specific numeric limits with units (% for dose, nm for overlay), cites SPC document"
+    },
+    {
+      "id": "acme-003",
+      "category": "troubleshooting",
+      "query": "The L-900 tool is showing overlay drift >4 nm. What troubleshooting steps should I follow?",
+      "expected_docs": ["ACME_05", "ACME_03"],
+      "expected_citations": ["§TR"],
+      "pass_criteria": "Mentions troubleshooting playbook, provides action steps, references overlay limits"
+    },
+    {
+      "id": "acme-004",
+      "category": "predictive",
+      "query": "What are the predictive maintenance rules for L-900 tool health monitoring?",
+      "expected_docs": ["ACME_03"],
+      "expected_citations": ["§FMEA"],
+      "pass_criteria": "Describes FMEA-based rules, health monitoring criteria, L-900 specific"
+    },
+    {
+      "id": "acme-005",
+      "category": "recipe",
+      "query": "What scanner test recipe should I use for PX-7 product qualification?",
+      "expected_docs": ["ACME_04"],
+      "expected_citations": ["§RECIPE"],
+      "pass_criteria": "Specifies test recipe parameters, PX-7 product context, qualification criteria"
+    },
+    {
+      "id": "acme-006",
+      "category": "limits_comparison",
+      "query": "Is a measured overlay of 3.8 nm within specification for PX-7 M1 layer?",
+      "expected_docs": ["ACME_02"],
+      "expected_citations": ["§SPC"],
+      "pass_criteria": "Compares 3.8 nm against UCL, provides clear pass/fail, cites SPC limits"
+    },
+    {
+      "id": "acme-007",
+      "category": "reliability",
+      "query": "What was the tool uptime for L-900 in Q3 FY25?",
+      "expected_docs": ["ACME_06"],
+      "expected_citations": ["§REL"],
+      "pass_criteria": "Provides uptime percentage, Q3 FY25 timeframe, L-900 tool reference"
+    },
+    {
+      "id": "acme-008",
+      "category": "multi_doc",
+      "query": "What are the complete steps to diagnose and resolve a dose uniformity issue on L-900 for PX-7 product?",
+      "expected_docs": ["ACME_01", "ACME_02", "ACME_05"],
+      "expected_citations": ["§SOP", "§SPC", "§TR"],
+      "pass_criteria": "Integrates calibration SOP, limit checks from SPC, and troubleshooting playbook steps"
+    },
+    {
+      "id": "acme-009",
+      "category": "table_extraction",
+      "query": "What are the bias focus target and tolerance values for PX-7?",
+      "expected_docs": ["ACME_02"],
+      "expected_citations": ["table", "§SPC"],
+      "pass_criteria": "Extracts table data, provides target nm and tolerance nm with numeric values"
+    },
+    {
+      "id": "acme-010",
+      "category": "negative",
+      "query": "What are the maintenance procedures for the Z-500 tool?",
+      "expected_docs": [],
+      "expected_citations": [],
+      "pass_criteria": "Responds with 'Not found in ACME sources' or similar, does not hallucinate Z-500 content"
+    }
+  ]
+}

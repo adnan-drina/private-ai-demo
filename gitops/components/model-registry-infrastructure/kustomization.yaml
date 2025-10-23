@@ -1,0 +1,39 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+metadata:
+  name: model-registry-infrastructure
+  annotations:
+    config.kubernetes.io/local-config: "true"
+
+# NOTE: namespace field removed - all resources have explicit namespace in their manifests
+# This avoids Kustomize namespace transformation conflicts
+
+resources:
+  - namespace.yaml
+  - modelregistry-secret.yaml     # Secret reference to MySQL in private-ai-demo
+  - modelregistry-cr.yaml         # ModelRegistry Custom Resource
+  - role.yaml                     # RBAC for Model Registry access
+  - rolebinding.yaml              # RBAC bindings
+  - networkpolicy-allow-dashboard.yaml
+  - networkpolicy-allow-jobs.yaml  # Allow job access from private-ai-demo
+  # MySQL auth fix job - run after MySQL is deployed
+  - job-mysql-auth-fix.yaml
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: model-registry
+      app.kubernetes.io/managed-by: gitops
+
+# Common annotations
+commonAnnotations:
+  gitops.redhat.com/component: model-registry-infrastructure
+  gitops.redhat.com/stage: stage1
+
+# Note: MySQL is deployed as a single replica for demo purposes
+# For production:
+# - Use MySQL operator or external managed database
+# - Enable replication and high availability
+# - Use proper backup/restore procedures
+# - Secure credentials with external secret management
+

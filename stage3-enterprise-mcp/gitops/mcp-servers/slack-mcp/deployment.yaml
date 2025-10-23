@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: slack-mcp
+  namespace: private-ai-demo
+  labels:
+    app: slack-mcp
+    component: mcp-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: slack-mcp
+  template:
+    metadata:
+      labels:
+        app: slack-mcp
+        component: mcp-server
+    spec:
+      containers:
+      - name: slack-mcp
+        image: image-registry.openshift-image-registry.svc:5000/private-ai-demo/slack-mcp:latest
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: PORT
+          value: "8080"
+        - name: DEFAULT_CHANNEL
+          value: "#acme-litho"
+        - name: DEFAULT_USERNAME
+          value: "ACME LithoOps Agent"
+        - name: DEFAULT_ICON
+          value: ":factory:"
+        # Slack webhook URL - configure via secret for real alerts
+        - name: SLACK_WEBHOOK_URL
+          valueFrom:
+            secretKeyRef:
+              name: slack-webhook
+              key: webhook-url
+              optional: true
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+

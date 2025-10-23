@@ -1,0 +1,159 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: register-models
+  namespace: private-ai-demo
+  labels:
+    app: model-registry
+    component: registration
+spec:
+  template:
+    spec:
+      serviceAccountName: ai-workload-sa
+      restartPolicy: OnFailure
+      securityContext:
+        runAsUser: 0
+      containers:
+      - name: register
+        image: python:3.11-slim
+        env:
+        - name: HOME
+          value: /tmp
+        command:
+          - /bin/bash
+          - -c
+          - |
+            set -euo pipefail
+            
+            echo "════════════════════════════════════════════════════════════════"
+            echo "  🚀 MODEL REGISTRY REGISTRATION"
+            echo "════════════════════════════════════════════════════════════════"
+            echo ""
+            
+            # Install dependencies
+            echo "Installing curl and jq..."
+            apt-get update -qq && apt-get install -y -qq curl jq > /dev/null 2>&1
+            echo "✓ Dependencies installed"
+            echo ""
+            
+            # Get Model Registry OAuth route
+            MR_ROUTE="private-ai-model-registry-rest.apps.cluster-n8cnx.n8cnx.sandbox2830.opentlc.com"
+            BASE_URL="https://${MR_ROUTE}"
+            
+            # Get ServiceAccount token
+            TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+            
+            echo "Model Registry URL: ${BASE_URL}"
+            echo "Using ServiceAccount token for authentication"
+            echo ""
+            
+            # Define models with comprehensive metadata
+            declare -A MODELS
+            MODELS["mistral-24b-quantized"]="Mistral Small Instruct 24B quantized to 4-bit weights with 16-bit activations (w4a16) by Red Hat AI. Maintains near-full model performance while reducing memory footprint by 75%. Optimized for efficient deployment on single GPU systems. Based on mistralai/Mistral-Small-24B-Instruct-2501.|RedHatAI/Mistral-Small-24B-Instruct-2501-quantized.w4a16|s3://models/mistral-24b-quantized|v1.0-quantized|Deployed on 1x NVIDIA L4 GPU (g6.4xlarge). Runtime: vLLM with tensor-parallel-size=1. Scaling: Serverless (KNative) with 60-min retention. Performance: ~19 tokens/sec. Memory: 24Gi. Quantization: w4a16.|1|24Gi"
+            
+            MODELS["mistral-24b"]="Mistral Small Instruct 24B (January 2025) is an advanced language model optimized for instruction following, conversational AI, and complex reasoning tasks. Built on transformer architecture with 24 billion parameters. Supports multilingual capabilities and function calling.|mistralai/Mistral-Small-24B-Instruct-2501|s3://models/mistral-24b|v1.0-full|Deployed on 4x NVIDIA L4 GPUs (g6.12xlarge). Runtime: vLLM with tensor-parallel-size=4. Scaling: Serverless (KNative) with 60-min retention. Performance: ~20 tokens/sec. Memory: 80Gi. Precision: Full FP16/BF16.|4|80Gi"
+            
+            for model_name in "${!MODELS[@]}"; do
+              IFS='|' read -r model_desc hf_repo storage_uri version_name version_desc gpu_count memory <<< "${MODELS[$model_name]}"
+              
+              echo "════════════════════════════════════════════════════════════════"
+              echo "Processing: $model_name"
+              echo "════════════════════════════════════════════════════════════════"
+              
+              # 1. Create/Update RegisteredModel
+              echo "  Creating RegisteredModel..."
+              model_id=$(curl -ks -X POST "${BASE_URL}/api/model_registry/v1alpha3/registered_models" \
+                -H "Authorization: Bearer $TOKEN" \
+                -H "Content-Type: application/json" \
+                -d "{
+                  \"name\":\"${model_name}\",
+                  \"description\":\"${model_desc}\"
+                }" | jq -r '.id // empty')
+              
+              if [ -z "$model_id" ]; then
+                # Model exists, get it
+                model_id=$(curl -ks -H "Authorization: Bearer $TOKEN" \
+                  "${BASE_URL}/api/model_registry/v1alpha3/registered_models" | \
+                  jq -r ".items[] | select(.name==\"${model_name}\") | .id")
+                echo "  ✓ RegisteredModel exists (ID: $model_id)"
+              else
+                echo "  ✓ RegisteredModel created (ID: $model_id)"
+              fi
+              
+              # 2. Create ModelVersion
+              echo "  Creating ModelVersion..."
+              version_id=$(curl -ks -X POST "${BASE_URL}/api/model_registry/v1alpha3/model_versions" \
+                -H "Authorization: Bearer $TOKEN" \
+                -H "Content-Type: application/json" \
+                -d "{
+                  \"name\":\"${version_name}\",
+                  \"description\":\"${version_desc}\",
+                  \"registeredModelId\":\"${model_id}\",
+                  \"author\":\"GitOps\"
+                }" | jq -r '.id // empty')
+              
+              if [ -z "$version_id" ]; then
+                # Version exists, get it
+                version_id=$(curl -ks -H "Authorization: Bearer $TOKEN" \
+                  "${BASE_URL}/api/model_registry/v1alpha3/registered_models/${model_id}/versions" | \
+                  jq -r ".items[] | select(.name==\"${version_name}\") | .id")
+                echo "  ✓ ModelVersion exists (ID: $version_id)"
+              else
+                echo "  ✓ ModelVersion created (ID: $version_id)"
+              fi
+              
+              # 3. Create ModelArtifact
+              echo "  Creating ModelArtifact..."
+              artifact_id=$(curl -ks -X POST "${BASE_URL}/api/model_registry/v1alpha3/model_artifacts" \
+                -H "Authorization: Bearer $TOKEN" \
+                -H "Content-Type: application/json" \
+                -d "{
+                  \"name\":\"${model_name}-artifact\",
+                  \"description\":\"Model weights and configuration. Format: Safetensors. Source: HuggingFace (${hf_repo}). Storage: MinIO S3.\",
+                  \"uri\":\"${storage_uri}\",
+                  \"modelId\":\"${model_id}\",
+                  \"modelVersionId\":\"${version_id}\"
+                }" | jq -r '.id // empty')
+              
+              if [ -n "$artifact_id" ]; then
+                echo "  ✓ ModelArtifact created (ID: $artifact_id)"
+                echo "    URI: $storage_uri"
+              else
+                echo "  ⚠️  ModelArtifact might exist or failed"
+              fi
+              
+              echo ""
+            done
+            
+            echo "════════════════════════════════════════════════════════════════"
+            echo "  ✅ MODEL REGISTRATION COMPLETE"
+            echo "════════════════════════════════════════════════════════════════"
+            echo ""
+            echo "Registered models:"
+            curl -ks -H "Authorization: Bearer $TOKEN" \
+              "${BASE_URL}/api/model_registry/v1alpha3/registered_models" | \
+              jq -r '.items[] | "  • \(.name) (ID: \(.id))"'
+            
+            echo ""
+            echo "Model versions:"
+            curl -ks -H "Authorization: Bearer $TOKEN" \
+              "${BASE_URL}/api/model_registry/v1alpha3/model_versions?pageSize=100" | \
+              jq -r '.items[] | "  • \(.name) for Model ID: \(.registeredModelId)"'
+            
+            echo ""
+            echo "Model artifacts:"
+            curl -ks -H "Authorization: Bearer $TOKEN" \
+              "${BASE_URL}/api/model_registry/v1alpha3/model_artifacts?pageSize=100" | \
+              jq -r '.items[] | "  • \(.name) - URI: \(.uri)"'
+            
+            echo ""
+            echo "🎉 Models registered with S3 URIs!"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+

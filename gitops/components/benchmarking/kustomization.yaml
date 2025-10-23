@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+metadata:
+  name: benchmarking
+  annotations:
+    config.kubernetes.io/local-config: "true"
+
+# GuideLLM-based Model Benchmarking Component
+#
+# Cloud-native approach:
+#   - Two jobs: one per model (quantized, full)
+#   - Each job has a dedicated PVC (benchmark-quantized-results, benchmark-full-results)
+#   - Parallel execution: No PVC conflicts
+#   - Results persist across pod restarts
+#   - Workbench mounts PVCs for direct access
+#   - Results also published to Model Registry
+
+resources:
+  - pvc-quantized-results.yaml
+  - pvc-full-results.yaml
+  - pvc-workbench-results.yaml
+  - configmap-publish-script.yaml
+  - job-guidellm-quantized.yaml
+  - job-guidellm-full.yaml
+  - job-copy-results.yaml

@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ACME LithoOps Agent - AI-Powered Calibration</title>
+    
+    <!-- Red Hat Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@400;700;900&family=Red+Hat+Text:wght@400;500;700&family=Red+Hat+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            /* Red Hat Brand Colors */
+            --rh-red: #EE0000;
+            --rh-black: #000000;
+            --rh-white: #FFFFFF;
+            --rh-gray-light: #F5F5F5;
+            --rh-gray-medium: #D2D2D2;
+            --rh-gray-dark: #6A6E73;
+            --rh-green: #3E8635;
+            --rh-orange: #EC7A08;
+            --rh-cyan: #00B9E4;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Red Hat Text', sans-serif;
+            background: var(--rh-gray-light);
+            color: var(--rh-black);
+            line-height: 1.6;
+        }
+        
+        /* Header */
+        .header {
+            background: var(--rh-white);
+            border-bottom: 4px solid var(--rh-red);
+            padding: 20px 40px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .header h1 {
+            font-family: 'Red Hat Display', sans-serif;
+            font-weight: 900;
+            font-size: 28px;
+            color: var(--rh-black);
+        }
+        
+        .header h1 .company {
+            color: var(--rh-red);
+        }
+        
+        .ai-badge {
+            background: var(--rh-red);
+            color: var(--rh-white);
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+        
+        /* Main Container */
+        .container {
+            display: flex;
+            max-width: 1400px;
+            margin: 20px auto;
+            gap: 20px;
+            padding: 0 40px;
+        }
+        
+        /* Sidebar (38%) */
+        .sidebar {
+            flex: 0 0 38%;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        /* Main Panel (62%) */
+        .main-panel {
+            flex: 1;
+        }
+        
+        .card {
+            background: var(--rh-white);
+            border-radius: 8px;
+            padding: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .card-header {
+            border-left: 4px solid var(--rh-red);
+            padding-left: 16px;
+            margin-bottom: 20px;
+        }
+        
+        .card-header h2 {
+            font-family: 'Red Hat Display', sans-serif;
+            font-weight: 700;
+            font-size: 20px;
+            margin-bottom: 4px;
+        }
+        
+        .card-header p {
+            color: var(--rh-gray-dark);
+            font-size: 14px;
+        }
+        
+        /* Form Styles */
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: var(--rh-black);
+        }
+        
+        .form-group select,
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid var(--rh-gray-medium);
+            border-radius: 4px;
+            font-family: 'Red Hat Text', sans-serif;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+        
+        .form-group select:focus,
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--rh-red);
+        }
+        
+        .btn {
+            background: var(--rh-red);
+            color: var(--rh-white);
+            border: none;
+            padding: 14px 32px;
+            font-family: 'Red Hat Text', sans-serif;
+            font-weight: 700;
+            font-size: 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+            width: 100%;
+        }
+        
+        .btn:hover {
+            background: #CC0000;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(238, 0, 0, 0.3);
+        }
+        
+        .btn:disabled {
+            background: var(--rh-gray-medium);
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        /* Status Panel */
+        .status-panel {
+            display: none;
+            margin-top: 20px;
+            padding: 16px;
+            border-radius: 4px;
+            border-left: 4px solid var(--rh-cyan);
+            background: rgba(0, 185, 228, 0.1);
+        }
+        
+        .status-panel.active {
+            display: block;
+        }
+        
+        .status-panel .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 3px solid var(--rh-gray-medium);
+            border-top-color: var(--rh-cyan);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Results Display */
+        #resultsDisplay {
+            display: none;
+        }
+        
+        #resultsDisplay.show {
+            display: block;
+        }
+        
+        .verdict-card {
+            padding: 24px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid;
+        }
+        
+        .verdict-card.pass {
+            border-color: var(--rh-green);
+            background: rgba(62, 134, 53, 0.1);
+        }
+        
+        .verdict-card.fail {
+            border-color: var(--rh-red);
+            background: rgba(238, 0, 0, 0.1);
+        }
+        
+        .verdict-card.error {
+            border-color: var(--rh-orange);
+            background: rgba(236, 122, 8, 0.1);
+        }
+        
+        .verdict-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        
+        .verdict-icon {
+            font-size: 32px;
+        }
+        
+        .verdict-title {
+            font-family: 'Red Hat Display', sans-serif;
+            font-weight: 700;
+            font-size: 24px;
+        }
+        
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+            margin-top: 20px;
+        }
+        
+        .metric-card {
+            padding: 16px;
+            background: var(--rh-white);
+            border-radius: 4px;
+            border-left: 4px solid var(--rh-red);
+        }
+        
+        .metric-label {
+            font-size: 12px;
+            color: var(--rh-gray-dark);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+        
+        .metric-value {
+            font-family: 'Red Hat Display', sans-serif;
+            font-weight: 700;
+            font-size: 20px;
+            color: var(--rh-black);
+        }
+        
+        /* AI Value Panel */
+        .ai-value-panel {
+            background: linear-gradient(135deg, rgba(238, 0, 0, 0.05) 0%, rgba(0, 185, 228, 0.05) 100%);
+            border: 2px solid var(--rh-gray-medium);
+        }
+        
+        .ai-value-panel .card-header {
+            border-left-color: var(--rh-cyan);
+        }
+        
+        .ai-feature {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 16px;
+            padding: 12px;
+            background: var(--rh-white);
+            border-radius: 4px;
+        }
+        
+        .ai-feature:last-child {
+            margin-bottom: 0;
+        }
+        
+        .ai-feature-icon {
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+        
+        .ai-feature-text {
+            flex: 1;
+        }
+        
+        .ai-feature-title {
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        
+        .ai-feature-desc {
+            font-size: 14px;
+            color: var(--rh-gray-dark);
+        }
+        
+        /* Analysis Text */
+        .analysis-text {
+            white-space: pre-wrap;
+            font-family: 'Red Hat Mono', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            padding: 16px;
+            background: var(--rh-gray-light);
+            border-radius: 4px;
+            margin-top: 16px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="header-content">
+            <h1><span class="company">ACME</span> LithoOps Agent</h1>
+            <span class="ai-badge">🤖 AI-POWERED</span>
+        </div>
+    </div>
+    
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Sidebar (38%) -->
+        <div class="sidebar">
+            <!-- Calibration Form -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>🔬 Calibration Check</h2>
+                    <p>AI-orchestrated equipment validation</p>
+                </div>
+                
+                <form id="calibrationForm">
+                    <div class="form-group">
+                        <label for="equipmentId">Equipment</label>
+                        <select id="equipmentId" required>
+                            <option value="">Select equipment...</option>
+                            <option value="LITHO-001">LITHO-001 (ASML NXE:3400C - EUV Scanner)</option>
+                            <option value="L-900-07">L-900-07 (TEL Lithius 1300 - Resist Coater)</option>
+                            <option value="L-900-08">L-900-08 (TEL Lithius 1300 - Resist Coater)</option>
+                            <option value="ABC123">ABC123 (Test Equipment)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="telemetryFile">Telemetry Data</label>
+                        <select id="telemetryFile" required>
+                            <option value="">Select telemetry...</option>
+                            <option value="/deployments/data/telemetry/acme_telemetry_clean.csv">✅ Clean Data (Expected: PASS)</option>
+                            <option value="/deployments/data/telemetry/acme_telemetry_outofspec.csv">❌ Out-of-Spec Data (Expected: FAIL)</option>
+                        </select>
+                    </div>
+                    
+                    <button type="submit" class="btn" id="submitBtn">
+                        Run Calibration Check
+                    </button>
+                </form>
+                
+                <!-- Status Panel -->
+                <div id="statusPanel" class="status-panel">
+                    <div class="spinner"></div>
+                    <span style="margin-left: 12px;">AI Agent analyzing equipment...</span>
+                </div>
+            </div>
+            
+            <!-- AI Value Proposition -->
+            <div class="card ai-value-panel">
+                <div class="card-header">
+                    <h2>🧠 AI Capabilities</h2>
+                    <p>What makes this intelligent</p>
+                </div>
+                
+                <div class="ai-feature">
+                    <div class="ai-feature-icon">🤖</div>
+                    <div class="ai-feature-text">
+                        <div class="ai-feature-title">LangChain4j Integration</div>
+                        <div class="ai-feature-desc">@RegisterAiService with @Tool methods</div>
+                    </div>
+                </div>
+                
+                <div class="ai-feature">
+                    <div class="ai-feature-icon">📚</div>
+                    <div class="ai-feature-text">
+                        <div class="ai-feature-title">RAG Integration</div>
+                        <div class="ai-feature-desc">Queries calibration limits from Llama Stack</div>
+                    </div>
+                </div>
+                
+                <div class="ai-feature">
+                    <div class="ai-feature-icon">🔧</div>
+                    <div class="ai-feature-text">
+                        <div class="ai-feature-title">MCP Tool Orchestration</div>
+                        <div class="ai-feature-desc">Slack alerts + Database queries</div>
+                    </div>
+                </div>
+                
+                <div class="ai-feature">
+                    <div class="ai-feature-icon">⚡</div>
+                    <div class="ai-feature-text">
+                        <div class="ai-feature-title">Fault Tolerance</div>
+                        <div class="ai-feature-desc">@Retry, @Timeout, @Fallback</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Main Panel (62%) -->
+        <div class="main-panel">
+            <div class="card" id="resultsDisplay">
+                <div class="card-header">
+                    <h2>📊 Analysis Results</h2>
+                    <p id="resultsSubtitle">AI-powered equipment analysis</p>
+                </div>
+                
+                <div id="resultsContent"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const form = document.getElementById('calibrationForm');
+        const submitBtn = document.getElementById('submitBtn');
+        const statusPanel = document.getElementById('statusPanel');
+        const resultsDisplay = document.getElementById('resultsDisplay');
+        const resultsContent = document.getElementById('resultsContent');
+        const resultsSubtitle = document.getElementById('resultsSubtitle');
+        
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const equipmentId = document.getElementById('equipmentId').value;
+            const telemetryFile = document.getElementById('telemetryFile').value;
+            
+            // Show loading
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Analyzing...';
+            statusPanel.classList.add('active');
+            resultsDisplay.classList.remove('show');
+            
+            try {
+                const response = await fetch('/api/v1/ops/calibration/check', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        equipmentId,
+                        telemetryFile
+                    })
+                });
+                
+                const result = await response.json();
+                
+                // Hide loading
+                statusPanel.classList.remove('active');
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Run Calibration Check';
+                
+                // Show results
+                displayResults(result);
+                
+            } catch (error) {
+                // Hide loading
+                statusPanel.classList.remove('active');
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Run Calibration Check';
+                
+                // Show error
+                displayError(error);
+            }
+        });
+        
+        function displayResults(result) {
+            const verdictClass = result.verdict?.toLowerCase() || 'error';
+            const verdictIcon = {
+                'pass': '✅',
+                'fail': '❌',
+                'error': '⚠️'
+            }[verdictClass] || '❓';
+            
+            resultsSubtitle.textContent = `Correlation ID: ${result.correlationId}`;
+            
+            resultsContent.innerHTML = `
+                <div class="verdict-card ${verdictClass}">
+                    <div class="verdict-header">
+                        <span class="verdict-icon">${verdictIcon}</span>
+                        <span class="verdict-title">${result.verdict || 'ERROR'}</span>
+                    </div>
+                    
+                    <div class="metrics-grid">
+                        <div class="metric-card">
+                            <div class="metric-label">Equipment</div>
+                            <div class="metric-value">${result.equipmentId}</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Duration</div>
+                            <div class="metric-value">${result.durationMs}ms</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Correlation ID</div>
+                            <div class="metric-value" style="font-size: 14px;">${result.correlationId}</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Status</div>
+                            <div class="metric-value" style="font-size: 16px;">${verdictIcon} ${result.verdict || 'ERROR'}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="analysis-text">${result.analysis || 'No analysis available'}</div>
+                </div>
+            `;
+            
+            resultsDisplay.classList.add('show');
+        }
+        
+        function displayError(error) {
+            resultsSubtitle.textContent = 'Error occurred';
+            resultsContent.innerHTML = `
+                <div class="verdict-card error">
+                    <div class="verdict-header">
+                        <span class="verdict-icon">⚠️</span>
+                        <span class="verdict-title">ERROR</span>
+                    </div>
+                    <div class="analysis-text">Failed to execute calibration check: ${error.message}</div>
+                </div>
+            `;
+            resultsDisplay.classList.add('show');
+        }
+    </script>
+</body>
+</html>
+
+

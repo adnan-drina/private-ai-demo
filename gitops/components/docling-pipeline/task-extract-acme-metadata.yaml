@@ -1,0 +1,175 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: extract-acme-metadata
+  namespace: private-ai-demo
+  labels:
+    app: docling-pipeline
+    scenario: acme
+spec:
+  description: Extract ACME-specific metadata from Docling processed documents
+  params:
+    - name: doc-name
+      type: string
+      description: Document filename (e.g., ACME_01)
+  workspaces:
+    - name: documents
+      description: PVC containing documents
+  steps:
+    - name: extract-metadata
+      image: python:3.11-slim
+      env:
+        - name: PYTHONUNBUFFERED
+          value: "1"
+      script: |
+        #!/usr/bin/env python3
+        import json
+        import re
+        import os
+        from pathlib import Path
+
+        DOC_NAME = "$(params.doc-name)"
+        DOCS_DIR = "/workspace/documents"
+        
+        print(f"🔍 Extracting ACME metadata for: {DOC_NAME}")
+        print("=" * 70)
+        
+        # Parse document name for metadata
+        # Format: ACME_XX_Product_Description.pdf
+        doc_parts = DOC_NAME.replace('.pdf', '').split('_')
+        doc_id = f"{doc_parts[0]}_{doc_parts[1]}"  # ACME_01
+        
+        # Determine document type from filename
+        doc_type_map = {
+            'ACME_01': 'SOP',      # Calibration SOP
+            'ACME_02': 'SPC',      # Control Plan & Limits
+            'ACME_03': 'FMEA',     # Tool Health & Predictive
+            'ACME_04': 'RECIPE',   # Test Recipe Handbook
+            'ACME_05': 'PLAYBOOK', # Trouble Response
+            'ACME_06': 'REPORT'    # Reliability Summary
+        }
+        
+        doc_type = doc_type_map.get(doc_id, 'UNKNOWN')
+        
+        # Extract tool model from filename
+        tool_pattern = r'(L-\d+|PX-\d+)'
+        filename_upper = DOC_NAME.upper()
+        tool_match = re.search(tool_pattern, filename_upper)
+        tool_model = tool_match.group(1) if tool_match else None
+        
+        # Extract product from filename
+        product_match = re.search(r'(PX-\d+)', filename_upper)
+        product = product_match.group(1) if product_match else None
+        
+        # Extract version from filename
+        version_match = re.search(r'[vV](\d+\.\d+)', DOC_NAME)
+        version = f"v{version_match.group(1)}" if version_match else "v1.0"
+        
+        print(f"📋 Base Metadata:")
+        print(f"  Document ID: {doc_id}")
+        print(f"  Document Type: {doc_type}")
+        print(f"  Tool Model: {tool_model}")
+        print(f"  Product: {product}")
+        print(f"  Version: {version}")
+        print()
+        
+        # Read Docling JSON output
+        json_path = Path(DOCS_DIR) / 'acme' / 'parsed' / f"{DOC_NAME.replace('.pdf', '')}_docling.json"
+        
+        if not json_path.exists():
+            print(f"⚠️  Docling JSON not found: {json_path}")
+            print("   Skipping metadata extraction")
+            exit(0)
+        
+        with open(json_path, 'r') as f:
+            docling_data = json.load(f)
+        
+        # Extract sections and pages
+        sections = []
+        if 'headings' in docling_data:
+            for heading in docling_data['headings']:
+                sections.append({
+                    'title': heading.get('text', ''),
+                    'level': heading.get('level', 1),
+                    'page': heading.get('page', 0)
+                })
+        
+        print(f"📄 Extracted {len(sections)} sections")
+        
+        # Generate section IDs based on doc type
+        section_prefix_map = {
+            'SOP': '§SOP',
+            'SPC': '§SPC',
+            'FMEA': '§FMEA',
+            'RECIPE': '§RECIPE',
+            'PLAYBOOK': '§TR',  # Troubleshooting
+            'REPORT': '§REL'    # Reliability
+        }
+        
+        section_prefix = section_prefix_map.get(doc_type, '§DOC')
+        
+        # Extract tables (for limit values)
+        tables = []
+        if 'tables' in docling_data:
+            for i, table in enumerate(docling_data['tables'], 1):
+                tables.append({
+                    'table_id': f"Table-{i}",
+                    'page': table.get('page', 0),
+                    'caption': table.get('caption', ''),
+                    'data': table.get('data', [])
+                })
+        
+        print(f"📊 Extracted {len(tables)} tables")
+        
+        # Extract limit values from tables (for SPC documents)
+        limits = {}
+        if doc_type == 'SPC' and tables:
+            for table in tables:
+                for row in table.get('data', []):
+                    # Look for UCL, LCL, target patterns
+                    for cell in row:
+                        cell_text = str(cell).lower()
+                        if 'overlay' in cell_text and 'ucl' in cell_text:
+                            # Extract numeric value
+                            nums = re.findall(r'(\d+\.?\d*)\s*(nm|%)', cell_text)
+                            if nums:
+                                limits['overlay_ucl_nm'] = float(nums[0][0])
+                        elif 'dose' in cell_text and 'ucl' in cell_text:
+                            nums = re.findall(r'(\d+\.?\d*)\s*(nm|%)', cell_text)
+                            if nums:
+                                limits['dose_ucl_pct'] = float(nums[0][0])
+        
+        if limits:
+            print(f"🎯 Extracted limits: {limits}")
+        
+        # Build comprehensive metadata
+        metadata = {
+            'doc_name': doc_id,
+            'doc_type': doc_type,
+            'version': version,
+            'tool_model': tool_model,
+            'product': product,
+            'section_count': len(sections),
+            'table_count': len(tables),
+            'section_prefix': section_prefix,
+            'sections': sections[:10],  # First 10 for preview
+            'tables': [{'table_id': t['table_id'], 'page': t['page'], 'caption': t['caption']} for t in tables],
+            'limits': limits,
+            'source_file': DOC_NAME
+        }
+        
+        # Save metadata
+        metadata_path = Path(DOCS_DIR) / 'acme' / 'parsed' / f"{DOC_NAME.replace('.pdf', '')}_metadata.json"
+        metadata_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        with open(metadata_path, 'w') as f:
+            json.dump(metadata, f, indent=2)
+        
+        print()
+        print("=" * 70)
+        print(f"✅ Metadata saved to: {metadata_path}")
+        print(f"📊 Summary: {doc_type} document with {len(sections)} sections, {len(tables)} tables")
+        if limits:
+            print(f"🎯 Limits: {', '.join(f'{k}={v}' for k, v in limits.items())}")
+
+

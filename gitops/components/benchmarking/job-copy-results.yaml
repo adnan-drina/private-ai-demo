@@ -1,0 +1,96 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: copy-benchmark-results
+  namespace: private-ai-demo
+  labels:
+    app: benchmark-results-copier
+    app.kubernetes.io/name: benchmark-copier
+    app.kubernetes.io/component: benchmarking
+    app.kubernetes.io/part-of: benchmark-testing
+  annotations:
+    description: "Copy benchmark results from job PVCs to shared workbench PVC"
+spec:
+  ttlSecondsAfterFinished: 3600  # Keep for 1 hour
+  template:
+    metadata:
+      labels:
+        app: benchmark-results-copier
+    spec:
+      serviceAccountName: ai-workload-sa
+      restartPolicy: OnFailure
+      
+      containers:
+      - name: copy-results
+        image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            set -e
+            
+            echo "════════════════════════════════════════════════════════════════"
+            echo "  📋 Copying Benchmark Results to Shared Storage"
+            echo "════════════════════════════════════════════════════════════════"
+            echo ""
+            
+            # Create directory structure
+            mkdir -p /shared/quantized /shared/full
+            
+            # Copy quantized results if they exist
+            if [ -f /results-quantized/mistral-24b-quantized-benchmark.json ]; then
+              echo "✅ Copying quantized model results..."
+              cp /results-quantized/mistral-24b-quantized-benchmark.json /shared/quantized/
+              ls -lh /shared/quantized/
+            else
+              echo "⚠️  Quantized results not found"
+            fi
+            
+            echo ""
+            
+            # Copy full precision results if they exist
+            if [ -f /results-full/mistral-24b-benchmark.json ]; then
+              echo "✅ Copying full precision model results..."
+              cp /results-full/mistral-24b-benchmark.json /shared/full/
+              ls -lh /shared/full/
+            else
+              echo "⚠️  Full precision results not found"
+            fi
+            
+            echo ""
+            echo "════════════════════════════════════════════════════════════════"
+            echo "  ✅ COPY COMPLETE"
+            echo "════════════════════════════════════════════════════════════════"
+            echo ""
+            echo "Results available in shared PVC at:"
+            echo "  - /shared/quantized/mistral-24b-quantized-benchmark.json"
+            echo "  - /shared/full/mistral-24b-benchmark.json"
+        
+        volumeMounts:
+        - name: results-quantized
+          mountPath: /results-quantized
+          readOnly: true
+        - name: results-full
+          mountPath: /results-full
+          readOnly: true
+        - name: shared-results
+          mountPath: /shared
+        
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+      
+      volumes:
+      - name: results-quantized
+        persistentVolumeClaim:
+          claimName: benchmark-quantized-results
+      - name: results-full
+        persistentVolumeClaim:
+          claimName: benchmark-full-results
+      - name: shared-results
+        persistentVolumeClaim:
+          claimName: benchmark-workbench-results
+

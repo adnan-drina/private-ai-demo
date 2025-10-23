@@ -1,0 +1,70 @@
+---
+apiVersion: trustyai.opendatahub.io/v1alpha1
+kind: LMEvalJob
+metadata:
+  name: eval-mistral-quantized
+  namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/name: lm-eval
+    app.kubernetes.io/component: trustyai-eval
+    app.kubernetes.io/part-of: trustyai-evaluation
+    model: mistral-24b-quantized
+  annotations:
+    description: "LM-Eval job for Mistral 24B Quantized model (W4A16, 1 GPU)"
+spec:
+  # Model configuration (local vLLM endpoint with OpenAI-compatible API)
+  # Using local-completions for loglikelihood support (required by arc_easy, hellaswag)
+  model: local-completions
+  
+  modelArgs:
+    - name: model
+      value: "mistral-24b-quantized"
+    - name: base_url
+      value: "https://mistral-24b-quantized-private-ai-demo.apps.cluster-qtvt5.qtvt5.sandbox2082.opentlc.com/v1/completions"
+    - name: tokenizer
+      value: "RedHatAI/Mistral-Small-24B-Instruct-2501-quantized.w4a16"
+    - name: num_concurrent
+      value: "2"  # Optimal for 1 GPU
+    - name: max_retries
+      value: "5"
+    - name: timeout
+      value: "600"
+  
+  # Evaluation tasks (All 4 benchmarks)
+  taskList:
+    taskNames:
+      - arc_easy        # General knowledge & reasoning
+      - hellaswag       # Commonsense reasoning
+      - gsm8k          # Math reasoning
+      - truthfulqa_mc2 # Truthfulness assessment
+  
+  # Sample configuration (fast-track for demo)
+  limit: "100"  # Samples per task
+  
+  # Batching configuration
+  batchSize: "1"  # Disabled for stability
+  
+  # Additional settings
+  logSamples: true
+  
+  # Allow online access and code execution
+  allowOnline: true
+  allowCodeExecution: true
+  
+  # Storage configuration (operator-managed PVC)
+  outputs:
+    pvcManaged:
+      size: 2Gi
+  
+  # Environment configuration
+  pod:
+    container:
+      env:
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: huggingface-token
+              key: HF_TOKEN
+        - name: VLLM_TIMEOUT
+          value: "600"
+

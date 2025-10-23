@@ -1,0 +1,32 @@
+{
+  "run_id": "acme-rag-preview",
+  "timestamp": "2025-10-08T00:00:00Z",
+  "status": "preview",
+  "documents": {
+    "total": 6,
+    "processed": 0,
+    "types": {
+      "SOP": 1,
+      "SPC": 1,
+      "FMEA": 1,
+      "RECIPE": 1,
+      "PLAYBOOK": 1,
+      "REPORT": 1
+    }
+  },
+  "chunks": {
+    "total": 0,
+    "indexed": 0,
+    "avg_tokens": 0
+  },
+  "milvus": {
+    "collection": "acme_documents",
+    "dimension": 768,
+    "index_type": "IVF_FLAT",
+    "metric_type": "COSINE",
+    "nlist": 128
+  },
+  "embedding_model": "ibm-granite/granite-embedding-125m-english",
+  "llm_model": "mistral-24b-quantized",
+  "notes": "Preview configuration for Stage 3 telemetry integration"
+}

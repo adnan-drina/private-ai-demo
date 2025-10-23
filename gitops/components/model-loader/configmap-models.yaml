@@ -1,0 +1,50 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: model-definitions
+  namespace: private-ai-demo
+  labels:
+    app: model-loader
+    app.kubernetes.io/name: model-definitions
+    app.kubernetes.io/component: configuration
+    app.kubernetes.io/part-of: private-ai-demo
+  annotations:
+    description: "Defines which models to download from HuggingFace"
+data:
+  models.json: |
+    {
+      "models": [
+        {
+          "name": "mistral-24b",
+          "display_name": "Mistral Small 24B Instruct 2501",
+          "hf_repo": "mistralai/Mistral-Small-24B-Instruct-2501",
+          "s3_bucket": "models",
+          "s3_prefix": "mistral-24b",
+          "revision": "main",
+          "enabled": true,
+          "description": "Full Mistral 24B model, requires 4 GPUs with tensor parallelism"
+        },
+        {
+          "name": "mistral-24b-quantized",
+          "display_name": "Mistral Small 24B Instruct 2501 (Quantized)",
+          "hf_repo": "RedHatAI/Mistral-Small-24B-Instruct-2501-quantized.w4a16",
+          "s3_bucket": "models",
+          "s3_prefix": "mistral-24b-quantized",
+          "revision": "main",
+          "enabled": true,
+          "description": "Quantized version by Red Hat AI, runs on single GPU with 24Gi memory"
+        }
+      ],
+      "minio": {
+        "endpoint": "minio.private-ai-demo.svc.cluster.local:9000",
+        "use_ssl": false,
+        "verify_ssl": false
+      },
+      "download": {
+        "chunk_size": 8388608,
+        "max_retries": 3,
+        "timeout": 600
+      }
+    }
+

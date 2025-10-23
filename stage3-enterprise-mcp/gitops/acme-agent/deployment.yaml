@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: acme-agent
+  namespace: acme-calibration-ops
+  labels:
+    app: acme-agent
+    app.kubernetes.io/name: acme-agent
+    app.kubernetes.io/part-of: stage3-enterprise-mcp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: acme-agent
+  template:
+    metadata:
+      labels:
+        app: acme-agent
+    spec:
+      serviceAccountName: acme-agent-sa
+      containers:
+      - name: acme-agent
+        image: image-registry.openshift-image-registry.svc:5000/private-ai-demo/acme-agent:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+          protocol: TCP
+          name: http
+        env:
+        - name: QUARKUS_HTTP_PORT
+          value: "8080"
+        - name: QUARKUS_LOG_LEVEL
+          value: "INFO"
+        - name: QUARKUS_LOG_CATEGORY__COM_REDHAT_ACME__LEVEL
+          value: "DEBUG"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+

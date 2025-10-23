@@ -1,0 +1,31 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: trustyai-lmeval-provider
+  namespace: private-ai-demo
+  labels:
+    app: trustyai-lmeval-provider
+    app.kubernetes.io/name: trustyai-provider
+    app.kubernetes.io/component: evaluation
+    app.kubernetes.io/part-of: llama-stack
+  annotations:
+    description: "Internal service for TrustyAI provider"
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  selector:
+    app: trustyai-lmeval-provider
+  ports:
+  - name: http
+    port: 8080
+    targetPort: http
+    protocol: TCP
+  - name: metrics
+    port: 9090
+    targetPort: metrics
+    protocol: TCP
+  sessionAffinity: None
+

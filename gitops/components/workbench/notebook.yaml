@@ -1,0 +1,136 @@
+apiVersion: kubeflow.org/v1
+kind: Notebook
+metadata:
+  name: rag-testing
+  namespace: private-ai-demo
+  labels:
+    app: rag-testing
+    app.kubernetes.io/name: rag-testing
+    app.kubernetes.io/component: notebook
+    app.kubernetes.io/part-of: private-ai-demo
+    app.openshift.io/runtime: python
+    opendatahub.io/dashboard: "true"
+  annotations:
+    app.openshift.io/connects-to: '[{"apiVersion":"apps/v1","kind":"Deployment","name":"llama-stack"}]'
+    notebooks.opendatahub.io/inject-oauth: "true"
+    notebooks.opendatahub.io/oauth-logout-url: "https://rhods-dashboard-redhat-ods-applications.apps.cluster-n8cnx.n8cnx.sandbox2830.opentlc.com/projects/private-ai-demo"
+    opendatahub.io/image-display-name: "Standard Data Science"
+    openshift.io/description: "RAG Testing Workbench for Scenario 1 and 2"
+    openshift.io/display-name: "RAG Testing Workbench"
+spec:
+  template:
+    spec:
+      affinity: {}
+      containers:
+      - name: rag-testing
+        image: image-registry.openshift-image-registry.svc:5000/redhat-ods-applications/s2i-generic-data-science-notebook:2025.1
+        imagePullPolicy: Always
+        env:
+        - name: NOTEBOOK_ARGS
+          value: |
+            --ServerApp.port=8888
+            --ServerApp.token=''
+            --ServerApp.password=''
+            --ServerApp.base_url=/notebook/private-ai-demo/rag-testing
+            --ServerApp.quit_button=False
+        - name: JUPYTER_IMAGE
+          value: image-registry.openshift-image-registry.svc:5000/redhat-ods-applications/s2i-generic-data-science-notebook:2025.1
+        ports:
+        - containerPort: 8888
+          name: notebook-port
+          protocol: TCP
+        resources:
+          limits:
+            cpu: "2"
+            memory: 8Gi
+          requests:
+            cpu: "1"
+            memory: 8Gi
+        volumeMounts:
+        - mountPath: /opt/app-root/src
+          name: rag-testing
+        - mountPath: /dev/shm
+          name: shm
+        # Mount benchmark results (shared PVC, read-only)
+        - mountPath: /opt/app-root/src/benchmark-results
+          name: benchmark-results
+          readOnly: true
+        # Mount notebooks from ConfigMaps
+        # Stage 1
+        - mountPath: /opt/app-root/src/01-benchmark.ipynb
+          name: notebook-01
+          subPath: 01-benchmark.ipynb
+        - mountPath: /opt/app-root/src/02-eval-results.ipynb
+          name: notebook-02-eval
+          subPath: 02-eval-results.ipynb
+        # Stage 2
+        - mountPath: /opt/app-root/src/03-redhat.ipynb
+          name: notebook-02
+          subPath: notebook.ipynb
+        - mountPath: /opt/app-root/src/04-eu-ai-act.ipynb
+          name: notebook-03
+          subPath: notebook.ipynb
+        - mountPath: /opt/app-root/src/05-acme.ipynb
+          name: notebook-04
+          subPath: notebook.ipynb
+        # Stage 3
+        - mountPath: /opt/app-root/src/06-stage3-agent.ipynb
+          name: notebook-05
+          subPath: 05-acme-agent-demo.ipynb
+        workingDir: /opt/app-root/src
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /notebook/private-ai-demo/rag-testing/api
+            port: notebook-port
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 1
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /notebook/private-ai-demo/rag-testing/api
+            port: notebook-port
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 1
+      enableServiceLinks: false
+      serviceAccountName: rag-testing
+      volumes:
+      - name: rag-testing
+        persistentVolumeClaim:
+          claimName: rag-testing
+      - emptyDir:
+          medium: Memory
+        name: shm
+      # Benchmark results (shared PVC, read-only)
+      - name: benchmark-results
+        persistentVolumeClaim:
+          claimName: benchmark-workbench-results
+      # Notebook ConfigMaps
+      # Stage 1
+      - name: notebook-01
+        configMap:
+          name: notebook-01-vllm-benchmark
+      - name: notebook-02-eval
+        configMap:
+          name: eval-results-notebook
+      # Stage 2
+      - name: notebook-02
+        configMap:
+          name: notebook-02-redhat
+      - name: notebook-03
+        configMap:
+          name: notebook-03-eu-ai-act
+      - name: notebook-04
+        configMap:
+          name: notebook-04-acme
+      # Stage 3
+      - name: notebook-05
+        configMap:
+          name: notebook-05-stage3-agent
+

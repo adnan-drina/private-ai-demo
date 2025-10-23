@@ -1,0 +1,77 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: private-ai-registry-db
+  namespace: rhoai-model-registries
+  labels:
+    app.kubernetes.io/name: model-registry-mysql
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: model-registry
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: model-registry-mysql
+      app.kubernetes.io/component: database
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: model-registry-mysql
+        app.kubernetes.io/component: database
+        app.kubernetes.io/part-of: model-registry
+      annotations:
+        sidecar.istio.io/inject: "false"  # Disable Istio for MySQL
+    spec:
+      containers:
+        - name: mysql
+          image: registry.redhat.io/rhel9/mysql-80:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - run-mysqld
+            - --default-authentication-plugin=mysql_native_password
+          ports:
+            - name: mysql
+              containerPort: 3306
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: private-ai-registry-db-parameters
+            - secretRef:
+                name: private-ai-registry-db-secret
+          volumeMounts:
+            - name: mysql-data
+              mountPath: /var/lib/mysql
+          readinessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -c
+                - mysql -D metadb -umodelregistry -pmodelregistry -e 'SELECT 1'
+            initialDelaySeconds: 15
+            timeoutSeconds: 2
+            periodSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: 3306
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 1
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+      volumes:
+        - name: mysql-data
+          persistentVolumeClaim:
+            claimName: private-ai-registry-mysql
+      restartPolicy: Always
+

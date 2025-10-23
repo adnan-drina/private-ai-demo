@@ -1,0 +1,39 @@
+---
+apiVersion: docling.github.io/v1alpha1
+kind: DoclingServe
+metadata:
+  name: shared-docling
+  namespace: ai-infrastructure
+  labels:
+    app: docling
+    component: document-processing
+    shared: "true"
+spec:
+  # API Server configuration
+  apiServer:
+    # Number of API server instances
+    instances: 1
+    
+    # Enable the UI
+    enableUI: true
+    
+    # Resource limits
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "1"
+      limits:
+        memory: "8Gi"
+        cpu: "4"
+  
+  # Compute engine configuration
+  engine:
+    # Use local engine (runs in same pod as API)
+    local:
+      numWorkers: 2
+  
+  # OpenShift Route configuration
+  route:
+    enabled: true
+
+

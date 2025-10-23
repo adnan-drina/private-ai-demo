@@ -1,0 +1,43 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: registry-user-private-ai-model-registry
+  namespace: rhoai-model-registries
+  labels:
+    app.kubernetes.io/name: model-registry
+    app.kubernetes.io/component: model-registry
+    app.kubernetes.io/part-of: private-ai-demo
+  annotations:
+    openshift.io/description: "Can access Model Registry private-ai-model-registry"
+    openshift.io/display-name: "Registry User Private AI Model Registry"
+rules:
+  - apiGroups:
+      - modelregistry.opendatahub.io
+    resources:
+      - modelregistries
+    verbs:
+      - get
+      - list
+    resourceNames:
+      - private-ai-model-registry
+  - apiGroups:
+      - ""
+    resources:
+      - services
+    verbs:
+      - get
+      - list
+    resourceNames:
+      - private-ai-model-registry
+  - apiGroups:
+      - route.openshift.io
+    resources:
+      - routes
+    verbs:
+      - get
+      - list
+    resourceNames:
+      - private-ai-model-registry
+      - private-ai-model-registry-https
+

@@ -1,0 +1,56 @@
+---
+apiVersion: serving.kserve.io/v1alpha1
+kind: ServingRuntime
+metadata:
+  name: vllm-cuda-runtime
+  namespace: private-ai-demo
+  annotations:
+    opendatahub.io/apiProtocol: REST
+    opendatahub.io/recommended-accelerators: '["nvidia.com/gpu"]'
+    opendatahub.io/runtime-version: v0.9.1.0
+    opendatahub.io/template-display-name: vLLM NVIDIA GPU ServingRuntime for KServe
+    opendatahub.io/template-name: vllm-cuda-runtime
+    openshift.io/display-name: vLLM NVIDIA GPU ServingRuntime for KServe
+  labels:
+    opendatahub.io/dashboard: "true"
+    app.kubernetes.io/part-of: private-ai-demo
+spec:
+  annotations:
+    prometheus.io/path: /metrics
+    prometheus.io/port: "8080"
+  containers:
+  - name: kserve-container
+    image: quay.io/modh/vllm@sha256:56aa86c6ed6ba6cc9557a8583ff9d4ee535193f6cda030bd1268064bc70120e3
+    command:
+    - python
+    - -m
+    - vllm.entrypoints.openai.api_server
+    args:
+    - --port=8080
+    - --model=/mnt/models
+    - --served-model-name={{.Name}}
+    env:
+    - name: HF_HOME
+      value: /tmp/hf_home
+    ports:
+    - containerPort: 8080
+      protocol: TCP
+    volumeMounts:
+    - name: shm
+      mountPath: /dev/shm
+  volumes:
+  - name: shm
+    emptyDir:
+      medium: Memory
+      sizeLimit: 16Gi
+  multiModel: false
+  supportedModelFormats:
+  - name: vLLM
+    autoSelect: true
+    version: "1"
+  protocolVersions:
+  - v2
+  - grpc-v2
+  grpcDataEndpoint: port:8001
+  grpcEndpoint: port:8085
+

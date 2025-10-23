@@ -1,0 +1,42 @@
+---
+apiVersion: modelregistry.opendatahub.io/v1beta1
+kind: ModelRegistry
+metadata:
+  name: private-ai-model-registry
+  namespace: rhoai-model-registries
+  labels:
+    app: model-registry
+    component: mlops
+    maistra.io/expose-route: "true"  # Enable external route via Service Mesh
+  annotations:
+    openshift.io/description: 'Private AI Demo Model Registry'
+    openshift.io/display-name: private-ai-model-registry
+spec:
+  podMetadata:
+    labels:
+      maistra.io/expose-route: "true"  # Required for Istio NetworkPolicy
+  grpc:
+    port: 9090
+  rest:
+    port: 8080
+    serviceRoute: disabled  # Disable direct REST route (use OAuth proxy instead)
+    resources:
+      limits:
+        cpu: 200m
+        memory: 512Mi
+      requests:
+        cpu: 100m
+        memory: 256Mi
+  oauthProxy:
+    port: 8443  # OAuth proxy internal port
+    routePort: 443  # External HTTPS route
+    serviceRoute: enabled  # Enable OAuth proxy route for dashboard
+  mysql:
+    host: private-ai-registry-db.rhoai-model-registries.svc.cluster.local
+    port: 3306
+    database: metadb
+    username: modelregistry
+    passwordSecret:
+      name: private-ai-model-registry-db
+      key: database-password
+
