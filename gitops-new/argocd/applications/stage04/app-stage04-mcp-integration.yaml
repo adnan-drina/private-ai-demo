@@ -24,7 +24,7 @@ spec:
       - PruneLast=true
       - RespectIgnoreDifferences=true
       - ApplyOutOfSyncOnly=true
-      - ServerSideApply=true  # Use server-side apply
+      # ServerSideApply removed - causes managedFields conflicts
     retry:
       limit: 3
       backoff:
