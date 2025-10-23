@@ -33,16 +33,35 @@ spec:
         factor: 2
         maxDuration: 3m
   ignoreDifferences:
-    # Ignore TrustyAI LMEvalJob status
+    # Ignore TrustyAI LMEvalJob status and metadata
     - group: trustyai.opendatahub.io
       kind: LMEvalJob
       jsonPointers:
         - /status
+        - /metadata/resourceVersion
     
     # Ignore Grafana dashboard status
     - group: grafana.integreatly.org
       kind: GrafanaDashboard
       jsonPointers:
+        - /status
+    
+    # Ignore ServiceMonitor and PodMonitor metadata
+    - group: monitoring.coreos.com
+      kind: ServiceMonitor
+      jsonPointers:
+        - /metadata/resourceVersion
+    - group: monitoring.coreos.com
+      kind: PodMonitor
+      jsonPointers:
+        - /metadata/resourceVersion
+    
+    # Ignore PVC dynamic provisioning
+    - group: ""
+      kind: PersistentVolumeClaim
+      jsonPointers:
+        - /spec/volumeName
+        - /spec/volumeMode
         - /status
     
     # Ignore managed fields metadata

@@ -49,6 +49,23 @@ spec:
       jsonPointers:
         - /status
     
+    # Ignore Tekton Task/Pipeline metadata.resourceVersion (immutable during updates)
+    - group: tekton.dev
+      kind: Task
+      jsonPointers:
+        - /metadata/resourceVersion
+    - group: tekton.dev
+      kind: Pipeline
+      jsonPointers:
+        - /metadata/resourceVersion
+    
+    # Ignore LlamaStackDistribution operator-managed fields
+    - group: llamastack.io
+      kind: LlamaStackDistribution
+      jsonPointers:
+        - /metadata/resourceVersion
+        - /status
+    
     # Ignore PVC dynamic provisioning
     - group: ""
       kind: PersistentVolumeClaim
@@ -56,6 +73,12 @@ spec:
         - /spec/volumeName
         - /spec/volumeMode
         - /status
+    
+    # Ignore ServiceMonitor metadata.resourceVersion
+    - group: monitoring.coreos.com
+      kind: ServiceMonitor
+      jsonPointers:
+        - /metadata/resourceVersion
     
     # Ignore managed fields metadata
     - group: "*"
