@@ -60,11 +60,12 @@ spec:
       jsonPointers:
         - /status
     
-    # Ignore PVC dynamic provisioning
+    # Ignore PVC dynamic provisioning (volumeName is set after binding)
     - group: ""
       kind: PersistentVolumeClaim
       jsonPointers:
         - /spec/volumeName
+        - /spec/volumeMode
         - /status
     
     # Ignore Job status (completed jobs show as progressing)
@@ -72,6 +73,14 @@ spec:
       kind: Job
       jsonPointers:
         - /status
+    
+    # Ignore managed fields metadata
+    - group: "*"
+      kind: "*"
+      jsonPointers:
+        - /metadata/managedFields
+        - /metadata/resourceVersion
+        - /metadata/generation
   
   info:
     - name: Description
