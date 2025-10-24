@@ -79,8 +79,3 @@ spec:
       - effect: NoSchedule
         key: nvidia.com/gpu
         value: "true"
-  availableReplicas: 1
-  fullyLabeledReplicas: 1
-  observedGeneration: 1
-  readyReplicas: 1
-  replicas: 1

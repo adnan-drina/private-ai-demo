@@ -2,9 +2,20 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
+# Namespaces
+- namespace-openshift-nfd.yaml
+- namespace-nvidia-gpu-operator.yaml
+- namespace-redhat-ods-operator.yaml
+
+# OperatorGroups
+- operatorgroup-nfd.yaml
+- operatorgroup-gpu.yaml
+- operatorgroup-rhods.yaml
+
+# Subscriptions
 - subscription-nfd.yaml
-- subscription-gpu.yaml
-- subscription-rhoai.yaml
-- subscription-servicemesh.yaml
-- subscription-serverless.yaml
+- subscription-gpu-operator-certified.yaml
+- subscription-rhods-operator.yaml
+- subscription-servicemeshoperator.yaml
+- subscription-serverless-operator.yaml
 

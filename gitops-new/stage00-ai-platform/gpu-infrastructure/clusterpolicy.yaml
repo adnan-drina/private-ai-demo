@@ -38,14 +38,3 @@ spec:
       env:
       - name: WITH_WORKLOAD
         value: "true"
-  conditions:
-  - lastTransitionTime: "2025-10-24T10:27:51Z"
-    message: No NFD labels found
-    reason: NFDLabelsMissing
-    type: Ready
-  - lastTransitionTime: "2025-10-24T10:27:51Z"
-    message: ""
-    reason: Ready
-    type: Error
-  namespace: nvidia-gpu-operator
-  state: ready

@@ -4,7 +4,7 @@ kind: Kustomization
 namespace: openshift-machine-api
 
 resources:
-- machineset-g6-4xlarge.yaml
-- machineset-g6-12xlarge.yaml
+- machineset-cluster-gmgrr-j2lhd-gpu-g6-4xlarge-us-east-2c.yaml
+- machineset-cluster-gmgrr-j2lhd-gpu-g6-12xlarge-us-east-2c.yaml
 - clusterpolicy.yaml
 
