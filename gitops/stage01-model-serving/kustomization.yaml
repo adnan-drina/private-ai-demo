@@ -16,7 +16,8 @@ resources:
   - project-namespace
   
   # 2. MinIO (Object storage for models and artifacts)
-  - minio
+  # COMMENTED OUT: Not needed for pipeline testing
+  # - minio
   
   # 3. ImageStreams (for ModelCar)
   - imagestreams
@@ -28,16 +29,20 @@ resources:
   - pipelines
   
   # 6. vLLM Serving Infrastructure
-  - vllm
+  # COMMENTED OUT: Pipeline will deploy InferenceServices
+  # - vllm
   
   # 7. Model Loading Jobs (legacy, can be removed once pipelines are validated)
-  - model-loader
+  # COMMENTED OUT: Replaced by pipeline
+  # - model-loader
   
   # 8. Benchmarking Infrastructure
-  - benchmarking
+  # COMMENTED OUT: Not needed for pipeline testing
+  # - benchmarking
   
   # 9. Workbench (Notebooks)
-  - workbench
+  # COMMENTED OUT: Not needed for pipeline testing
+  # - workbench
 
 # Configuration for all resources
 configurations:
