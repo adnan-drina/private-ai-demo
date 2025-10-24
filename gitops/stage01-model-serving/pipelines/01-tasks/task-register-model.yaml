@@ -45,6 +45,21 @@ spec:
       type: string
       description: Model version description
       default: ""
+    
+    - name: base_model
+      type: string
+      description: Base model name (e.g., "mistralai/Mistral-Large-Instruct-2407")
+      default: ""
+    
+    - name: quantization
+      type: string
+      description: Quantization type (e.g., "w4a16", "fp16", "none")
+      default: "none"
+    
+    - name: gpu_requirement
+      type: string
+      description: Number of GPUs required
+      default: "1"
 
   stepTemplate:
     metadata:
@@ -81,12 +96,18 @@ spec:
         image_uri = "$(params.image_uri)"
         format_name = "$(params.model_format_name)"
         format_version = "$(params.model_format_version)"
-        description = "$(params.description)" or f"ModelCar image {image_uri}"
+        description = "$(params.description)" or f"ModelCar image for {model_name}"
+        base_model = "$(params.base_model)"
+        quantization = "$(params.quantization)"
+        gpu_requirement = "$(params.gpu_requirement)"
 
-        print(f"Model Name:    {model_name}")
-        print(f"Version:       {version_name}")
-        print(f"Image URI:     {image_uri}")
-        print(f"Format:        {format_name} v{format_version}")
+        print(f"Model Name:        {model_name}")
+        print(f"Version:           {version_name}")
+        print(f"Base Model:        {base_model}")
+        print(f"Quantization:      {quantization}")
+        print(f"GPU Requirement:   {gpu_requirement}")
+        print(f"Image URI:         {image_uri}")
+        print(f"Format:            {format_name} v{format_version}")
         print("════════════════════════════════════════════════════════════")
 
         # Get Model Registry host
@@ -105,8 +126,32 @@ spec:
             
             print("✅ Connected successfully!")
             
-            # Register model with SDK
+            # Register model with SDK and rich metadata
             print(f"\n📝 Registering model: {model_name} version {version_name}...")
+            
+            # Build metadata dictionary
+            metadata = {
+                "pipeline": "ModelCar",
+                "container_image": image_uri,
+                "format": "ModelCar",
+                "deployment_type": "vLLM",
+                "use_case": "inference",
+            }
+            
+            # Add optional metadata if provided
+            if base_model:
+                metadata["base_model"] = base_model
+                metadata["source"] = "HuggingFace"
+            
+            if quantization and quantization != "none":
+                metadata["quantization"] = quantization
+                metadata["optimization"] = "AWQ" if "w4" in quantization.lower() else "None"
+            
+            if gpu_requirement:
+                metadata["gpu_requirement"] = gpu_requirement
+                metadata["accelerator"] = "NVIDIA-GPU"
+            
+            print(f"\n📋 Metadata: {metadata}")
             
             registered_model = registry.register_model(
                 name=model_name,
@@ -115,13 +160,7 @@ spec:
                 model_format_version=format_version,
                 version=version_name,
                 description=description,
-                metadata={
-                    "source": "HuggingFace",
-                    "deployment_type": "vLLM",
-                    "pipeline": "ModelCar",
-                    "container_image": image_uri,
-                    "format": "ModelCar"
-                }
+                metadata=metadata
             )
             
             print(f"✅ Model registered successfully!")

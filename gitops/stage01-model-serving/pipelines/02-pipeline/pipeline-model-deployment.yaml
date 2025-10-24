@@ -71,6 +71,21 @@ spec:
       description: Description for this model version
       default: ""
     
+    - name: base_model
+      type: string
+      description: Base model HuggingFace ID (for metadata)
+      default: ""
+    
+    - name: quantization
+      type: string
+      description: Quantization type (e.g., w4a16, fp16, none)
+      default: "none"
+    
+    - name: gpu_requirement
+      type: string
+      description: Number of GPUs required for deployment
+      default: "1"
+    
     # Internal parameters (computed)
     - name: internal_registry
       type: string
@@ -161,6 +176,12 @@ spec:
           value: "1"
         - name: description
           value: $(params.version_description)
+        - name: base_model
+          value: $(params.base_model)
+        - name: quantization
+          value: $(params.quantization)
+        - name: gpu_requirement
+          value: $(params.gpu_requirement)
 
   finally:
     - name: cleanup-workspace
