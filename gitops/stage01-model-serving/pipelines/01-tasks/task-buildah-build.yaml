@@ -63,7 +63,7 @@ spec:
       image: registry.redhat.io/rhel9/buildah:latest
       workingDir: $(workspaces.source.path)
       # Resource requirements for large model builds (20GB+ models)
-      resources:
+      computeResources:
         requests:
           memory: "8Gi"
           cpu: "2"
