@@ -61,11 +61,6 @@ spec:
       description: Number of GPUs required
       default: "1"
 
-  stepTemplate:
-    metadata:
-      annotations:
-        sidecar.istio.io/inject: "false"
-  
   steps:
     - name: register-via-sdk
       image: registry.access.redhat.com/ubi9/python-311:latest
