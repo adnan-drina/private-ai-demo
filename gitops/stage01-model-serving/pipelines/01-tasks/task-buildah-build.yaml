@@ -70,9 +70,18 @@ spec:
         limits:
           memory: "16Gi"  # Adequate for 20GB model download + build
           cpu: "4"
+      # Use workspace subdirectory for Buildah storage (avoids ephemeral-storage exhaustion)
+      env:
+        - name: BUILDAH_STORAGE_ROOT
+          value: $(workspaces.source.path)/.buildah-storage
+        - name: STORAGE_DRIVER
+          value: vfs
       script: |
         #!/bin/bash
         set -e
+        
+        # Create Buildah storage directory in workspace PVC
+        mkdir -p ${BUILDAH_STORAGE_ROOT}
         
         echo "════════════════════════════════════════════════════════════"
         echo "🔨 Building ModelCar Image with Buildah"
@@ -81,10 +90,11 @@ spec:
         echo "Dockerfile:  $(params.DOCKERFILE)"
         echo "Destination: $(params.IMAGE)"
         echo "Format:      $(params.FORMAT)"
+        echo "Storage:     ${BUILDAH_STORAGE_ROOT} (PVC-backed, 100Gi)"
         echo "════════════════════════════════════════════════════════════"
         
-        # Build the image
-        buildah --storage-driver=vfs bud \
+        # Build the image (using PVC storage)
+        buildah --root ${BUILDAH_STORAGE_ROOT} --storage-driver=vfs bud \
           --format=$(params.FORMAT) \
           --tls-verify=$(params.TLSVERIFY) \
           --no-cache \
@@ -96,8 +106,8 @@ spec:
         echo ""
         echo "📤 Pushing image to registry..."
         
-        # Push the image
-        buildah --storage-driver=vfs push \
+        # Push the image (using PVC storage)
+        buildah --root ${BUILDAH_STORAGE_ROOT} --storage-driver=vfs push \
           --tls-verify=$(params.TLSVERIFY) \
           --digestfile /tmp/image-digest \
           $(params.IMAGE) \
