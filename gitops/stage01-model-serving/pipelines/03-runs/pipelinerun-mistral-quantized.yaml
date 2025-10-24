@@ -29,13 +29,13 @@ spec:
     - name: image_tag
       value: "w4a16-2501"
     
-    # Quay configuration (will be set by deploy.sh)
+    # Quay configuration
     - name: quay_org
-      value: "QUAY_ORG_PLACEHOLDER"
+      value: "adrina"
     - name: quay_repo
-      value: "mistral-24b-quantized"
+      value: "private-ai"
     - name: quay_tag
-      value: "w4a16-2501"
+      value: "mistral-24b-quantized-w4a16-2501"
     
     # Model Registry
     - name: model_name

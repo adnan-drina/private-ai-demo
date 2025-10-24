@@ -178,18 +178,11 @@ run_modelcar_pipelines() {
   
   log_section "Preparing PipelineRuns"
   
-  # Update PipelineRun templates with actual Quay org
+  # PipelineRun templates are ready to use (Quay org already configured)
   QUANTIZED_PR="$GITOPS_PATH/pipelines/03-runs/pipelinerun-mistral-quantized.yaml"
   FULL_PR="$GITOPS_PATH/pipelines/03-runs/pipelinerun-mistral-full.yaml"
   
-  # Create temporary files with updated Quay org
-  TEMP_QUANTIZED=$(mktemp)
-  TEMP_FULL=$(mktemp)
-  
-  sed "s/QUAY_ORG_PLACEHOLDER/${QUAY_ORGANIZATION}/g" "$QUANTIZED_PR" > "$TEMP_QUANTIZED"
-  sed "s/QUAY_ORG_PLACEHOLDER/${QUAY_ORGANIZATION}/g" "$FULL_PR" > "$TEMP_FULL"
-  
-  log_info "PipelineRuns prepared with Quay organization: $QUAY_ORGANIZATION"
+  log_info "PipelineRuns ready with Quay repository: quay.io/${QUAY_ORGANIZATION}/private-ai"
   
   # Ask user which pipeline to run
   echo ""
@@ -207,7 +200,7 @@ run_modelcar_pipelines() {
       if [ "$DRY_RUN" = true ]; then
         log_info "[DRY-RUN] Would create quantized model PipelineRun"
       else
-        oc create -f "$TEMP_QUANTIZED"
+        oc create -f "$QUANTIZED_PR"
         log_success "Quantized model pipeline started"
         log_info "Monitor with: tkn pr logs -f -L -n private-ai-demo"
       fi
@@ -217,7 +210,7 @@ run_modelcar_pipelines() {
       if [ "$DRY_RUN" = true ]; then
         log_info "[DRY-RUN] Would create full model PipelineRun"
       else
-        oc create -f "$TEMP_FULL"
+        oc create -f "$FULL_PR"
         log_success "Full model pipeline started"
         log_info "Monitor with: tkn pr logs -f -L -n private-ai-demo"
       fi
@@ -228,11 +221,11 @@ run_modelcar_pipelines() {
         log_info "[DRY-RUN] Would create both PipelineRuns"
       else
         log_info "Starting quantized model pipeline..."
-        oc create -f "$TEMP_QUANTIZED"
+        oc create -f "$QUANTIZED_PR"
         log_success "Quantized model pipeline started"
         
         log_info "Starting full model pipeline..."
-        oc create -f "$TEMP_FULL"
+        oc create -f "$FULL_PR"
         log_success "Full model pipeline started"
         
         log_info "Monitor all pipelines: tkn pr list -n private-ai-demo"
@@ -245,8 +238,5 @@ run_modelcar_pipelines() {
       log_warning "Invalid choice, skipping pipeline execution"
       ;;
   esac
-  
-  # Cleanup temp files
-  rm -f "$TEMP_QUANTIZED" "$TEMP_FULL"
 }
 
