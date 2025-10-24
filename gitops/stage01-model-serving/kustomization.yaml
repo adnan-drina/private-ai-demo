@@ -18,16 +18,25 @@ resources:
   # 2. MinIO (Object storage for models and artifacts)
   - minio
   
-  # 3. vLLM Serving Infrastructure
+  # 3. ImageStreams (for ModelCar)
+  - imagestreams
+  
+  # 4. Pipeline Workspaces
+  - workspaces
+  
+  # 5. Tekton Pipelines (ModelCar)
+  - pipelines
+  
+  # 6. vLLM Serving Infrastructure
   - vllm
   
-  # 4. Model Loading Jobs
+  # 7. Model Loading Jobs (legacy, can be removed once pipelines are validated)
   - model-loader
   
-  # 5. Benchmarking Infrastructure
+  # 8. Benchmarking Infrastructure
   - benchmarking
   
-  # 6. Workbench (Notebooks)
+  # 9. Workbench (Notebooks)
   - workbench
 
 # Configuration for all resources
