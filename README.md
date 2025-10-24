@@ -1,249 +1,377 @@
-# Red Hat AI Demo - Three-Stage Journey
+# Red Hat AI Demo - Five-Stage Journey
 
-**Complete demonstration of Red Hat AI's Four Pillars across hybrid cloud environments**
+**Complete demonstration of Red Hat AI's Four Pillars on OpenShift**
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Overview
 
-This demo showcases Red Hat AI capabilities through three progressive stages:
+This demo showcases Red Hat AI capabilities through five progressive stages, demonstrating sovereignty, flexibility, trust, and integration.
 
-1. **Stage 1**: Sovereign AI with efficient inference
-2. **Stage 2**: Private data enhancement with RAG & InstructLab  
-3. **Stage 3**: Enterprise agentic AI with MCP servers
+### Demo Stages
+
+0. **Platform Setup** - OpenShift AI 2.24, GPU nodes, Model Registry
+1. **Model Serving** - Efficient vLLM inference with benchmarking
+2. **Model Alignment** - RAG + Llama Stack orchestration
+3. **Model Monitoring** - TrustyAI evaluation + observability
+4. **Model Integration** - Agentic workflows with MCP
 
 ---
 
 ## 📁 Project Structure
 
 ```
-llama-stack-tst-demo/
-├── README.md                    # This file
-├── gitops/                      # GitOps deployment (Kustomize)
-│   ├── base/                    # Essential: namespace, vLLM
-│   ├── components/              # Optional: GPUs, loaders, benchmarks
-│   ├── overlays/                # Environments: dev, staging, production
-│   ├── kustomization.yaml       # Root: deploy everything
-│   └── README.md                # Deployment guide
-├── stage1-sovereign-ai/         # Stage 1 (README.md + deploy.sh)
-├── stage2-private-data-rag/     # Stage 2 (README.md + deploy.sh)
-├── stage3-enterprise-mcp/       # Stage 3 (README.md + deploy.sh)
-└── docs/                        # Reference documentation
-    ├── presentations/           # Demo scripts & talking points
-    └── reference/               # Architecture docs & guides
+private-ai-demo/
+├── README.md                                           # This file
+│
+├── gitops-new/                                         # GitOps manifests (Kustomize)
+│   ├── argocd/                                         # ArgoCD Applications
+│   ├── stage00-ai-platform-rhoai/                     # Stage 0: Platform
+│   ├── stage01-model-serving/                          # Stage 1: vLLM
+│   ├── stage02-model-alignment/                        # Stage 2: RAG
+│   ├── stage03-model-monitoring/                       # Stage 3: TrustyAI
+│   └── stage04-model-integration/                      # Stage 4: MCP
+│
+├── stage0-ai-platform-rhoai/                          # Stage 0 deployment
+│   ├── README.md                                       # Platform setup guide
+│   ├── deploy.sh                                       # Deploy RHOAI + GPU
+│   ├── validate.sh                                     # Validate platform
+│   └── env.template                                    # Config template
+│
+├── stage1-model-serving-with-vllm/                    # Stage 1 deployment
+│   ├── README.md                                       # Model serving guide
+│   ├── deploy.sh                                       # Deploy models + benchmarks
+│   ├── validate.sh                                     # Validate serving
+│   └── env.template                                    # HuggingFace token
+│
+├── stage2-model-alignment-with-rag-and-llama-stack/  # Stage 2 deployment
+│   ├── README.md                                       # RAG setup guide
+│   ├── deploy.sh                                       # Deploy RAG stack
+│   ├── validate.sh                                     # Validate RAG
+│   ├── env.template                                    # Config template
+│   └── documents/                                      # Documents for ingestion
+│
+├── stage3-model-monitoring-with-trustyai-.../         # Stage 3 deployment
+│   ├── README.md                                       # Monitoring guide
+│   ├── deploy.sh                                       # Deploy observability
+│   ├── validate.sh                                     # Validate monitoring
+│   └── env.template                                    # Config template
+│
+├── stage4-model-integration-with-mcp-and-llama-stack/ # Stage 4 deployment
+│   ├── README.md                                       # Agent guide
+│   ├── deploy.sh                                       # Deploy MCP + agent
+│   ├── validate.sh                                     # Validate integration
+│   ├── env.template                                    # Config template
+│   └── documents/                                      # Agent data
+│
+├── docs/                                               # Documentation
+│   └── *.md                                            # Architecture & guides
+│
+└── scripts/                                            # Utility scripts
+    └── cleanup-environment.sh                          # Clean deployment
 ```
 
 ---
 
 ## 🎯 Prerequisites
 
-- OpenShift cluster with admin access
-- GPU nodes (or ability to provision via MachineSets)
-- `oc` CLI configured
-- HuggingFace token (for model downloads)
-- Basic understanding of Kubernetes/OpenShift
+### Required
+- **OpenShift Cluster** - 4.16+ with admin access
+- **oc CLI** - Configured and logged in
+- **HuggingFace Token** - For model downloads
+- **GPU Capacity** - AWS g6.4xlarge (1 GPU) + g6.12xlarge (4 GPUs)
+
+### Installed via Stage 0
+- OpenShift AI operator 2.24
+- GPU Operator
+- Model Registry
 
 ---
 
-## 📚 Stage Overview
+## 🚀 Quick Start
 
-### Stage 1: Sovereign AI (20 minutes)
-**Focus**: Efficient inference + Hybrid cloud flexibility
-
-**What you'll demonstrate**:
-- Deploy models with 75% GPU cost savings (quantization)
-- vLLM as inference engine
-- Complete data sovereignty
-- GitOps-based deployment
-
-**Automated deployment**: `cd stage1-sovereign-ai && ./deploy.sh`  
-**Manual guide**: [stage1-sovereign-ai/README.md](./stage1-sovereign-ai/README.md)
-
----
-
-### Stage 2: Private Data Enhancement (30 minutes)
-**Focus**: Data connection + Hybrid cloud flexibility
-
-**What you'll demonstrate**:
-- RAG for grounding LLM responses in your documents
-- InstructLab for accessible model fine-tuning
-- Vector databases and embeddings
-- Data processed where it lives
-
-**Automated deployment**: `cd stage2-private-data-rag && ./deploy.sh` (planned)  
-**Manual guide**: [stage2-private-data-rag/README.md](./stage2-private-data-rag/README.md)
-
----
-
-### Stage 3: Enterprise Agentic AI (30 minutes)
-**Focus**: Agentic AI + Hybrid cloud flexibility
-
-**What you'll demonstrate**:
-- Model Context Protocol (MCP) for system integration
-- Quarkus AI agents (enterprise Java)
-- Autonomous multi-system workflows
-- Production-ready architecture
-
-**Automated deployment**: `cd stage3-enterprise-mcp && ./deploy.sh` (planned)  
-**Manual guide**: [stage3-enterprise-mcp/README.md](./stage3-enterprise-mcp/README.md)
-
----
-
-## 🏗️ GitOps Deployment
-
-All infrastructure and applications are deployed via GitOps:
+### End-to-End Deployment
 
 ```bash
-# Option 1: Deploy production (recommended)
-oc apply -k gitops/overlays/production
+# 1. Login to OpenShift
+oc login <cluster-url>
 
-# Option 2: Deploy development (for testing)
-oc apply -k gitops/overlays/dev
+# 2. Stage 0: Platform Setup
+cd stage0-ai-platform-rhoai
+./deploy.sh
+./validate.sh
 
-# Option 3: Deploy step-by-step
-oc apply -k gitops/base                    # Essential resources
-oc apply -k gitops/components/model-loader # Download models
-oc apply -k gitops/components/benchmarking # Run tests
+# 3. Stage 1: Model Serving
+cd ../stage1-model-serving-with-vllm
+cp env.template .env
+# Edit .env and add HF_TOKEN
+./deploy.sh
+./validate.sh
+
+# 4. Stage 2: Model Alignment (RAG)
+cd ../stage2-model-alignment-with-rag-and-llama-stack
+./deploy.sh
+./validate.sh
+
+# 5. Stage 3: Model Monitoring
+cd ../stage3-model-monitoring-with-trustyai-opentelemetry-and-llama-stack
+./deploy.sh
+./validate.sh
+
+# 6. Stage 4: Model Integration (MCP)
+cd ../stage4-model-integration-with-mcp-and-llama-stack
+./deploy.sh
+./validate.sh
 ```
 
-See [gitops/README.md](./gitops/README.md) for details.
+### Using ArgoCD (GitOps)
+
+```bash
+# Deploy ArgoCD Applications
+oc apply -k gitops-new/argocd/
+
+# Monitor sync status
+oc get applications -n openshift-gitops
+```
 
 ---
 
-## 🎓 Red Hat AI Four Pillars
+## 📚 Stage Details
 
-This demo demonstrates all Four Pillars:
+### Stage 0: AI Platform - RHOAI
+**Setup foundational infrastructure**
 
-**Pillar 3** (Foundation): Hybrid Cloud Flexibility
-- Runs throughout all stages
-- Deploy on-premise, cloud, edge, air-gapped
-- Complete data sovereignty
+- OpenShift AI 2.24 operator
+- DataScienceCluster with Model Registry
+- GPU Operator + GPU nodes (g6.4xlarge, g6.12xlarge)
+- Model Registry + MySQL backend
 
-**Pillar 1** (Stage 1): Efficient Inferencing
-- vLLM optimization, 75% cost reduction
-- Built ON Pillar 3
+📖 [Stage 0 README](stage0-ai-platform-rhoai/README.md)
 
-**Pillar 2** (Stage 2): Simplified Data Connection
-- RAG and InstructLab
-- Built ON Pillar 3
+---
 
-**Pillar 4** (Stage 3): Agentic AI Delivery
-- MCP servers and Quarkus agents
-- Built ON Pillar 3
+### Stage 1: Model Serving with vLLM
+**Efficient inference with benchmarking**
 
-See [docs/reference/FOUR-PILLARS-ALIGNMENT.md](./docs/reference/FOUR-PILLARS-ALIGNMENT.md) for details.
+- vLLM ServingRuntime (shared)
+- Mistral 24B Quantized (1 GPU, W4A16)
+- Mistral 24B Full (4 GPUs, FP16)
+- GuideLLM benchmarks + Model Registry integration
+- MinIO storage for artifacts
+- Benchmark results notebook
+
+**Key Concepts:** GPU optimization, quantization trade-offs, cost efficiency
+
+📖 [Stage 1 README](stage1-model-serving-with-vllm/README.md)
+
+---
+
+### Stage 2: Model Alignment with RAG + Llama Stack
+**Enterprise data enhancement**
+
+- Llama Stack orchestrator (central hub)
+- Milvus vector database
+- Docling + Granite embedding model
+- Tekton document ingestion pipelines (3 use cases)
+- RAG demonstration notebooks
+
+**Use Cases:**
+- Red Hat documentation queries
+- EU AI Act compliance questions
+- ACME manufacturing procedures
+
+**Key Concepts:** RAG, vector search, document chunking, Llama Stack
+
+📖 [Stage 2 README](stage2-model-alignment-with-rag-and-llama-stack/README.md)
+
+---
+
+### Stage 3: Model Monitoring with TrustyAI + OpenTelemetry + Llama Stack
+**Quality assessment and observability**
+
+- TrustyAI LMEvalJobs (4 benchmarks: arc_easy, hellaswag, gsm8k, truthfulqa_mc2)
+- Grafana dashboards (performance + quality)
+- Prometheus metrics collection
+- OpenTelemetry distributed tracing
+- Evaluation results notebook
+
+**Key Metrics:**
+- Model accuracy and quality scores
+- GPU utilization and memory
+- TTFT (Time To First Token)
+- Throughput and latency
+
+**Key Concepts:** Model evaluation, observability, quality vs performance
+
+📖 [Stage 3 README](stage3-model-monitoring-with-trustyai-opentelemetry-and-llama-stack/README.md)
+
+---
+
+### Stage 4: Model Integration with MCP + Llama Stack
+**Enterprise agentic workflows**
+
+- ACME Calibration Agent (Quarkus app)
+- PostgreSQL equipment database
+- MCP Servers (Database + Slack)
+- Llama Stack + RAG integration
+- Agent demonstration notebook
+
+**Workflow:**
+```
+User Query
+  ↓
+ACME Agent
+  ├→ Database MCP (equipment lookup)
+  ├→ Llama Stack + RAG (calibration docs)
+  ├→ vLLM (expert analysis)
+  └→ Slack MCP (team notification)
+  ↓
+Comprehensive Response
+```
+
+**Key Concepts:** MCP protocol, agentic AI, multi-step orchestration
+
+📖 [Stage 4 README](stage4-model-integration-with-mcp-and-llama-stack/README.md)
+
+---
+
+## 🏗️ Red Hat AI Four Pillars
+
+This demo demonstrates all four pillars of Red Hat AI:
+
+### 1️⃣ Flexible Foundation (Stage 1)
+- ✅ Multiple model formats (quantized, full precision)
+- ✅ Efficient serving (vLLM)
+- ✅ GPU optimization and cost efficiency
+
+### 2️⃣ Data & AI Integration (Stage 2)
+- ✅ RAG with enterprise data
+- ✅ Vector storage and retrieval
+- ✅ Automated document ingestion
+
+### 3️⃣ Trust & Governance (Stage 3)
+- ✅ Model quality evaluation
+- ✅ Continuous monitoring
+- ✅ Comprehensive observability
+
+### 4️⃣ Integration & Automation (Stage 4)
+- ✅ Agentic workflows
+- ✅ Standardized protocols (MCP)
+- ✅ Enterprise system integration
+
+---
+
+## 🎓 Demo Audience
+
+### For Technical Teams
+- Architecture patterns for AI deployments
+- Best practices for GPU optimization
+- RAG implementation with Llama Stack
+- Observability and monitoring strategies
+
+### For Business Stakeholders
+- AI sovereignty and data privacy
+- Cost optimization (quantization)
+- Quality vs performance trade-offs
+- Enterprise AI integration patterns
+
+---
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+**Models not loading:**
+```bash
+# Check GPU nodes
+oc get nodes -l nvidia.com/gpu.present=true
+
+# Check InferenceServices
+oc get inferenceservice -n private-ai-demo
+
+# Check pod placement
+oc get pods -n private-ai-demo -o wide
+```
+
+**RAG not working:**
+```bash
+# Check Milvus
+oc get deployment milvus-standalone -n private-ai-demo
+
+# Check Llama Stack
+oc get llamastackdistribution -n private-ai-demo
+
+# Check pipelines
+tkn pr list -n private-ai-demo
+```
+
+**Monitoring issues:**
+```bash
+# Check TrustyAI
+oc get lmevaljob -n private-ai-demo
+
+# Check Grafana
+oc get route grafana-route -n grafana-system
+```
 
 ---
 
 ## 📖 Documentation
 
-### For Demo Presenters
-- [Demo Scripts](./docs/presentations/) - Complete presentation flows
-- [Talking Points](./docs/presentations/) - Quick reference cards
-- [Screenshots Guide](./docs/reference/screenshots/) - What to capture
+### Red Hat Official Docs
+- [OpenShift AI 2.24](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/2.24)
+- [Serving Models](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/2.24/html/serving_models/)
+- [Monitoring Models](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/2.24/html/monitoring_data_science_models/)
+- [Model Registry](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/2.24/html/managing_model_registries/)
 
-### For Technical Implementation
-- [GitOps Structure](./docs/reference/COMPLETE-STRUCTURE.md) - Full architecture
-- [Deployment Guide](./docs/reference/DEPLOYMENT-GUIDE.md) - Step-by-step setup
-- [Model Registry Guide](./docs/reference/MODEL-REGISTRY-METADATA-GUIDE.md) - Metadata setup
+### Open Source Projects
+- [vLLM](https://docs.vllm.ai/)
+- [Llama Stack](https://llama-stack.readthedocs.io/)
+- [Milvus](https://milvus.io/docs)
+- [TrustyAI](https://trustyai-explainability.github.io/)
+- [Model Context Protocol](https://modelcontextprotocol.io/)
 
-### For Architecture & Planning
-- [Project Status](./docs/reference/PROJECT-STATUS.md) - Complete status & implementation guide
-- [Four Pillars Alignment](./docs/reference/FOUR-PILLARS-ALIGNMENT.md) - Strategic framing
-- [Project Summary](./docs/reference/PROJECT-SUMMARY.md) - Accomplishments
-
----
-
-## 🎯 Demo Flow
-
-**Recommended presentation order**:
-
-1. **Introduction** (5 min)
-   - AI Platform as Technology Decision Point
-   - Big 3 challenges (Cost, Complexity, Flexibility)
-   - Four Pillars overview
-
-2. **Stage 1** (20 min)
-   - Show efficient inference
-   - Prove cost savings
-   - Emphasize hybrid cloud deployment
-
-3. **Stage 2** (30 min)
-   - Demonstrate RAG
-   - Show InstructLab workflow
-   - Data sovereignty maintained
-
-4. **Stage 3** (30 min)
-   - Live agentic AI demo
-   - Multi-system integration
-   - Production considerations
-
-5. **Conclusion** (5 min)
-   - Recap Four Pillars
-   - Customer examples
-   - Next steps
-
-**Total**: ~90 minutes (can be shortened to 60 min by cutting optional sections)
+### Community Resources
+- [Red Hat AI Services GitHub](https://github.com/rh-aiservices-bu/)
+- [Llama Stack Demos](https://github.com/opendatahub-io/llama-stack-demos)
+- [rhoai-mlops Examples](https://github.com/rhoai-mlops/)
 
 ---
 
-## ⚡ Quick Commands
+## 🧹 Cleanup
+
+To remove all components:
 
 ```bash
-# Verify cluster access
-oc whoami
-oc get nodes
+# Delete namespace (removes all deployed resources)
+oc delete project private-ai-demo
 
-# Check GPU nodes
-oc get nodes -l nvidia.com/gpu.present=true
-
-# Deploy Stage 1
-oc apply -k gitops/overlays/production
-
-# Check deployments
-oc get inferenceservice -n private-ai-demo
-oc get modelregistry -n model-registry
-
-# Access dashboards
-oc get route -n redhat-ods-applications
-oc get route -n private-ai-demo
+# Or use cleanup script
+./scripts/cleanup-environment.sh
 ```
 
 ---
 
-## 🆘 Troubleshooting
+## 📝 License
 
-**Models not deploying?**
-- Check GPU nodes: `oc get nodes -l nvidia.com/gpu.present=true`
-- Check HuggingFace token: `oc get secret -n private-ai-demo`
-- Check logs: `oc logs -n private-ai-demo <pod-name>`
-
-**Dashboard not showing models?**
-- Verify labels: `opendatahub.io/dashboard: "true"`
-- Check Model Registry: `oc get modelregistry -n model-registry`
-- Verify InferenceService: `oc get inferenceservice -n private-ai-demo -o yaml`
-
-**For detailed troubleshooting**, see stage-specific README files.
+This demo project is provided as-is for demonstration and educational purposes.
 
 ---
 
 ## 🤝 Contributing
 
-This demo is a living project. To improve:
-
-1. Test in your environment
-2. Document issues/improvements
-3. Submit pull requests
-4. Share customer feedback
+This is a demonstration project. For production deployments, please refer to official Red Hat documentation and work with Red Hat support.
 
 ---
 
-## 📞 Support
+## 📧 Support
 
-- **Red Hat OpenShift AI**: https://www.redhat.com/en/technologies/cloud-computing/openshift/openshift-ai
-- **Documentation**: https://docs.redhat.com/en/documentation/red_hat_openshift_ai
-- **Community**: https://www.redhat.com/en/about/open-source
+For issues or questions:
+- Review stage-specific README files
+- Check docs/ folder for detailed guides
+- Consult Red Hat OpenShift AI documentation
+- Contact Red Hat support for production use
 
 ---
 
-**Ready to start?** → [Stage 1: Sovereign AI](./stage1-sovereign-ai/README.md)
+**Built with ❤️ demonstrating Red Hat AI capabilities**

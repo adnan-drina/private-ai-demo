@@ -1,238 +1,275 @@
-# Stage 3: ACME LithoOps Agentic Orchestrator
+# Stage 4: Model Integration with MCP + Llama Stack
 
-> **Enterprise AI Agent for Semiconductor Equipment Calibration**  
-> Built with Quarkus, LangChain4j, MCP, and vLLM
+## Overview
 
----
+Stage 4 demonstrates enterprise agentic AI using the Model Context Protocol (MCP). This stage deploys an ACME manufacturing calibration agent that orchestrates multiple AI capabilities: database queries, RAG-enhanced document retrieval, expert LLM analysis, and team notifications.
 
-## 🎯 Overview
+## Components
 
-The ACME LithoOps Agent demonstrates enterprise-grade AI orchestration for semiconductor manufacturing. It automates equipment calibration analysis by:
+### MCP Servers
+- **Database MCP Server** - PostgreSQL query interface
+  - Equipment metadata queries
+  - Calibration history lookup
+  - Specification retrieval
+- **Slack MCP Server** - Team notification system
+  - Alert notifications
+  - Status updates
+  - Collaboration triggers
 
-1. **Querying equipment data** from PostgreSQL via Database MCP
-2. **Retrieving calibration limits** from ACME documentation  
-3. **Analyzing telemetry readings** using Mistral 24B LLM (vLLM)
-4. **Sending critical alerts** to Slack via Slack MCP
+### Data Layer
+- **PostgreSQL Database** - Equipment metadata storage
+  - Equipment specifications
+  - Calibration records
+  - Maintenance history
 
-**Key Features:**
-- ✅ **Production-Ready**: Real database, real Slack integration, no mocks
-- ✅ **Quarkus Native**: High-performance Java framework
-- ✅ **MCP Protocol**: Modular, reusable AI tool servers
-- ✅ **vLLM Compatible**: Manual tool orchestration (works without native tool calling)
-- ✅ **Red Hat Branded**: Professional UI following Red Hat design standards
-- ✅ **Full Observability**: Correlation IDs, structured logging, health checks
+### Application
+- **ACME Calibration Agent** - Quarkus application
+  - Llama Stack integration
+  - MCP server orchestration
+  - RAG-enhanced analysis
+  - Web UI for demonstrations
 
----
+### Demo Tools
+- **Agent Notebook** - Step-by-step workflow demonstration
+  - Component interaction visualization
+  - Technical flow explanation
+  - Sovereignty and architecture discussion
 
-## 🚀 Quick Start
+## Prerequisites
 
-### Prerequisites
-- OpenShift 4.x with vLLM (Stage 1) deployed
-- `oc` CLI, Maven 3.8+, Java 17+
-- Namespaces: `private-ai-demo`, `acme-calibration-ops`
+- **Stages 1, 2, 3** deployed and validated
+- Models serving with RAG capability
+- Llama Stack orchestrator ready
 
-### Deploy in 5 Minutes
+## Deployment
 
 ```bash
-# Optional: Configure Slack webhook
-export SLACK_WEBHOOK_URL='https://hooks.slack.com/services/YOUR/WEBHOOK/URL'
-
-# Deploy everything
-cd stage3-enterprise-mcp
+# Deploy all Stage 4 components
 ./deploy.sh
+
+# Validate deployment
+./validate.sh
 ```
 
-**That's it!** The script deploys:
-- PostgreSQL with equipment database
-- Database MCP (equipment queries)
-- Slack MCP (notifications)
-- ACME Agent (Quarkus + LangChain4j)
+## Verification
 
-**📖 Full documentation:** [QUICKSTART.md](QUICKSTART.md)
+Monitor deployment:
 
----
+```bash
+# Check PostgreSQL
+oc get deployment postgresql -n private-ai-demo
+oc get svc postgresql -n private-ai-demo
 
-## 🏗️ Architecture
+# Check MCP servers
+oc get deployment database-mcp -n private-ai-demo
+oc get deployment slack-mcp -n private-ai-demo
 
-```
-┌─────────────────────────────────────┐
-│  ACME Agent (Quarkus)               │
-│  • Red Hat UI                       │
-│  • LangChain4j orchestration        │
-│  • Manual tool execution            │
-└─────────────┬───────────────────────┘
-              │
-              ↓
-┌─────────────────────────────────────┐
-│  Backend Services (private-ai-demo) │
-│  ┌──────────┐  ┌──────────┐        │
-│  │ DB MCP   │  │Slack MCP │        │
-│  └────┬─────┘  └──────────┘        │
-│       ↓                             │
-│  ┌──────────┐  ┌──────────┐        │
-│  │PostgreSQL│  │ vLLM     │        │
-│  │ Database │  │Mistral24B│        │
-│  └──────────┘  └──────────┘        │
-└─────────────────────────────────────┘
+# Check ACME Agent
+oc get deployment acme-agent -n private-ai-demo
+oc get route acme-agent -n private-ai-demo
+
+# Test ACME Agent UI
+ACME_URL=$(oc get route acme-agent -n private-ai-demo -o jsonpath='{.spec.host}')
+curl -k https://${ACME_URL}/api/health
 ```
 
----
+## Agent Workflow
 
-## 🧪 Demo Flows
-
-### Scenario 1: Passing Calibration ✅
-**Equipment:** LITHO-001 (EUV Scanner)  
-**Data:** Clean telemetry (all readings within spec)  
-**Result:** PASS verdict, success notification to Slack
-
-### Scenario 2: Failed Calibration ❌
-**Equipment:** LITHO-001  
-**Data:** Out-of-spec overlay accuracy (8.1 nm peak)  
-**Result:** FAIL verdict, critical alert to Slack with:
-- Peak measurement: 8.1 nm (exceeds ±3.5 nm limit)
-- Sustained violations from 11:03-11:09
-- Emergency calibration recommendations
-
----
-
-## 📦 What's Included
+The ACME Calibration Agent orchestrates a multi-step AI workflow:
 
 ```
-stage3-enterprise-mcp/
-├── QUICKSTART.md              # 👈 START HERE - Complete deployment guide
-├── deploy.sh                  # Automated deployment script
-├── acme-lithoops-agent/       # Quarkus application
-│   ├── src/main/java/         # Java source code
-│   ├── src/main/resources/    # Config, UI, telemetry data
-│   ├── deploy/                # Kubernetes manifests
-│   └── pom.xml                # Maven dependencies
+User Request: "Check calibration for Litho-Print-3000"
+    ↓
+ACME Agent (Quarkus + LangChain4j)
+    ↓
+1. Query Equipment DB (via Database MCP)
+   ├→ Equipment specs
+   ├→ Last calibration date
+   └→ Operational parameters
+    ↓
+2. Retrieve Calibration Docs (via RAG)
+   ├→ Llama Stack orchestrates
+   ├→ Search Milvus for relevant procedures
+   └→ Return calibration guidelines
+    ↓
+3. LLM Analysis (via vLLM)
+   ├→ Analyze equipment status
+   ├→ Compare with specifications
+   └→ Generate expert recommendations
+    ↓
+4. Send Notifications (via Slack MCP)
+   ├→ Alert maintenance team
+   ├→ Include analysis summary
+   └→ Add action items
+    ↓
+Comprehensive Response with Citations
+```
+
+## Demo Use Case
+
+**ACME Lithography Manufacturing**
+
+Equipment: Litho-Print-3000 Calibration System
+
+The agent assists with:
+- Equipment status inquiries
+- Calibration procedure guidance
+- Out-of-spec detection
+- Maintenance team coordination
+
+## Testing the Agent
+
+### Via Web UI
+
+```bash
+# Get ACME Agent URL
+oc get route acme-agent -n private-ai-demo -o jsonpath='{.spec.host}'
+
+# Open in browser
+# Navigate to: https://<acme-agent-url>
+# Try: "Check calibration status for Litho-Print-3000"
+```
+
+### Via API
+
+```bash
+ACME_URL=$(oc get route acme-agent -n private-ai-demo -o jsonpath='{.spec.host}')
+
+curl -k https://${ACME_URL}/api/calibrate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "equipmentId": "LITHO-3000",
+    "query": "What is the calibration procedure?"
+  }'
+```
+
+### Via Notebook
+
+```bash
+# Access OpenShift AI dashboard
+# Navigate to: Workbenches → rag-testing
+# Open: 05-acme-agent-demo.ipynb
+# Run cells to see detailed workflow
+```
+
+## MCP Server Details
+
+### Database MCP
+
+Provides tools for:
+- `query_equipment` - Get equipment details
+- `get_calibration_history` - Retrieve past calibrations
+- `check_specifications` - Verify specs
+
+Connection:
+```
+Agent → database-mcp:8080 → postgresql:5432
+```
+
+### Slack MCP
+
+Provides tools for:
+- `send_message` - Post to channel
+- `send_alert` - Send urgent notification
+- `create_thread` - Start discussion
+
+Configuration:
+- Demo mode (logs only) or webhook URL
+
+## Architecture Highlights
+
+### Sovereignty
+- **On-Premise Models** - All inference local
+- **Data Privacy** - No external API calls
+- **Full Control** - Custom model selection
+
+### Integration Patterns
+- **MCP Protocol** - Standardized tool interface
+- **Llama Stack** - Central orchestration
+- **RAG Enhancement** - Context-aware responses
+- **Multi-Agent** - Composable AI workflows
+
+## Troubleshooting
+
+### PostgreSQL Connection Issues
+- Check service: `oc get svc postgresql -n private-ai-demo`
+- Test connection: `oc exec -it deployment/database-mcp -- nc -zv postgresql 5432`
+- Verify init: `oc logs deployment/postgresql -n private-ai-demo`
+
+### MCP Servers Not Responding
+- Check logs: `oc logs deployment/database-mcp -n private-ai-demo`
+- Verify service: `oc get svc database-mcp -n private-ai-demo`
+- Test endpoint: `curl http://database-mcp:8080/health`
+
+### ACME Agent Errors
+- Check Llama Stack connection: `oc get svc llama-stack -n private-ai-demo`
+- Verify MCP endpoints in agent config
+- Check logs: `oc logs deployment/acme-agent -n private-ai-demo`
+
+### Slack Notifications Not Working
+- Verify webhook URL in Slack MCP deployment
+- Check demo mode: Should see log messages
+- Test: `curl -X POST http://slack-mcp:8080/send -d '{"message":"test"}'`
+
+## GitOps Structure
+
+```
+gitops-new/stage04-model-integration/
+├── postgresql/          # Database deployment + init schema
 ├── mcp-servers/
-│   ├── database-mcp/          # PostgreSQL MCP server
-│   └── slack-mcp/             # Slack notification MCP
-├── gitops/                    # Kubernetes manifests
-│   ├── database/              # PostgreSQL deployment
-│   ├── mcp-servers/           # MCP deployments
-│   └── acme-agent/            # ACME Agent deployment (archive)
-└── docs/                      # Historical documentation
+│   ├── database-mcp/    # PostgreSQL MCP server
+│   └── slack-mcp/       # Slack notification MCP server
+├── acme-agent/          # Quarkus agent application
+└── notebooks/           # Agent demo notebook
 ```
 
----
+## Topology View
 
-## 🎓 Key Learnings
+In OpenShift Console → Topology:
 
-### 1. **vLLM Tool Orchestration**
-vLLM doesn't support native tool calling with "tool" roles. Solution: **manual orchestration**:
-```java
-// Gather all data first
-String equipmentInfo = getEquipmentInfo(equipmentId);
-String limits = getCalibrationLimits(equipmentId, "overlay");
-String telemetry = readTelemetryData(telemetryFile);
-
-// Send single comprehensive prompt to LLM
-String prompt = buildAnalysisPrompt(equipmentInfo, limits, telemetry);
-String analysis = llm.chat(prompt);
+```
+🤖 ACME Agent (Quarkus)
+  ├─→ 🦙 Llama Stack
+  │     ├─→ 🔥 vLLM (Mistral models)
+  │     └─→ 🗄️  Milvus (RAG)
+  ├─→ 🔌 Database MCP
+  │     └─→ 🐘 PostgreSQL
+  └─→ 📢 Slack MCP
+        └─→ 💬 Slack API
 ```
 
-### 2. **MCP Protocol Pattern**
-Generic `/execute` endpoint with tool name + parameters:
-```java
-// Request format
-{
-  "tool": "query_equipment",
-  "parameters": {"equipment_id": "LITHO-001"}
-}
+## Next Steps
 
-// Response format
-{
-  "result": {"equipment": {...}}
-}
-```
+Once Stage 4 is validated:
+1. Test the complete agent workflow
+2. Review component interactions in notebook
+3. Demo complete! All 4 pillars of Red Hat AI demonstrated
 
-### 3. **Cross-Namespace Communication**
-RBAC configuration for ACME Agent to access vLLM and MCP services:
-- ServiceAccount in `acme-calibration-ops`
-- Role in `private-ai-demo` (vLLM access)
-- RoleBinding for cross-namespace permissions
+## Red Hat AI Four Pillars
 
-### 4. **Production Database Integration**
-No mocks! Real PostgreSQL with:
-- Equipment table (4 lithography tools)
-- Service history (calibration records)
-- Parts inventory (modules, sensors)
+✅ **Pillar 1: Flexible Foundation** (Stage 1)
+- vLLM efficient serving
+- Multiple model formats
+- GPU optimization
 
----
+✅ **Pillar 2: Data & AI** (Stage 2)  
+- RAG with enterprise data
+- Vector storage
+- Automated ingestion
 
-## 📊 Technical Stack
+✅ **Pillar 3: Trust & Governance** (Stage 3)
+- Model evaluation
+- Quality monitoring
+- Observability
 
-| Layer | Technology | Purpose |
-|-------|-----------|---------|
-| **Frontend** | Quarkus + LangChain4j | AI orchestration, REST API |
-| **LLM** | vLLM (Mistral 24B) | Reasoning and analysis |
-| **MCP Servers** | Python Flask | Tool servers (DB, Slack) |
-| **Database** | PostgreSQL 15 | Equipment data |
-| **Platform** | OpenShift 4.x | Kubernetes + Service Mesh |
+✅ **Pillar 4: Integration & Automation** (Stage 4)
+- Agentic workflows
+- MCP protocol
+- Enterprise integration
 
----
+## Documentation
 
-## 🔗 Related Demos
-
-- **Stage 1**: vLLM Deployment (Mistral 24B with vLLM)
-- **Stage 2**: RAG Service (Document retrieval)
-- **Stage 3**: This demo (Agentic orchestration)
-
----
-
-## 📚 Documentation
-
-- **[QUICKSTART.md](QUICKSTART.md)** - Complete setup guide 👈 **Start here!**
-- **[ACME-LITHOOPS-ORCHESTRATOR.md](docs/ACME-LITHOOPS-ORCHESTRATOR.md)** - Detailed specification
-- **[SERVICE-MESH-ARCHITECTURE.md](SERVICE-MESH-ARCHITECTURE.md)** - Networking decisions
-- **[FINAL-STATUS.md](FINAL-STATUS.md)** - Current implementation status
-- **[RED-HAT-MCP-ALIGNMENT.md](RED-HAT-MCP-ALIGNMENT.md)** - MCP design principles
-
----
-
-## 🛠️ Maintenance
-
-### View Logs
-```bash
-# ACME Agent
-oc logs -f deployment/acme-agent -n acme-calibration-ops
-
-# Database MCP
-oc logs -f deployment/database-mcp -n private-ai-demo
-
-# Slack MCP
-oc logs -f deployment/slack-mcp -n private-ai-demo
-```
-
-### Update Application
-```bash
-cd acme-lithoops-agent
-mvn clean package -DskipTests
-oc start-build acme-agent --from-dir=. -n acme-calibration-ops --wait
-oc rollout restart deployment/acme-agent -n acme-calibration-ops
-```
-
-### Database Queries
-```bash
-POD=$(oc get pod -l app=postgresql -n private-ai-demo -o jsonpath='{.items[0].metadata.name}')
-oc exec -it $POD -n private-ai-demo -- \
-  bash -c "PGPASSWORD=acme_secure_2025 psql -U acmeadmin -d acme_equipment"
-```
-
----
-
-## 🙏 Credits
-
-- **Red Hat OpenShift** - Enterprise Kubernetes platform
-- **Quarkus** - Supersonic Subatomic Java
-- **LangChain4j** - AI orchestration for Java
-- **vLLM** - High-throughput LLM serving
-- **Mistral AI** - Mistral 24B model
-
----
-
-**📖 Ready to deploy? → [QUICKSTART.md](QUICKSTART.md)**
-
-**Built with ❤️ using Red Hat OpenShift**
+- [Model Context Protocol](https://modelcontextprotocol.io/)
+- [Llama Stack Agents](https://llama-stack.readthedocs.io/en/latest/concepts/agents.html)
+- [Quarkus + LangChain4j](https://docs.quarkiverse.io/quarkus-langchain4j/dev/index.html)
+- [Red Hat AI Demos](https://github.com/rh-aiservices-bu/)
