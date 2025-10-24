@@ -140,23 +140,25 @@ spec:
         - name: source
           workspace: shared-workspace
     
-    # Task 2: Build the ModelCar image and push to internal registry
+    # Task 2: Build the ModelCar image and push to internal registry (Red Hat Buildah)
     - name: build-and-push
       runAfter: ["prepare-context"]
       taskRef:
-        name: kaniko-build-modelcar
-        kind: ClusterTask
+        name: buildah-build-modelcar
+        kind: Task
       params:
         - name: IMAGE
           value: $(params.internal_registry)/$(params.namespace)/$(params.image_stream_name):$(params.image_tag)
         - name: CONTEXT
-          value: /workspace/source
+          value: $(workspaces.source.path)
         - name: DOCKERFILE
-          value: /workspace/source/Containerfile
-        - name: EXTRA_ARGS
-          value:
-            - --build-arg=HF_REPO=$(params.hf_repo)
-            - --build-arg=HF_REVISION=$(params.hf_revision)
+          value: $(workspaces.source.path)/Containerfile
+        - name: FORMAT
+          value: "oci"
+        - name: TLSVERIFY
+          value: "false"
+        - name: BUILD_EXTRA_ARGS
+          value: "--build-arg=HF_REPO=$(params.hf_repo) --build-arg=HF_REVISION=$(params.hf_revision)"
       workspaces:
         - name: source
           workspace: shared-workspace

@@ -1,7 +1,8 @@
 apiVersion: tekton.dev/v1
-kind: ClusterTask
+kind: Task
 metadata:
   name: kaniko-build-modelcar
+  namespace: private-ai-demo
   labels:
     app.kubernetes.io/name: kaniko-build
     app.kubernetes.io/component: pipeline-task
@@ -58,57 +59,25 @@ spec:
   steps:
     - name: build-and-push
       image: $(params.BUILDER_IMAGE)
+      workingDir: $(workspaces.source.path)
       env:
         - name: DOCKER_CONFIG
-          value: /tekton/home/.docker/
-      workingDir: $(workspaces.source.path)
-      script: |
-        #!/busybox/sh
-        set -e
-        
-        echo "════════════════════════════════════════════════════════════"
-        echo "🔨 Building ModelCar Image with Kaniko"
-        echo "════════════════════════════════════════════════════════════"
-        echo "Context:     $(params.CONTEXT)"
-        echo "Dockerfile:  $(params.DOCKERFILE)"
-        echo "Destination: $(params.IMAGE)"
-        echo "════════════════════════════════════════════════════════════"
-        
-        # Build the argument list
-        ARGS="--context=$(params.CONTEXT) \
-              --dockerfile=$(params.DOCKERFILE) \
-              --destination=$(params.IMAGE) \
-              --digest-file=/tekton/results/IMAGE_DIGEST \
-              --insecure-registry=image-registry.openshift-image-registry.svc:5000 \
-              --skip-tls-verify-registry=image-registry.openshift-image-registry.svc \
-              --cache=true \
-              --cache-ttl=24h \
-              --compressed-caching=false"
-        
-        # Add extra args if provided
-        for arg in "$@"; do
-          ARGS="$ARGS $arg"
-        done
-        
-        # Execute kaniko
-        /kaniko/executor $ARGS
-        
-        # Write image URL result
-        echo -n "$(params.IMAGE)" > /tekton/results/IMAGE_URL
-        
-        echo "════════════════════════════════════════════════════════════"
-        echo "✅ Build Complete!"
-        echo "════════════════════════════════════════════════════════════"
+          value: /tekton/home/.docker
       args:
         - $(params.EXTRA_ARGS[*])
+        - --dockerfile=$(params.DOCKERFILE)
+        - --context=$(params.CONTEXT)
+        - --destination=$(params.IMAGE)
+        - --digest-file=/tekton/results/IMAGE_DIGEST
+        - --insecure-registry=image-registry.openshift-image-registry.svc:5000
+        - --skip-tls-verify-registry=image-registry.openshift-image-registry.svc
       securityContext:
         runAsUser: 0
-        capabilities:
-          add:
-            - CHOWN
-            - DAC_OVERRIDE
-            - FOWNER
-            - SETGID
-            - SETUID
-            - SETFCAP
+    
+    - name: write-url
+      image: docker.io/library/bash:5.1.4
+      script: |
+        #!/usr/bin/env bash
+        set -e
+        echo -n "$(params.IMAGE)" | tee /tekton/results/IMAGE_URL
 

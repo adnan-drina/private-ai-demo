@@ -1,0 +1,113 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: buildah-build-modelcar
+  namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/name: buildah-build
+    app.kubernetes.io/component: pipeline-task
+    app.kubernetes.io/part-of: private-ai-demo
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+    tekton.dev/pipelines.minVersion: "0.17.0"
+    tekton.dev/tags: "image-build,buildah"
+    tekton.dev/displayName: "Buildah Build for ModelCar"
+spec:
+  description: >-
+    This task builds a ModelCar container image using Red Hat Buildah.
+    Buildah is rootless and works seamlessly with OpenShift's security model.
+
+  params:
+    - name: IMAGE
+      type: string
+      description: Reference of the image to build (e.g., image-registry.openshift-image-registry.svc:5000/namespace/name:tag)
+    
+    - name: DOCKERFILE
+      type: string
+      description: Path to the Containerfile/Dockerfile
+      default: ./Containerfile
+    
+    - name: CONTEXT
+      type: string
+      description: Path to the build context
+      default: .
+    
+    - name: FORMAT
+      type: string
+      description: Format of the built image (oci or docker)
+      default: "oci"
+    
+    - name: TLSVERIFY
+      type: string
+      description: Verify TLS on the registry endpoint
+      default: "false"
+    
+    - name: BUILD_EXTRA_ARGS
+      type: string
+      description: Extra arguments passed to buildah bud
+      default: ""
+
+  workspaces:
+    - name: source
+      description: Workspace containing the build context
+
+  results:
+    - name: IMAGE_DIGEST
+      description: Digest of the image just built
+    
+    - name: IMAGE_URL
+      description: URL of the image just built
+
+  steps:
+    - name: build-and-push
+      image: registry.redhat.io/rhel9/buildah:latest
+      workingDir: $(workspaces.source.path)
+      script: |
+        #!/bin/bash
+        set -e
+        
+        echo "════════════════════════════════════════════════════════════"
+        echo "🔨 Building ModelCar Image with Buildah"
+        echo "════════════════════════════════════════════════════════════"
+        echo "Context:     $(params.CONTEXT)"
+        echo "Dockerfile:  $(params.DOCKERFILE)"
+        echo "Destination: $(params.IMAGE)"
+        echo "Format:      $(params.FORMAT)"
+        echo "════════════════════════════════════════════════════════════"
+        
+        # Build the image
+        buildah --storage-driver=vfs bud \
+          --format=$(params.FORMAT) \
+          --tls-verify=$(params.TLSVERIFY) \
+          --no-cache \
+          -f $(params.DOCKERFILE) \
+          -t $(params.IMAGE) \
+          $(params.BUILD_EXTRA_ARGS) \
+          $(params.CONTEXT)
+        
+        echo ""
+        echo "📤 Pushing image to registry..."
+        
+        # Push the image
+        buildah --storage-driver=vfs push \
+          --tls-verify=$(params.TLSVERIFY) \
+          --digestfile /tmp/image-digest \
+          $(params.IMAGE) \
+          docker://$(params.IMAGE)
+        
+        # Save results
+        cat /tmp/image-digest | tee /tekton/results/IMAGE_DIGEST
+        echo -n "$(params.IMAGE)" | tee /tekton/results/IMAGE_URL
+        
+        echo ""
+        echo "════════════════════════════════════════════════════════════"
+        echo "✅ Build and Push Complete!"
+        echo "════════════════════════════════════════════════════════════"
+        echo "Image: $(params.IMAGE)"
+        echo "Digest: $(cat /tmp/image-digest)"
+        echo "════════════════════════════════════════════════════════════"
+      securityContext:
+        capabilities:
+          add:
+            - SETFCAP
+

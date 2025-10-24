@@ -78,58 +78,75 @@ spec:
         echo "Memory:   $(params.memory_request)"
         echo "════════════════════════════════════════════════════════════"
         
-        # Build node selector if provided
-        NODE_SELECTOR=""
+        # Create base InferenceService YAML
+        cat > /tmp/isvc.yaml <<'ENDISVC'
+        apiVersion: serving.kserve.io/v1beta1
+        kind: InferenceService
+        metadata:
+          name: SERVICENAME_PLACEHOLDER
+          namespace: private-ai-demo
+          labels:
+            app.kubernetes.io/name: SERVICENAME_PLACEHOLDER
+            app.kubernetes.io/component: inference
+            app.kubernetes.io/part-of: private-ai-demo
+          annotations:
+            serving.kserve.io/deploymentMode: RawDeployment
+            serving.knative.openshift.io/enablePassthrough: "true"
+        spec:
+          predictor:
+            model:
+              modelFormat:
+                name: vllm
+              runtime: RUNTIME_PLACEHOLDER
+              storageUri: STORAGEURI_PLACEHOLDER
+              args:
+                - --model=/models
+                - --tensor-parallel-size=TENSORPARALLEL_PLACEHOLDER
+                - --disable-custom-all-reduce
+                - --max-model-len=4096
+                - --gpu-memory-utilization=0.9
+                - --trust-remote-code
+              resources:
+                requests:
+                  cpu: "CPUREQ_PLACEHOLDER"
+                  memory: "MEMREQ_PLACEHOLDER"
+                  nvidia.com/gpu: "GPUCOUNT_PLACEHOLDER"
+                limits:
+                  memory: "MEMLIMIT_PLACEHOLDER"
+                  nvidia.com/gpu: "GPUCOUNT_PLACEHOLDER"
+        ENDISVC
+        
+        # Replace placeholders
+        sed -i "s|SERVICENAME_PLACEHOLDER|$(params.service_name)|g" /tmp/isvc.yaml
+        sed -i "s|RUNTIME_PLACEHOLDER|$(params.runtime_name)|g" /tmp/isvc.yaml
+        sed -i "s|STORAGEURI_PLACEHOLDER|$(params.storage_uri)|g" /tmp/isvc.yaml
+        sed -i "s|TENSORPARALLEL_PLACEHOLDER|$(params.tensor_parallel_size)|g" /tmp/isvc.yaml
+        sed -i "s|CPUREQ_PLACEHOLDER|$(params.cpu_request)|g" /tmp/isvc.yaml
+        sed -i "s|MEMREQ_PLACEHOLDER|$(params.memory_request)|g" /tmp/isvc.yaml
+        sed -i "s|MEMLIMIT_PLACEHOLDER|$(params.memory_limit)|g" /tmp/isvc.yaml
+        sed -i "s|GPUCOUNT_PLACEHOLDER|$(params.gpu_count)|g" /tmp/isvc.yaml
+        
+        # Add node selector and tolerations if specified
         if [ -n "$(params.node_selector_label)" ]; then
           LABEL_KEY=$(echo "$(params.node_selector_label)" | cut -d'=' -f1)
           LABEL_VALUE=$(echo "$(params.node_selector_label)" | cut -d'=' -f2)
-          NODE_SELECTOR="
-            nodeSelector:
-              ${LABEL_KEY}: \"${LABEL_VALUE}\"
-            tolerations:
-              - key: \"nvidia.com/gpu\"
-                operator: \"Exists\"
-                effect: \"NoSchedule\""
+          
+          # Add nodeSelector and tolerations to the YAML
+          python3 << ENDPYTHON
+        import yaml
+        with open('/tmp/isvc.yaml', 'r') as f:
+            doc = yaml.safe_load(f)
+        doc['spec']['predictor']['model']['nodeSelector'] = {'${LABEL_KEY}': '${LABEL_VALUE}'}
+        doc['spec']['predictor']['model']['tolerations'] = [
+            {'key': 'nvidia.com/gpu', 'operator': 'Exists', 'effect': 'NoSchedule'}
+        ]
+        with open('/tmp/isvc.yaml', 'w') as f:
+            yaml.dump(doc, f)
+        ENDPYTHON
         fi
         
-        # Create InferenceService manifest
-        cat <<EOF | oc apply -f -
-apiVersion: serving.kserve.io/v1beta1
-kind: InferenceService
-metadata:
-  name: $(params.service_name)
-  namespace: private-ai-demo
-  labels:
-    app.kubernetes.io/name: $(params.service_name)
-    app.kubernetes.io/component: inference
-    app.kubernetes.io/part-of: private-ai-demo
-  annotations:
-    serving.kserve.io/deploymentMode: RawDeployment
-    serving.knative.openshift.io/enablePassthrough: "true"
-spec:
-  predictor:
-    model:
-      modelFormat:
-        name: vllm
-      runtime: $(params.runtime_name)
-      storageUri: $(params.storage_uri)
-      args:
-        - --model=/models
-        - --tensor-parallel-size=$(params.tensor_parallel_size)
-        - --disable-custom-all-reduce
-        - --max-model-len=4096
-        - --gpu-memory-utilization=0.9
-        - --trust-remote-code
-      resources:
-        requests:
-          cpu: "$(params.cpu_request)"
-          memory: "$(params.memory_request)"
-          nvidia.com/gpu: "$(params.gpu_count)"
-        limits:
-          memory: "$(params.memory_limit)"
-          nvidia.com/gpu: "$(params.gpu_count)"
-      ${NODE_SELECTOR}
-EOF
+        # Apply the InferenceService
+        oc apply -f /tmp/isvc.yaml
         
         echo ""
         echo "⏳ Waiting for InferenceService to become Ready..."

@@ -55,86 +55,90 @@ spec:
         echo "════════════════════════════════════════════════════════════"
         
         # Create download script
-        cat > download_model.py << 'EOF'
-from huggingface_hub import snapshot_download
-import os
-import sys
+        cat > download_model.py << 'EOFPY'
+        from huggingface_hub import snapshot_download
+        import os
+        import sys
 
-repo = os.environ.get("HF_REPO")
-revision = os.environ.get("HF_REVISION", "main")
-target = "/models"
+        repo = os.environ.get("HF_REPO")
+        revision = os.environ.get("HF_REVISION", "main")
+        target = "/models"
 
-print(f"Downloading {repo} (revision: {revision})...")
-os.makedirs(target, exist_ok=True)
+        print(f"Downloading {repo} (revision: {revision})...")
+        os.makedirs(target, exist_ok=True)
 
-try:
-    snapshot_download(
-        repo_id=repo,
-        revision=revision,
-        local_dir=target,
-        local_dir_use_symlinks=False,
-        allow_patterns=[
-            "*.safetensors",
-            "*.bin",
-            "*.json",
-            "*.txt",
-            "*.model",
-            "*.py",
-            "tokenizer*",
-            "config*",
-            "generation*",
-            "special_tokens*"
-        ]
-    )
-    print(f"✅ Successfully downloaded {repo}")
-except Exception as e:
-    print(f"❌ Error downloading model: {e}", file=sys.stderr)
-    sys.exit(1)
-EOF
+        try:
+            # Optimized download with parallel workers for 2-3x speedup
+            snapshot_download(
+                repo_id=repo,
+                revision=revision,
+                local_dir=target,
+                local_dir_use_symlinks=False,
+                max_workers=20,              # Parallel downloads (default: 8)
+                resume_download=True,        # Resume on failure
+                etag_timeout=5,              # Faster metadata checks
+                allow_patterns=[
+                    "*.safetensors",
+                    "*.bin",
+                    "*.json",
+                    "*.txt",
+                    "*.model",
+                    "*.py",
+                    "tokenizer*",
+                    "config*",
+                    "generation*",
+                    "special_tokens*"
+                ]
+            )
+            print(f"✅ Successfully downloaded {repo}")
+        except Exception as e:
+            print(f"❌ Error downloading model: {e}", file=sys.stderr)
+            sys.exit(1)
+        EOFPY
         
         # Create Containerfile using Red Hat UBI base images
-        cat > Containerfile << 'EOF'
-# Stage 1: Download the model from HuggingFace
-FROM registry.access.redhat.com/ubi9/python-311:latest AS downloader
+        cat > Containerfile << 'EOFDOCKER'
+        # Stage 1: Download the model from HuggingFace
+        FROM registry.access.redhat.com/ubi9/python-311:latest AS downloader
 
-USER 0
+        USER 0
 
-# Install HuggingFace Hub library
-RUN pip install --no-cache-dir huggingface-hub
+        # Install HuggingFace Hub library
+        RUN pip install --no-cache-dir huggingface-hub
 
-# Copy download script
-COPY download_model.py /download_model.py
+        # Copy download script
+        COPY download_model.py /download_model.py
 
-# Set build arguments and environment variables
-ARG HF_REPO
-ARG HF_REVISION=main
-ENV HF_REPO=${HF_REPO}
-ENV HF_REVISION=${HF_REVISION}
-ENV HF_HOME=/tmp/hf
-ENV HF_HUB_CACHE=/tmp/hf
+        # Set build arguments and environment variables
+        ARG HF_REPO
+        ARG HF_REVISION=main
+        ENV HF_REPO=${HF_REPO}
+        ENV HF_REVISION=${HF_REVISION}
+        ENV HF_HOME=/tmp/hf
+        ENV HF_HUB_CACHE=/tmp/hf
 
-# Download the model
-RUN python /download_model.py
+        # Download the model
+        RUN python /download_model.py
 
-# Stage 2: Create minimal runtime image with model
-FROM registry.access.redhat.com/ubi9/ubi-micro:9.5
+        # Stage 2: Create minimal runtime image with model
+        FROM registry.access.redhat.com/ubi9/ubi-micro:9.5
 
-# Copy model files from downloader stage
-COPY --from=downloader /models /models
+        # Copy model files from downloader stage
+        COPY --from=downloader /models /models
 
-# Set ownership and permissions
-USER 1001
+        # Set ownership and permissions
+        USER 1001
 
-# Labels for OpenShift
-LABEL name="modelcar" \
-      vendor="Red Hat" \
-      version="1.0" \
-      summary="ModelCar container with HuggingFace model" \
-      description="This image contains an AI model packaged as a ModelCar for use with vLLM"
+        # Labels for OpenShift
+        LABEL name="modelcar" \
+              vendor="Red Hat" \
+              version="1.0" \
+              summary="ModelCar container with HuggingFace model" \
+              description="This image contains an AI model packaged as a ModelCar for use with vLLM"
 
-# Default command (not used in vLLM but good practice)
-CMD ["/bin/sh", "-c", "echo 'ModelCar ready. Model files at /models'"]
-EOF
+        # Default command (not used in vLLM but good practice)
+        CMD ["/bin/sh", "-c", "echo 'ModelCar ready. Model files at /models'"]
+        EOFDOCKER
         
         echo "════════════════════════════════════════════════════════════"
         echo "✅ Build context prepared successfully"
