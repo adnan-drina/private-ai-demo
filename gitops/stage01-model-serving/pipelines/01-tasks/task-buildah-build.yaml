@@ -70,12 +70,16 @@ spec:
         limits:
           memory: "16Gi"  # Adequate for 20GB model download + build
           cpu: "4"
-      # Use workspace subdirectory for Buildah storage (avoids ephemeral-storage exhaustion)
+      # Use workspace subdirectory for ALL Buildah operations (avoids ephemeral-storage exhaustion)
       env:
         - name: BUILDAH_STORAGE_ROOT
           value: $(workspaces.source.path)/.buildah-storage
         - name: STORAGE_DRIVER
           value: vfs
+        - name: TMPDIR
+          value: $(workspaces.source.path)/.tmp
+        - name: HOME
+          value: $(workspaces.source.path)/.home
         - name: HF_TOKEN
           valueFrom:
             secretKeyRef:
@@ -86,8 +90,11 @@ spec:
         #!/bin/bash
         set -e
         
-        # Create Buildah storage directory in workspace PVC
+        # Create all directories in workspace PVC to avoid ephemeral storage
+        echo "📁 Setting up PVC-backed directories..."
         mkdir -p ${BUILDAH_STORAGE_ROOT}
+        mkdir -p ${TMPDIR}
+        mkdir -p ${HOME}
         
         echo "════════════════════════════════════════════════════════════"
         echo "🔨 Building ModelCar Image with Buildah"
@@ -96,7 +103,9 @@ spec:
         echo "Dockerfile:  $(params.DOCKERFILE)"
         echo "Destination: $(params.IMAGE)"
         echo "Format:      $(params.FORMAT)"
-        echo "Storage:     ${BUILDAH_STORAGE_ROOT} (PVC-backed, 100Gi)"
+        echo "Storage:     ${BUILDAH_STORAGE_ROOT} (PVC-backed)"
+        echo "Temp Dir:    ${TMPDIR} (PVC-backed)"
+        echo "Home Dir:    ${HOME} (PVC-backed)"
         echo "HF Token:    ${HF_TOKEN:+<set>}"
         echo "════════════════════════════════════════════════════════════"
         
