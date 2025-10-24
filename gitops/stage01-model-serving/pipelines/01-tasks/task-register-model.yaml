@@ -116,7 +116,8 @@ spec:
             registry = ModelRegistry(
                 server_address=f"http://{registry_host}",
                 port=8080,
-                author="GitOps-Pipeline"
+                author="GitOps-Pipeline",
+                is_secure=False  # HTTP connection, no authentication needed
             )
             
             print("✅ Connected successfully!")
