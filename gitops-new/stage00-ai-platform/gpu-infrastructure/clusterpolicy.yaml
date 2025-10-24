@@ -1,0 +1,51 @@
+apiVersion: nvidia.com/v1
+kind: ClusterPolicy
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"nvidia.com/v1","kind":"ClusterPolicy","metadata":{"annotations":{},"name":"gpu-cluster-policy"},"spec":{"daemonsets":{"rollingUpdate":{"maxUnavailable":"1"},"updateStrategy":"RollingUpdate"},"dcgm":{"enabled":true},"dcgmExporter":{"enabled":true},"devicePlugin":{"enabled":true},"driver":{"enabled":true,"version":"latest"},"gfd":{"enabled":true},"mig":{"strategy":"single"},"nodeStatusExporter":{"enabled":true},"operator":{"defaultRuntime":"crio","use_ocp_driver_toolkit":true},"toolkit":{"enabled":true},"validator":{"plugin":{"env":[{"name":"WITH_WORKLOAD","value":"true"}]}}}}
+  name: gpu-cluster-policy
+spec:
+  daemonsets:
+    rollingUpdate:
+      maxUnavailable: "1"
+    updateStrategy: RollingUpdate
+  dcgm:
+    enabled: true
+  dcgmExporter:
+    enabled: true
+  devicePlugin:
+    enabled: true
+  driver:
+    enabled: true
+    kernelModuleType: auto
+    version: latest
+  gfd:
+    enabled: true
+  mig:
+    strategy: single
+  nodeStatusExporter:
+    enabled: true
+  operator:
+    defaultRuntime: crio
+    runtimeClass: nvidia
+    use_ocp_driver_toolkit: true
+  toolkit:
+    enabled: true
+    installDir: /usr/local/nvidia
+  validator:
+    plugin:
+      env:
+      - name: WITH_WORKLOAD
+        value: "true"
+  conditions:
+  - lastTransitionTime: "2025-10-24T10:27:51Z"
+    message: No NFD labels found
+    reason: NFDLabelsMissing
+    type: Ready
+  - lastTransitionTime: "2025-10-24T10:27:51Z"
+    message: ""
+    reason: Ready
+    type: Error
+  namespace: nvidia-gpu-operator
+  state: ready
