@@ -13,7 +13,7 @@ spec:
   source:
     repoURL: https://github.com/adnan-drina/private-ai-demo.git
     targetRevision: feature/stage-alignment
-    path: stage0-ai-platform-rhoai/gitops/operators
+    path: gitops/stage00-ai-platform/operators
   destination:
     server: https://kubernetes.default.svc
   syncPolicy:
