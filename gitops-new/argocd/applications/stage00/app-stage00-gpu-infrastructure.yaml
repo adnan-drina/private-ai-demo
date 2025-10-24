@@ -13,7 +13,7 @@ spec:
   source:
     repoURL: https://github.com/adnan-drina/private-ai-demo.git
     targetRevision: feature/stage-alignment
-    path: gitops-new/stage00-ai-platform/gpu-infrastructure
+    path: stage0-ai-platform-rhoai/gitops/gpu-infrastructure
   destination:
     server: https://kubernetes.default.svc
     namespace: openshift-machine-api
