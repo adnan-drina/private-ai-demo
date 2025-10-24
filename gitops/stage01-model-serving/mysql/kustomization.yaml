@@ -2,10 +2,12 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
+# Force namespace for all MySQL resources (overrides parent)
 namespace: rhoai-model-registries
 
 resources:
-  - namespace.yaml
+  # Namespace already exists (created by OpenShift AI operator)
+  # - namespace.yaml
   - pvc.yaml
   # secret.yaml is created by deploy.sh (not in Git for security)
   - configmap.yaml
