@@ -62,6 +62,14 @@ spec:
     - name: build-and-push
       image: registry.redhat.io/rhel9/buildah:latest
       workingDir: $(workspaces.source.path)
+      # Resource requirements for large model builds (20GB+ models)
+      resources:
+        requests:
+          memory: "8Gi"
+          cpu: "2"
+        limits:
+          memory: "16Gi"  # Adequate for 20GB model download + build
+          cpu: "4"
       script: |
         #!/bin/bash
         set -e
