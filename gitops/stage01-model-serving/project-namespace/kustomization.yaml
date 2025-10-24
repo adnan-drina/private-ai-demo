@@ -9,4 +9,5 @@ resources:
   - resource-quota.yaml
   - serviceaccount.yaml
   - role-model-registry-access.yaml
+  - connection-internal-registry.yaml
 

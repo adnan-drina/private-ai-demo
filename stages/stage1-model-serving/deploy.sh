@@ -190,7 +190,7 @@ load_env_file() {
     for var in "${missing_vars[@]}"; do
       log_info "$var"
     done
-    echo ""
+echo ""
     echo "Please edit $ENV_FILE and set these variables"
     exit 1
   fi
@@ -253,6 +253,39 @@ create_secrets() {
     log_success "Secret created: minio-credentials"
   fi
   
+  # Internal Registry Connection for OpenShift AI Dashboard
+  log_info "Creating internal registry connection..."
+  if [ "$DRY_RUN" = true ]; then
+    log_info "[DRY-RUN] Would create connection: internal-registry-private-ai"
+  else
+    # Get the dockerconfigjson from model-pipeline-sa service account
+    DOCKERCONFIG=$(oc get secret -n "$PROJECT_NAME" -l kubernetes.io/service-account.name=model-pipeline-sa -o jsonpath='{.items[0].data.\.dockerconfigjson}' 2>/dev/null)
+    
+    if [ -n "$DOCKERCONFIG" ]; then
+      oc create secret generic internal-registry-private-ai \
+        --from-literal=.dockerconfigjson="$(echo $DOCKERCONFIG | base64 -d)" \
+        --from-literal=OCI_HOST="image-registry.openshift-image-registry.svc:5000" \
+        --type=kubernetes.io/dockerconfigjson \
+        -n "$PROJECT_NAME" \
+        --dry-run=client -o yaml | \
+        oc label --local -f - \
+          opendatahub.io/dashboard=true \
+          app.kubernetes.io/name=registry-connection \
+          app.kubernetes.io/component=connection \
+          app.kubernetes.io/part-of=private-ai-demo \
+          --dry-run=client -o yaml | \
+        oc annotate --local -f - \
+          opendatahub.io/connection-type-ref=oci-v1 \
+          openshift.io/description="Internal OpenShift Registry for ModelCar Images" \
+          openshift.io/display-name=internal-registry-private-ai \
+          --dry-run=client -o yaml | \
+        oc apply -f -
+      log_success "Connection created: internal-registry-private-ai"
+    else
+      log_warning "model-pipeline-sa not found yet, connection will be created by GitOps"
+    fi
+  fi
+  
   log_success "All secrets created successfully"
   log_warning "Remember: Secrets are NOT in Git (managed imperatively)"
 }
@@ -276,7 +309,7 @@ deploy_gitops_manifests() {
     echo "..."
   else
     echo ""
-    oc apply -k "$GITOPS_PATH"
+oc apply -k "$GITOPS_PATH"
     log_success "GitOps manifests applied"
   fi
 }
@@ -311,8 +344,8 @@ display_next_steps() {
   fi
   
   log_success "Stage 1 deployment initiated!"
-  
-  echo ""
+
+echo ""
   echo "📊 Monitor Deployment:"
   echo "────────────────────────────────────────────────────────────────────────"
   echo "  # Check all resources"
@@ -349,7 +382,7 @@ display_next_steps() {
   echo "  • Model downloads: 10-30 minutes (running in background)"
   echo "  • InferenceServices ready: 5-10 minutes after downloads complete"
   echo "  • Benchmarks: Run manually or automatically after models ready"
-  echo ""
+echo ""
 }
 
 # ============================================================================

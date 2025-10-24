@@ -1,0 +1,29 @@
+---
+# OpenShift AI Dashboard Connection - Internal Registry
+# This connection allows the dashboard and workloads to pull ModelCar images
+# from the OpenShift internal registry where Tekton pipeline pushes them
+#
+# NOTE: This connection references the dockerconfigjson from model-pipeline-sa
+# The actual secret is created by the deploy.sh script
+apiVersion: v1
+kind: Secret
+metadata:
+  name: internal-registry-private-ai
+  namespace: private-ai-demo
+  labels:
+    opendatahub.io/dashboard: "true"
+    app.kubernetes.io/name: registry-connection
+    app.kubernetes.io/component: connection
+    app.kubernetes.io/part-of: private-ai-demo
+  annotations:
+    opendatahub.io/connection-type-ref: "oci-v1"
+    openshift.io/description: "Internal OpenShift Registry for ModelCar Images"
+    openshift.io/display-name: "internal-registry-private-ai"
+    argocd.argoproj.io/sync-wave: "2"
+type: kubernetes.io/dockerconfigjson
+stringData:
+  # OCI Host for the internal registry
+  OCI_HOST: image-registry.openshift-image-registry.svc:5000
+  # The .dockerconfigjson is populated from model-pipeline-sa secret
+  # This is handled by the deploy.sh script during deployment
+
