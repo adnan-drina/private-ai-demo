@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pipeline-workspace
+  namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/name: pipeline-workspace
+    app.kubernetes.io/component: storage
+    app.kubernetes.io/part-of: private-ai-demo
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    description: "Shared workspace for model pipeline builds (caches HuggingFace downloads)"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Gi
+  volumeMode: Filesystem
+

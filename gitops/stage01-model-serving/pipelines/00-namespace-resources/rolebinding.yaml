@@ -1,0 +1,60 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: model-pipeline-rolebinding
+  namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/name: model-pipeline
+    app.kubernetes.io/component: pipeline
+    app.kubernetes.io/part-of: private-ai-demo
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: model-pipeline-role
+subjects:
+  - kind: ServiceAccount
+    name: model-pipeline-sa
+    namespace: private-ai-demo
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: model-pipeline-registry-editor
+  namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/name: model-pipeline
+    app.kubernetes.io/component: pipeline
+    app.kubernetes.io/part-of: private-ai-demo
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: registry-editor
+subjects:
+  - kind: ServiceAccount
+    name: model-pipeline-sa
+    namespace: private-ai-demo
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: model-pipeline-image-pusher
+  namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/name: model-pipeline
+    app.kubernetes.io/component: pipeline
+    app.kubernetes.io/part-of: private-ai-demo
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:image-pusher
+subjects:
+  - kind: ServiceAccount
+    name: model-pipeline-sa
+    namespace: private-ai-demo
+

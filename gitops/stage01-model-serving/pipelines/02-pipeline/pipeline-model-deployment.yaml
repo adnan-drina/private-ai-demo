@@ -1,0 +1,235 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: modelcar-build-deploy
+  namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/name: modelcar-pipeline
+    app.kubernetes.io/component: pipeline
+    app.kubernetes.io/part-of: private-ai-demo
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+    tekton.dev/pipelines.minVersion: "0.17.0"
+    tekton.dev/tags: "mlops,modelcar,vllm"
+    tekton.dev/displayName: "ModelCar Build and Deploy Pipeline"
+spec:
+  description: >-
+    End-to-end MLOps pipeline that:
+    1. Downloads a model from HuggingFace
+    2. Packages it as a ModelCar container image
+    3. Pushes to OpenShift internal registry (ImageStream)
+    4. Mirrors to Quay.io
+    5. Registers in Model Registry
+    6. Deploys as vLLM InferenceService
+
+  params:
+    # Model source parameters
+    - name: hf_repo
+      type: string
+      description: HuggingFace repository ID
+    
+    - name: hf_revision
+      type: string
+      description: HuggingFace revision to download
+      default: "main"
+    
+    # Image and registry parameters
+    - name: image_stream_name
+      type: string
+      description: Name of the ImageStream in OpenShift
+    
+    - name: image_tag
+      type: string
+      description: Tag for the built image
+      default: "latest"
+    
+    - name: quay_org
+      type: string
+      description: Quay.io organization name
+    
+    - name: quay_repo
+      type: string
+      description: Quay.io repository name
+    
+    - name: quay_tag
+      type: string
+      description: Tag for Quay image
+      default: "latest"
+    
+    # Model Registry parameters
+    - name: model_name
+      type: string
+      description: Registered model name in Model Registry
+    
+    - name: version_name
+      type: string
+      description: Model version identifier
+    
+    - name: version_description
+      type: string
+      description: Description for this model version
+      default: ""
+    
+    # Deployment parameters
+    - name: service_name
+      type: string
+      description: Name of the InferenceService
+    
+    - name: runtime_name
+      type: string
+      description: vLLM ServingRuntime name
+      default: "vllm-nvidia-gpu"
+    
+    - name: gpu_count
+      type: string
+      description: Number of GPUs to request
+      default: "1"
+    
+    - name: cpu_request
+      type: string
+      description: CPU request
+      default: "4"
+    
+    - name: memory_request
+      type: string
+      description: Memory request
+      default: "32Gi"
+    
+    - name: memory_limit
+      type: string
+      description: Memory limit
+      default: "48Gi"
+    
+    - name: node_selector_label
+      type: string
+      description: Node selector for GPU nodes (e.g., "node.kubernetes.io/instance-type=g6.4xlarge")
+      default: ""
+    
+    - name: tensor_parallel_size
+      type: string
+      description: vLLM tensor parallelism size
+      default: "1"
+    
+    # Internal parameters (computed)
+    - name: internal_registry
+      type: string
+      description: OpenShift internal registry hostname
+      default: "image-registry.openshift-image-registry.svc:5000"
+    
+    - name: namespace
+      type: string
+      description: Target namespace
+      default: "private-ai-demo"
+
+  workspaces:
+    - name: shared-workspace
+      description: Shared workspace for build context and artifacts
+
+  tasks:
+    # Task 1: Prepare the ModelCar build context
+    - name: prepare-context
+      taskRef:
+        name: prepare-modelcar-context
+        kind: Task
+      params:
+        - name: hf_repo
+          value: $(params.hf_repo)
+        - name: hf_revision
+          value: $(params.hf_revision)
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+    
+    # Task 2: Build the ModelCar image and push to internal registry
+    - name: build-and-push
+      runAfter: ["prepare-context"]
+      taskRef:
+        name: kaniko-build-modelcar
+        kind: ClusterTask
+      params:
+        - name: IMAGE
+          value: $(params.internal_registry)/$(params.namespace)/$(params.image_stream_name):$(params.image_tag)
+        - name: CONTEXT
+          value: /workspace/source
+        - name: DOCKERFILE
+          value: /workspace/source/Containerfile
+        - name: EXTRA_ARGS
+          value:
+            - --build-arg=HF_REPO=$(params.hf_repo)
+            - --build-arg=HF_REVISION=$(params.hf_revision)
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+    
+    # Task 3: Mirror the image to Quay.io
+    - name: mirror-to-quay
+      runAfter: ["build-and-push"]
+      taskRef:
+        name: mirror-to-quay
+        kind: Task
+      params:
+        - name: src_image
+          value: $(params.internal_registry)/$(params.namespace)/$(params.image_stream_name):$(params.image_tag)
+        - name: dest_image
+          value: quay.io/$(params.quay_org)/$(params.quay_repo):$(params.quay_tag)
+    
+    # Task 4: Register the model in Model Registry
+    - name: register-model
+      runAfter: ["mirror-to-quay"]
+      taskRef:
+        name: register-model
+        kind: Task
+      params:
+        - name: model_name
+          value: $(params.model_name)
+        - name: version_name
+          value: $(params.version_name)
+        - name: image_uri
+          value: oci://quay.io/$(params.quay_org)/$(params.quay_repo):$(params.quay_tag)
+        - name: model_format_name
+          value: "ModelCar"
+        - name: model_format_version
+          value: "1"
+        - name: description
+          value: $(params.version_description)
+    
+    # Task 5: Deploy as vLLM InferenceService
+    - name: deploy-vllm
+      runAfter: ["register-model"]
+      taskRef:
+        name: deploy-vllm-inferenceservice
+        kind: Task
+      params:
+        - name: service_name
+          value: $(params.service_name)
+        - name: storage_uri
+          value: oci://quay.io/$(params.quay_org)/$(params.quay_repo):$(params.quay_tag)
+        - name: runtime_name
+          value: $(params.runtime_name)
+        - name: gpu_count
+          value: $(params.gpu_count)
+        - name: cpu_request
+          value: $(params.cpu_request)
+        - name: memory_request
+          value: $(params.memory_request)
+        - name: memory_limit
+          value: $(params.memory_limit)
+        - name: node_selector_label
+          value: $(params.node_selector_label)
+        - name: tensor_parallel_size
+          value: $(params.tensor_parallel_size)
+
+  finally:
+    - name: cleanup-workspace
+      taskSpec:
+        steps:
+          - name: cleanup
+            image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+            script: |
+              #!/bin/bash
+              echo "🧹 Pipeline execution completed"
+              echo "Check InferenceService status: oc get isvc -n private-ai-demo"
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+

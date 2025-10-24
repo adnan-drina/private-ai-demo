@@ -1,0 +1,72 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: mistral-24b-full-
+  namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/name: mistral-24b-full-pipeline
+    app.kubernetes.io/component: pipeline-run
+    app.kubernetes.io/part-of: private-ai-demo
+    tekton.dev/pipeline: modelcar-build-deploy
+  annotations:
+    argocd.argoproj.io/hook: Skip
+    description: "Pipeline run for Mistral 24B Full Precision model"
+spec:
+  serviceAccountName: model-pipeline-sa
+  pipelineRef:
+    name: modelcar-build-deploy
+  
+  params:
+    # Model source
+    - name: hf_repo
+      value: "mistralai/Mistral-Small-24B-Instruct-2501"
+    - name: hf_revision
+      value: "main"
+    
+    # Image configuration
+    - name: image_stream_name
+      value: "mistral-24b-full"
+    - name: image_tag
+      value: "fp-2501"
+    
+    # Quay configuration (will be set by deploy.sh)
+    - name: quay_org
+      value: "QUAY_ORG_PLACEHOLDER"
+    - name: quay_repo
+      value: "mistral-24b-full"
+    - name: quay_tag
+      value: "fp-2501"
+    
+    # Model Registry
+    - name: model_name
+      value: "Mistral-24B-Instruct"
+    - name: version_name
+      value: "full-precision-2501"
+    - name: version_description
+      value: "Mistral Small 24B Instruct full precision - requires 4 GPUs for optimal performance"
+    
+    # Deployment configuration
+    - name: service_name
+      value: "mistral-24b-full"
+    - name: runtime_name
+      value: "vllm-nvidia-gpu"
+    - name: gpu_count
+      value: "4"
+    - name: cpu_request
+      value: "8"
+    - name: memory_request
+      value: "96Gi"
+    - name: memory_limit
+      value: "128Gi"
+    - name: node_selector_label
+      value: "node.kubernetes.io/instance-type=g6.12xlarge"
+    - name: tensor_parallel_size
+      value: "4"
+  
+  workspaces:
+    - name: shared-workspace
+      persistentVolumeClaim:
+        claimName: pipeline-workspace
+  
+  timeout: "3h"
+

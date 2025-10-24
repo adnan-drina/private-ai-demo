@@ -1,0 +1,16 @@
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: mistral-24b-quantized
+  namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/name: mistral-24b-quantized
+    app.kubernetes.io/component: model-image
+    app.kubernetes.io/part-of: private-ai-demo
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+    description: "ModelCar image for Mistral 24B Quantized (w4a16) model"
+spec:
+  lookupPolicy:
+    local: true
+

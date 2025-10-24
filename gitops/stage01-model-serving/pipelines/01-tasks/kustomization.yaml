@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - clustertask-kaniko-build.yaml
+  - task-prepare-modelcar.yaml
+  - task-mirror-to-quay.yaml
+  - task-register-model.yaml
+  - task-deploy-vllm.yaml
+
+commonLabels:
+  app.kubernetes.io/instance: stage01-pipelines
+  app.kubernetes.io/managed-by: argocd
+
