@@ -125,11 +125,8 @@ spec:
     - name: shared-workspace
       description: Shared workspace for build context and artifacts
 
-  # Timeout configuration
-  timeouts:
-    pipeline: "2h"    # Overall pipeline timeout
-    tasks: "2h"       # Individual task timeout
-    finally: "10m"    # Finally tasks timeout
+  # Note: Timeout configuration is set at PipelineRun level, not Pipeline level
+  # Default PipelineRun timeout: 2h (set when creating PipelineRun)
 
   tasks:
     # Task 1: Prepare the ModelCar build context
