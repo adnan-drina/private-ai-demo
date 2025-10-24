@@ -21,7 +21,7 @@ spec:
     - CreateNamespace=false
     - RespectIgnoreDifferences=true
   ignoreDifferences:
-  # Ignore annotations managed by operators and OpenShift
+  # Ignore annotations and labels managed by operators and OpenShift
   - kind: Namespace
     jsonPointers:
     - /metadata/annotations
@@ -30,6 +30,16 @@ spec:
     jsonPointers:
     - /status
     - /metadata/annotations
+    - /metadata/labels/operators.coreos.com
+    - /spec/catalogHealth
+    - /spec/conditions
+    - /spec/currentCSV
+    - /spec/installPlanGeneration
+    - /spec/installPlanRef
+    - /spec/installedCSV
+    - /spec/installplan
+    - /spec/lastUpdated
+    - /spec/state
   - group: operators.coreos.com
     kind: OperatorGroup
     jsonPointers:

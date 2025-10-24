@@ -1,11 +1,6 @@
 apiVersion: operators.coreos.com/v1alpha1
 kind: Subscription
 metadata:
-  annotations:
-    kubectl.kubernetes.io/last-applied-configuration: |
-      {"apiVersion":"operators.coreos.com/v1alpha1","kind":"Subscription","metadata":{"annotations":{},"name":"gpu-operator-certified","namespace":"nvidia-gpu-operator"},"spec":{"channel":"stable","installPlanApproval":"Automatic","name":"gpu-operator-certified","source":"certified-operators","sourceNamespace":"openshift-marketplace"}}
-  labels:
-    operators.coreos.com/gpu-operator-certified.nvidia-gpu-operator: ""
   name: gpu-operator-certified
   namespace: nvidia-gpu-operator
 spec:
@@ -14,51 +9,3 @@ spec:
   name: gpu-operator-certified
   source: certified-operators
   sourceNamespace: openshift-marketplace
-  catalogHealth:
-  - catalogSourceRef:
-      apiVersion: operators.coreos.com/v1alpha1
-      kind: CatalogSource
-      name: certified-operators
-      namespace: openshift-marketplace
-    healthy: true
-    lastUpdated: "2025-10-24T09:44:45Z"
-  - catalogSourceRef:
-      apiVersion: operators.coreos.com/v1alpha1
-      kind: CatalogSource
-      name: community-operators
-      namespace: openshift-marketplace
-    healthy: true
-    lastUpdated: "2025-10-24T09:44:45Z"
-  - catalogSourceRef:
-      apiVersion: operators.coreos.com/v1alpha1
-      kind: CatalogSource
-      name: redhat-marketplace
-      namespace: openshift-marketplace
-    healthy: true
-    lastUpdated: "2025-10-24T09:44:45Z"
-  - catalogSourceRef:
-      apiVersion: operators.coreos.com/v1alpha1
-      kind: CatalogSource
-      name: redhat-operators
-      namespace: openshift-marketplace
-    healthy: true
-    lastUpdated: "2025-10-24T09:44:45Z"
-  conditions:
-  - lastTransitionTime: "2025-10-24T09:44:47Z"
-    message: all available catalogsources are healthy
-    reason: AllCatalogSourcesHealthy
-    type: CatalogSourcesUnhealthy
-  currentCSV: gpu-operator-certified.v25.3.4
-  installPlanGeneration: 1
-  installPlanRef:
-    apiVersion: operators.coreos.com/v1alpha1
-    kind: InstallPlan
-    name: install-hzqbp
-    namespace: nvidia-gpu-operator
-  installedCSV: gpu-operator-certified.v25.3.4
-  installplan:
-    apiVersion: operators.coreos.com/v1alpha1
-    kind: InstallPlan
-    name: install-hzqbp
-  lastUpdated: "2025-10-24T09:44:55Z"
-  state: AtLatestKnown
