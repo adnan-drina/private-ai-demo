@@ -20,6 +20,21 @@ spec:
     syncOptions:
     - CreateNamespace=false
     - RespectIgnoreDifferences=true
+  ignoreDifferences:
+  # Ignore annotations managed by operators and OpenShift
+  - kind: Namespace
+    jsonPointers:
+    - /metadata/annotations
+  - group: operators.coreos.com
+    kind: Subscription
+    jsonPointers:
+    - /status
+    - /metadata/annotations
+  - group: operators.coreos.com
+    kind: OperatorGroup
+    jsonPointers:
+    - /status
+    - /metadata/annotations
   # Track existing resources without auto-sync
   # Resources were deployed imperatively and are tracked here for visibility
   info:

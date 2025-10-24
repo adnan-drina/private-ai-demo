@@ -22,15 +22,18 @@ spec:
     - CreateNamespace=false
     - RespectIgnoreDifferences=true
   ignoreDifferences:
+  # Ignore annotations managed by operators and OpenShift
   - group: machine.openshift.io
     kind: MachineSet
     jsonPointers:
     - /status
     - /spec/replicas
+    - /metadata/annotations
   - group: nvidia.com
     kind: ClusterPolicy
     jsonPointers:
     - /status
+    - /metadata/annotations
   info:
   - name: Deployment Method
     value: "Imperative (already deployed)"

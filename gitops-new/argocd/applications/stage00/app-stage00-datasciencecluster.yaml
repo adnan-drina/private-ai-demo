@@ -21,14 +21,21 @@ spec:
     - CreateNamespace=false
     - RespectIgnoreDifferences=true
   ignoreDifferences:
+  # Ignore all annotations - they are managed by operators and OpenShift
+  - kind: Namespace
+    jsonPointers:
+    - /metadata/annotations
   - group: datasciencecluster.opendatahub.io
     kind: DataScienceCluster
     jsonPointers:
     - /status
+    - /metadata/annotations
   - group: maistra.io
     kind: ServiceMeshControlPlane
     jsonPointers:
     - /status
+    - /metadata/annotations/kubectl.kubernetes.io~1last-applied-configuration
+    - /metadata/annotations/platform.opendatahub.io
   info:
   - name: Deployment Method
     value: "Imperative (already deployed)"
