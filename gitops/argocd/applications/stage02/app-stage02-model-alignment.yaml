@@ -1,0 +1,100 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: stage02-model-alignment
+  namespace: openshift-gitops
+  annotations:
+    argocd.argoproj.io/tracking-method: Annotation
+spec:
+  project: stage02-model-alignment # Use the dedicated AppProject
+  source:
+    repoURL: https://github.com/adnan-drina/private-ai-demo.git # Will be updated dynamically
+    targetRevision: feature/stage-alignment # Current branch
+    path: gitops/stage02-model-alignment # Path to Stage 02 manifests
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: private-ai-demo # Target namespace for deployment
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: false
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+      - RespectIgnoreDifferences=true
+      - Replace=true  # Delete and recreate resources when patching fails (immutable fields)
+      - ApplyOutOfSyncOnly=true
+      # ServerSideApply removed - causes managedFields conflicts
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  ignoreDifferences:
+    # Ignore HPA-managed replica counts
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas
+    
+    # Ignore Tekton PipelineRun/TaskRun status
+    - group: tekton.dev
+      kind: PipelineRun
+      jsonPointers:
+        - /status
+    - group: tekton.dev
+      kind: TaskRun
+      jsonPointers:
+        - /status
+    
+    # Ignore Tekton Task/Pipeline metadata.resourceVersion (immutable during updates)
+    - group: tekton.dev
+      kind: Task
+      jsonPointers:
+        - /metadata/resourceVersion
+    - group: tekton.dev
+      kind: Pipeline
+      jsonPointers:
+        - /metadata/resourceVersion
+    
+    # Ignore LlamaStackDistribution operator-managed fields
+    - group: llamastack.io
+      kind: LlamaStackDistribution
+      jsonPointers:
+        - /metadata/resourceVersion
+        - /status
+    
+    # Ignore PVC dynamic provisioning
+    - group: ""
+      kind: PersistentVolumeClaim
+      jsonPointers:
+        - /spec/volumeName
+        - /spec/volumeMode
+        - /status
+    
+    # Ignore ServiceMonitor metadata.resourceVersion
+    - group: monitoring.coreos.com
+      kind: ServiceMonitor
+      jsonPointers:
+        - /metadata/resourceVersion
+    
+    # Ignore managed fields metadata
+    - group: "*"
+      kind: "*"
+      jsonPointers:
+        - /metadata/managedFields
+        - /metadata/resourceVersion
+        - /metadata/generation
+  
+  info:
+    - name: Description
+      value: |
+        Stage 02: Model Alignment with RAG + Llama Stack
+        - Llama Stack distribution for orchestration
+        - Milvus vector database for embeddings
+        - Docling operator for document processing
+        - Document ingestion pipelines (Red Hat, EU AI Act, ACME)
+        - RAG demo notebooks
+

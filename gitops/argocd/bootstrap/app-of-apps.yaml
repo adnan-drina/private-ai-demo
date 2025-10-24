@@ -1,0 +1,56 @@
+---
+# App-of-Apps: Root Application
+# Purpose: Manages all stage applications (App-of-Apps pattern)
+# This is the only app that needs to be manually created in ArgoCD
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: private-ai-demo-root
+  namespace: openshift-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+  labels:
+    app.kubernetes.io/name: private-ai-demo-root
+    app.kubernetes.io/part-of: private-ai-demo
+    gitops.pattern: app-of-apps
+spec:
+  project: default  # Root app uses default project
+  
+  source:
+    repoURL: https://github.com/adnan-drina/private-ai-demo.git
+    targetRevision: feature/gitops-phase2-refactoring
+    path: gitops/argocd/applications
+    
+    # Use directory recursion to find all applications
+    directory:
+      recurse: true
+      include: '*.yaml'
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: openshift-gitops
+  
+  syncPolicy:
+    automated:
+      prune: false      # Don't auto-prune for safety
+      selfHeal: false   # Don't auto-heal during testing
+    
+    syncOptions:
+      - CreateNamespace=false  # Namespaces should already exist
+      - PruneLast=true
+      - RespectIgnoreDifferences=true
+    
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  
+  # Ignore differences for known dynamic fields
+  ignoreDifferences:
+    - group: argoproj.io
+      kind: Application
+      jsonPointers:
+        - /status
+

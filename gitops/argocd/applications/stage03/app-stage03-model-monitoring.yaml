@@ -1,0 +1,84 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: stage03-model-monitoring
+  namespace: openshift-gitops
+  annotations:
+    argocd.argoproj.io/tracking-method: Annotation
+spec:
+  project: stage03-model-monitoring # Use the dedicated AppProject
+  source:
+    repoURL: https://github.com/adnan-drina/private-ai-demo.git # Will be updated dynamically
+    targetRevision: feature/stage-alignment # Current branch
+    path: gitops/stage03-model-monitoring # Path to Stage 03 manifests
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: private-ai-demo # Target namespace for deployment
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: false
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+      - RespectIgnoreDifferences=true
+      - Replace=true  # Delete and recreate resources when patching fails (immutable fields)
+      - ApplyOutOfSyncOnly=true
+      # ServerSideApply removed - causes managedFields conflicts
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  ignoreDifferences:
+    # Ignore TrustyAI LMEvalJob status and metadata
+    - group: trustyai.opendatahub.io
+      kind: LMEvalJob
+      jsonPointers:
+        - /status
+        - /metadata/resourceVersion
+    
+    # Ignore Grafana dashboard status
+    - group: grafana.integreatly.org
+      kind: GrafanaDashboard
+      jsonPointers:
+        - /status
+    
+    # Ignore ServiceMonitor and PodMonitor metadata
+    - group: monitoring.coreos.com
+      kind: ServiceMonitor
+      jsonPointers:
+        - /metadata/resourceVersion
+    - group: monitoring.coreos.com
+      kind: PodMonitor
+      jsonPointers:
+        - /metadata/resourceVersion
+    
+    # Ignore PVC dynamic provisioning
+    - group: ""
+      kind: PersistentVolumeClaim
+      jsonPointers:
+        - /spec/volumeName
+        - /spec/volumeMode
+        - /status
+    
+    # Ignore managed fields metadata
+    - group: "*"
+      kind: "*"
+      jsonPointers:
+        - /metadata/managedFields
+        - /metadata/resourceVersion
+        - /metadata/generation
+  
+  info:
+    - name: Description
+      value: |
+        Stage 03: Model Monitoring with TrustyAI + Observability
+        - TrustyAI LMEvalJobs for model quality assessment
+        - Grafana dashboards for visualization
+        - Prometheus ServiceMonitors for metrics
+        - OpenTelemetry Collector for traces
+        - Evaluation results notebook
+
