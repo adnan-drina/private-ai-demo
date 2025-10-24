@@ -15,7 +15,7 @@ metadata:
 spec:
   description: >-
     This task registers a model in the OpenShift AI Model Registry using the
-    v1alpha3 API. It creates or updates a RegisteredModel and creates a new
+    Python SDK. It creates or updates a RegisteredModel and creates a new
     ModelVersion pointing to the ModelCar OCI image.
 
   params:
@@ -46,28 +46,35 @@ spec:
       description: Model version description
       default: ""
 
+  stepTemplate:
+    metadata:
+      annotations:
+        sidecar.istio.io/inject: "false"
+  
   steps:
-    - name: register-via-api
+    - name: register-via-sdk
       image: registry.access.redhat.com/ubi9/python-311:latest
       env:
-        - name: MODEL_REGISTRY_URL
-          valueFrom:
-            secretKeyRef:
-              name: model-registry-config
-              key: MR_BASE_URL
-              optional: false
+        - name: MODEL_REGISTRY_HOST
+          value: "private-ai-model-registry.rhoai-model-registries.svc.cluster.local"
       script: |
-        #!/usr/bin/env python3
+        #!/usr/bin/env bash
+        set -euo pipefail
+        
+        # Install Python SDK
+        echo "📦 Installing model-registry Python SDK..."
+        pip install --quiet model-registry==0.2.10
+        
+        # Run Python script using SDK
+        python3 << 'EOFPYTHON'
         import os
         import sys
-        import json
-        import requests
-        from urllib.parse import urljoin
-        
+        from model_registry import ModelRegistry
+
         print("════════════════════════════════════════════════════════════")
-        print("📝 Registering Model in Model Registry")
+        print("📝 Registering Model in Model Registry (Python SDK)")
         print("════════════════════════════════════════════════════════════")
-        
+
         # Get parameters
         model_name = "$(params.model_name)"
         version_name = "$(params.version_name)"
@@ -75,111 +82,61 @@ spec:
         format_name = "$(params.model_format_name)"
         format_version = "$(params.model_format_version)"
         description = "$(params.description)" or f"ModelCar image {image_uri}"
-        
+
         print(f"Model Name:    {model_name}")
         print(f"Version:       {version_name}")
         print(f"Image URI:     {image_uri}")
         print(f"Format:        {format_name} v{format_version}")
         print("════════════════════════════════════════════════════════════")
+
+        # Get Model Registry host
+        registry_host = os.environ.get("MODEL_REGISTRY_HOST", "private-ai-model-registry.rhoai-model-registries.svc.cluster.local")
         
-        # Get Model Registry URL
-        mr_base_url = os.environ.get("MODEL_REGISTRY_URL")
-        if not mr_base_url:
-            print("❌ ERROR: MODEL_REGISTRY_URL not set", file=sys.stderr)
-            sys.exit(1)
-        
-        print(f"Registry URL:  {mr_base_url}")
-        
-        # Setup session with auth
-        session = requests.Session()
-        session.headers["Content-Type"] = "application/json"
-        
-        # Try to get service account token
-        token_path = "/var/run/secrets/kubernetes.io/serviceaccount/token"
-        if os.path.exists(token_path):
-            with open(token_path, 'r') as f:
-                token = f.read().strip()
-                session.headers["Authorization"] = f"Bearer {token}"
-                print("✅ Using ServiceAccount token for authentication")
-        else:
-            print("⚠️  No ServiceAccount token found, proceeding without auth")
-        
+        print(f"\n🔗 Registry Host: {registry_host}")
+
         try:
-            # Step 1: Find or create RegisteredModel
-            print("\n🔍 Looking for existing RegisteredModel...")
-            response = session.get(
-                urljoin(mr_base_url, "registered_models"),
-                params={"filter": f"name=='{model_name}'"}
-            )
-            response.raise_for_status()
-            
-            items = response.json().get("items", [])
-            if items:
-                rm_id = items[0]["id"]
-                print(f"✅ Found existing RegisteredModel: {rm_id}")
-            else:
-                print(f"📝 Creating new RegisteredModel: {model_name}")
-                payload = {
-                    "name": model_name,
-                    "description": f"Model serving for {model_name}",
-                    "customProperties": {
-                        "source": {"string_value": "HuggingFace"},
-                        "deployment_type": {"string_value": "vLLM"},
-                        "pipeline": {"string_value": "ModelCar"}
-                    }
-                }
-                response = session.post(
-                    urljoin(mr_base_url, "registered_models"),
-                    data=json.dumps(payload)
-                )
-                response.raise_for_status()
-                rm_id = response.json()["id"]
-                print(f"✅ Created RegisteredModel: {rm_id}")
-            
-            # Step 2: Create ModelVersion
-            print(f"\n📝 Creating ModelVersion: {version_name}")
-            payload = {
-                "name": version_name,
-                "description": description,
-                "modelSource": {
-                    "modelFormat": {
-                        "name": format_name,
-                        "version": format_version
-                    },
-                    "uri": image_uri
-                },
-                "customProperties": {
-                    "container_image": {"string_value": image_uri},
-                    "format": {"string_value": "ModelCar"},
-                    "registry": {"string_value": "Quay.io"}
-                }
-            }
-            
-            response = session.post(
-                urljoin(mr_base_url, f"registered_models/{rm_id}/versions"),
-                data=json.dumps(payload)
+            # Initialize SDK
+            print("\n🔌 Connecting to Model Registry...")
+            registry = ModelRegistry(
+                server_address=f"http://{registry_host}",
+                port=8080,
+                author="GitOps-Pipeline"
             )
             
-            if response.status_code not in (200, 201):
-                print(f"❌ ERROR: Registration failed", file=sys.stderr)
-                print(f"Status: {response.status_code}", file=sys.stderr)
-                print(f"Response: {response.text}", file=sys.stderr)
-                sys.exit(1)
+            print("✅ Connected successfully!")
             
-            version_id = response.json()["id"]
-            print(f"✅ Created ModelVersion: {version_id}")
+            # Register model with SDK
+            print(f"\n📝 Registering model: {model_name} version {version_name}...")
+            
+            registered_model = registry.register_model(
+                name=model_name,
+                uri=image_uri,
+                model_format_name=format_name,
+                model_format_version=format_version,
+                version=version_name,
+                description=description,
+                metadata={
+                    "source": "HuggingFace",
+                    "deployment_type": "vLLM",
+                    "pipeline": "ModelCar",
+                    "container_image": image_uri,
+                    "format": "ModelCar"
+                }
+            )
+            
+            print(f"✅ Model registered successfully!")
+            print(f"   Registered Model ID: {registered_model.id}")
+            print(f"   Model Name: {registered_model.name}")
             
             print("\n════════════════════════════════════════════════════════════")
-            print("✅ Model registered successfully!")
+            print("✅ Registration complete!")
             print("════════════════════════════════════════════════════════════")
             
-        except requests.exceptions.RequestException as e:
-            print(f"\n❌ ERROR: API request failed: {e}", file=sys.stderr)
-            if hasattr(e, 'response') and e.response is not None:
-                print(f"Status: {e.response.status_code}", file=sys.stderr)
-                print(f"Response: {e.response.text}", file=sys.stderr)
-            sys.exit(1)
         except Exception as e:
-            print(f"\n❌ ERROR: {e}", file=sys.stderr)
+            print(f"\n❌ ERROR: Registration failed", file=sys.stderr)
+            print(f"Error: {str(e)}", file=sys.stderr)
+            import traceback
+            traceback.print_exc(file=sys.stderr)
             sys.exit(1)
 
+        EOFPYTHON

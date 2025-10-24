@@ -76,6 +76,12 @@ spec:
           value: $(workspaces.source.path)/.buildah-storage
         - name: STORAGE_DRIVER
           value: vfs
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: hf-token
+              key: HF_TOKEN
+              optional: true
       script: |
         #!/bin/bash
         set -e
@@ -91,17 +97,33 @@ spec:
         echo "Destination: $(params.IMAGE)"
         echo "Format:      $(params.FORMAT)"
         echo "Storage:     ${BUILDAH_STORAGE_ROOT} (PVC-backed, 100Gi)"
+        echo "HF Token:    ${HF_TOKEN:+<set>}"
         echo "════════════════════════════════════════════════════════════"
         
         # Build the image (using PVC storage)
-        buildah --root ${BUILDAH_STORAGE_ROOT} --storage-driver=vfs bud \
-          --format=$(params.FORMAT) \
-          --tls-verify=$(params.TLSVERIFY) \
-          --no-cache \
-          -f $(params.DOCKERFILE) \
-          -t $(params.IMAGE) \
-          $(params.BUILD_EXTRA_ARGS) \
-          $(params.CONTEXT)
+        # Pass HF_TOKEN as build arg if set
+        if [ -n "${HF_TOKEN}" ]; then
+          echo "🔐 Using HF_TOKEN for model download authentication"
+          buildah --root ${BUILDAH_STORAGE_ROOT} --storage-driver=vfs bud \
+            --format=$(params.FORMAT) \
+            --tls-verify=$(params.TLSVERIFY) \
+            --no-cache \
+            --build-arg=HF_TOKEN="${HF_TOKEN}" \
+            -f $(params.DOCKERFILE) \
+            -t $(params.IMAGE) \
+            $(params.BUILD_EXTRA_ARGS) \
+            $(params.CONTEXT)
+        else
+          echo "⚠️  No HF_TOKEN provided - downloading public models only"
+          buildah --root ${BUILDAH_STORAGE_ROOT} --storage-driver=vfs bud \
+            --format=$(params.FORMAT) \
+            --tls-verify=$(params.TLSVERIFY) \
+            --no-cache \
+            -f $(params.DOCKERFILE) \
+            -t $(params.IMAGE) \
+            $(params.BUILD_EXTRA_ARGS) \
+            $(params.CONTEXT)
+        fi
         
         echo ""
         echo "📤 Pushing image to registry..."

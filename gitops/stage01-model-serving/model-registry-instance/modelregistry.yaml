@@ -1,0 +1,45 @@
+---
+apiVersion: modelregistry.opendatahub.io/v1alpha1
+kind: ModelRegistry
+metadata:
+  name: private-ai-model-registry
+  namespace: rhoai-model-registries
+  labels:
+    app.kubernetes.io/name: private-ai-model-registry
+    app.kubernetes.io/component: model-registry
+    app.kubernetes.io/part-of: rhoai
+    maistra.io/expose-route: "true"
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  grpc:
+    port: 9090
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+  rest:
+    port: 8080
+    serviceRoute: enabled
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+  istio:
+    enabled: true
+    gateway: istio-system/ingressgateway
+  mysql:
+    host: mysql.rhoai-model-registries.svc.cluster.local
+    port: 3306
+    database: modelregistry
+    username: mlops
+    passwordSecret:
+      name: mysql-credentials
+      key: password
+

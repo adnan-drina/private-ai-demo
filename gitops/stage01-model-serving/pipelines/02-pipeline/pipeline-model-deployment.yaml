@@ -14,13 +14,14 @@ metadata:
     tekton.dev/displayName: "ModelCar Build and Deploy Pipeline"
 spec:
   description: >-
-    End-to-end MLOps pipeline that:
+    ModelCar build and registration pipeline that:
     1. Downloads a model from HuggingFace
     2. Packages it as a ModelCar container image
     3. Pushes to OpenShift internal registry (ImageStream)
-    4. Mirrors to Quay.io
+    4. (Optional) Mirrors to Quay.io for external access
     5. Registers in Model Registry
-    6. Deploys as vLLM InferenceService
+    
+    Deployment is handled separately for more flexibility.
 
   params:
     # Model source parameters
@@ -69,46 +70,6 @@ spec:
       type: string
       description: Description for this model version
       default: ""
-    
-    # Deployment parameters
-    - name: service_name
-      type: string
-      description: Name of the InferenceService
-    
-    - name: runtime_name
-      type: string
-      description: vLLM ServingRuntime name
-      default: "vllm-nvidia-gpu"
-    
-    - name: gpu_count
-      type: string
-      description: Number of GPUs to request
-      default: "1"
-    
-    - name: cpu_request
-      type: string
-      description: CPU request
-      default: "4"
-    
-    - name: memory_request
-      type: string
-      description: Memory request
-      default: "32Gi"
-    
-    - name: memory_limit
-      type: string
-      description: Memory limit
-      default: "48Gi"
-    
-    - name: node_selector_label
-      type: string
-      description: Node selector for GPU nodes (e.g., "node.kubernetes.io/instance-type=g6.4xlarge")
-      default: ""
-    
-    - name: tensor_parallel_size
-      type: string
-      description: vLLM tensor parallelism size
-      default: "1"
     
     # Internal parameters (computed)
     - name: internal_registry
@@ -167,7 +128,7 @@ spec:
         - name: source
           workspace: shared-workspace
     
-    # Task 3: Mirror the image to Quay.io
+    # Task 3: Mirror to Quay.io (optional - runs in parallel)
     - name: mirror-to-quay
       runAfter: ["build-and-push"]
       taskRef:
@@ -180,8 +141,10 @@ spec:
           value: quay.io/$(params.quay_org)/$(params.quay_repo):$(params.quay_tag)
     
     # Task 4: Register the model in Model Registry
+    # Uses OpenShift internal registry (not Quay)
+    # Pipeline ends here - deployment is handled separately
     - name: register-model
-      runAfter: ["mirror-to-quay"]
+      runAfter: ["build-and-push"]
       taskRef:
         name: register-model
         kind: Task
@@ -191,39 +154,13 @@ spec:
         - name: version_name
           value: $(params.version_name)
         - name: image_uri
-          value: oci://quay.io/$(params.quay_org)/$(params.quay_repo):$(params.quay_tag)
+          value: oci://$(params.internal_registry)/$(params.namespace)/$(params.image_stream_name):$(params.image_tag)
         - name: model_format_name
           value: "ModelCar"
         - name: model_format_version
           value: "1"
         - name: description
           value: $(params.version_description)
-    
-    # Task 5: Deploy as vLLM InferenceService
-    - name: deploy-vllm
-      runAfter: ["register-model"]
-      taskRef:
-        name: deploy-vllm-inferenceservice
-        kind: Task
-      params:
-        - name: service_name
-          value: $(params.service_name)
-        - name: storage_uri
-          value: oci://quay.io/$(params.quay_org)/$(params.quay_repo):$(params.quay_tag)
-        - name: runtime_name
-          value: $(params.runtime_name)
-        - name: gpu_count
-          value: $(params.gpu_count)
-        - name: cpu_request
-          value: $(params.cpu_request)
-        - name: memory_request
-          value: $(params.memory_request)
-        - name: memory_limit
-          value: $(params.memory_limit)
-        - name: node_selector_label
-          value: $(params.node_selector_label)
-        - name: tensor_parallel_size
-          value: $(params.tensor_parallel_size)
 
   finally:
     - name: cleanup-workspace
@@ -234,7 +171,8 @@ spec:
             script: |
               #!/bin/bash
               echo "🧹 Pipeline execution completed"
-              echo "Check InferenceService status: oc get isvc -n private-ai-demo"
+              echo "✅ ModelCar built and registered in Model Registry"
+              echo "Check registered model: oc get registeredmodels -n private-ai-model-registry"
       workspaces:
         - name: source
           workspace: shared-workspace

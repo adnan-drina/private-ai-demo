@@ -1,0 +1,15 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: model-registry-config
+  namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/name: model-registry-config
+    app.kubernetes.io/component: configuration
+    app.kubernetes.io/part-of: private-ai-demo
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+data:
+  MR_BASE_URL: "http://private-ai-model-registry.rhoai-model-registries.svc.cluster.local:8080/api/model_registry/v1alpha3/"
+

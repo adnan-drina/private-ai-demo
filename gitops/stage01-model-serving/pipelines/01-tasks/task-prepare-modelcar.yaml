@@ -113,12 +113,14 @@ spec:
         # Set build arguments and environment variables
         ARG HF_REPO
         ARG HF_REVISION=main
+        ARG HF_TOKEN
         ENV HF_REPO=${HF_REPO}
         ENV HF_REVISION=${HF_REVISION}
+        ENV HF_TOKEN=${HF_TOKEN}
         ENV HF_HOME=/tmp/hf
         ENV HF_HUB_CACHE=/tmp/hf
 
-        # Download the model
+        # Download the model (with authentication if HF_TOKEN is set)
         RUN python /download_model.py
 
         # Stage 2: Create minimal runtime image with model

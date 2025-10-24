@@ -1,0 +1,43 @@
+---
+# RoleBinding for OpenShift AI Dashboard access
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: rhods-dashboard-model-registry-access
+  namespace: rhoai-model-registries
+  labels:
+    app.kubernetes.io/name: model-registry-rbac
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: model-registry
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: registry-user-private-ai-model-registry
+subjects:
+  - kind: ServiceAccount
+    name: rhods-dashboard
+    namespace: redhat-ods-applications
+---
+# RoleBinding for pipeline ServiceAccount access
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pipeline-model-registry-access
+  namespace: rhoai-model-registries
+  labels:
+    app.kubernetes.io/name: model-registry-rbac
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: model-registry
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: registry-user-private-ai-model-registry
+subjects:
+  - kind: ServiceAccount
+    name: pipeline
+    namespace: private-ai-demo
+

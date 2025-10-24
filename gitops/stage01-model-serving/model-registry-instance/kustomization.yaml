@@ -1,0 +1,11 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: rhoai-model-registries
+
+resources:
+  - modelregistry.yaml
+  - network-policy.yaml
+  - rbac.yaml
+

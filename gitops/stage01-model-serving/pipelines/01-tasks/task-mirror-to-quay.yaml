@@ -42,7 +42,7 @@ spec:
               key: QUAY_PASSWORD
       script: |
         #!/bin/bash
-        set -e
+        set -euo pipefail
         
         echo "════════════════════════════════════════════════════════════"
         echo "🔄 Mirroring Image to Quay.io"
@@ -50,6 +50,10 @@ spec:
         echo "Source:      $(params.src_image)"
         echo "Destination: $(params.dest_image)"
         echo "════════════════════════════════════════════════════════════"
+        
+        # Install jq for JSON parsing
+        echo "📦 Installing dependencies..."
+        microdnf install -y jq 2>&1 | grep -v "^$" || true
         
         # Login to Quay.io
         echo "🔐 Authenticating to Quay.io..."
@@ -68,7 +72,8 @@ spec:
         
         # Verify the copy
         echo "✅ Verifying image..."
-        skopeo inspect "docker://$(params.dest_image)" | jq -r '.Digest'
+        DIGEST=$(skopeo inspect "docker://$(params.dest_image)" | jq -r '.Digest')
+        echo "Image Digest: ${DIGEST}"
         
         echo "════════════════════════════════════════════════════════════"
         echo "✅ Image mirrored successfully to Quay.io"
