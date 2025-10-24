@@ -10,5 +10,6 @@ commonLabels:
 resources:
 - machineset-cluster-gmgrr-j2lhd-gpu-g6-4xlarge-us-east-2c.yaml
 - machineset-cluster-gmgrr-j2lhd-gpu-g6-12xlarge-us-east-2c.yaml
+- nodefeaturediscovery.yaml
 - clusterpolicy.yaml
 

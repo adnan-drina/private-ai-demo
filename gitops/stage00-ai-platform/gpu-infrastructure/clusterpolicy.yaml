@@ -1,12 +1,17 @@
 apiVersion: nvidia.com/v1
 kind: ClusterPolicy
 metadata:
-  annotations:
-    kubectl.kubernetes.io/last-applied-configuration: |
-      {"apiVersion":"nvidia.com/v1","kind":"ClusterPolicy","metadata":{"annotations":{},"name":"gpu-cluster-policy"},"spec":{"daemonsets":{"rollingUpdate":{"maxUnavailable":"1"},"updateStrategy":"RollingUpdate"},"dcgm":{"enabled":true},"dcgmExporter":{"enabled":true},"devicePlugin":{"enabled":true},"driver":{"enabled":true,"version":"latest"},"gfd":{"enabled":true},"mig":{"strategy":"single"},"nodeStatusExporter":{"enabled":true},"operator":{"defaultRuntime":"crio","use_ocp_driver_toolkit":true},"toolkit":{"enabled":true},"validator":{"plugin":{"env":[{"name":"WITH_WORKLOAD","value":"true"}]}}}}
   name: gpu-cluster-policy
+  namespace: nvidia-gpu-operator
+  labels:
+    app.kubernetes.io/instance: stage00-gpu-infrastructure
+    app.kubernetes.io/part-of: stage00-ai-platform
 spec:
   daemonsets:
+    tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
     rollingUpdate:
       maxUnavailable: "1"
     updateStrategy: RollingUpdate

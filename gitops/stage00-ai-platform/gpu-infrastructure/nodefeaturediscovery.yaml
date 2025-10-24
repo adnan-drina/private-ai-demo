@@ -1,0 +1,40 @@
+apiVersion: nfd.openshift.io/v1
+kind: NodeFeatureDiscovery
+metadata:
+  name: nfd-instance
+  namespace: openshift-nfd
+  labels:
+    app.kubernetes.io/instance: stage00-gpu-infrastructure
+    app.kubernetes.io/part-of: stage00-ai-platform
+spec:
+  instance: ""
+  operand:
+    image: registry.redhat.io/openshift4/ose-node-feature-discovery:v4.19
+    imagePullPolicy: Always
+  enableTaints: false
+  prunerOnDelete: false
+  topologyUpdater: false
+  workerConfig:
+    configData: |
+      core:
+        sleepInterval: 60s
+      sources:
+        pci:
+          deviceClassWhitelist:
+            - "0200"
+            - "03"
+            - "12"
+          deviceLabelFields:
+            - "vendor"
+            - "device"
+        usb:
+          deviceClassWhitelist:
+            - "0e"
+            - "ef"
+            - "fe"
+            - "ff"
+          deviceLabelFields:
+            - "serial"
+            - "vendor"
+            - "device"
+
