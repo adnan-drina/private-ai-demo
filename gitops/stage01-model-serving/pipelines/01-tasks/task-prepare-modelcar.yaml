@@ -69,13 +69,13 @@ spec:
 
         try:
             # Optimized download with parallel workers for 2-3x speedup
+            # Note: resume_download and local_dir_use_symlinks removed (deprecated in huggingface_hub 1.0)
+            # Downloads now resume automatically and symlinks are no longer used
             snapshot_download(
                 repo_id=repo,
                 revision=revision,
                 local_dir=target,
-                local_dir_use_symlinks=False,
                 max_workers=20,              # Parallel downloads (default: 8)
-                resume_download=True,        # Resume on failure
                 etag_timeout=5,              # Faster metadata checks
                 allow_patterns=[
                     "*.safetensors",
@@ -103,8 +103,9 @@ spec:
 
         USER 0
 
-        # Install HuggingFace Hub library
-        RUN pip install --no-cache-dir huggingface-hub
+        # Upgrade pip and install HuggingFace Hub library
+        RUN pip install --no-cache-dir --upgrade pip && \
+            pip install --no-cache-dir huggingface-hub
 
         # Copy download script
         COPY download_model.py /download_model.py
