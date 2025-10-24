@@ -44,6 +44,12 @@ spec:
       value: "quantized-w4a16-2501"
     - name: version_description
       value: "Red Hat AI Mistral Small 24B Instruct quantized (W4A16), packaged as ModelCar. Requires 1 GPU for deployment."
+    - name: base_model
+      value: "RedHatAI/Mistral-Small-24B-Instruct-2501-quantized.w4a16"
+    - name: quantization
+      value: "w4a16"
+    - name: gpu_requirement
+      value: "1"
     
   workspaces:
     - name: shared-workspace

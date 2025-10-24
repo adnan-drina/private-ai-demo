@@ -44,6 +44,12 @@ spec:
       value: "full-fp16-2501"
     - name: version_description
       value: "Mistral Small 24B Instruct full precision (FP16), packaged as ModelCar. Requires 4 GPUs for deployment."
+    - name: base_model
+      value: "mistralai/Mistral-Small-24B-Instruct-2501"
+    - name: quantization
+      value: "fp16"
+    - name: gpu_requirement
+      value: "4"
     
   workspaces:
     - name: shared-workspace
