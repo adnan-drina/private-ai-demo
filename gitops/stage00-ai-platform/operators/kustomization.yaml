@@ -22,4 +22,5 @@ resources:
 - subscription-rhods-operator.yaml
 - subscription-servicemeshoperator.yaml
 - subscription-serverless-operator.yaml
+- subscription-openshift-pipelines-operator.yaml
 
