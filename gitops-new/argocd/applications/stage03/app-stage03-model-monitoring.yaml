@@ -2,16 +2,16 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: stage02-rag-llama-stack
+  name: stage03-model-monitoring
   namespace: openshift-gitops
   annotations:
     argocd.argoproj.io/tracking-method: Annotation
 spec:
-  project: stage02-rag-llama-stack # Use the dedicated AppProject
+  project: stage03-model-monitoring # Use the dedicated AppProject
   source:
     repoURL: https://github.com/adnan-drina/private-ai-demo.git # Will be updated dynamically
-    targetRevision: feature/gitops-phase2-refactoring # Current branch
-    path: gitops-new/stage02-rag-llama-stack # Path to Stage 02 manifests
+    targetRevision: feature/stage-alignment # Current branch
+    path: gitops-new/stage03-model-monitoring # Path to Stage 03 manifests
   destination:
     server: https://kubernetes.default.svc
     namespace: private-ai-demo # Target namespace for deployment
@@ -33,38 +33,28 @@ spec:
         factor: 2
         maxDuration: 3m
   ignoreDifferences:
-    # Ignore HPA-managed replica counts
-    - group: apps
-      kind: Deployment
-      jsonPointers:
-        - /spec/replicas
-    
-    # Ignore Tekton PipelineRun/TaskRun status
-    - group: tekton.dev
-      kind: PipelineRun
+    # Ignore TrustyAI LMEvalJob status and metadata
+    - group: trustyai.opendatahub.io
+      kind: LMEvalJob
       jsonPointers:
         - /status
-    - group: tekton.dev
-      kind: TaskRun
+        - /metadata/resourceVersion
+    
+    # Ignore Grafana dashboard status
+    - group: grafana.integreatly.org
+      kind: GrafanaDashboard
       jsonPointers:
         - /status
     
-    # Ignore Tekton Task/Pipeline metadata.resourceVersion (immutable during updates)
-    - group: tekton.dev
-      kind: Task
+    # Ignore ServiceMonitor and PodMonitor metadata
+    - group: monitoring.coreos.com
+      kind: ServiceMonitor
       jsonPointers:
         - /metadata/resourceVersion
-    - group: tekton.dev
-      kind: Pipeline
+    - group: monitoring.coreos.com
+      kind: PodMonitor
       jsonPointers:
         - /metadata/resourceVersion
-    
-    # Ignore LlamaStackDistribution operator-managed fields
-    - group: llamastack.io
-      kind: LlamaStackDistribution
-      jsonPointers:
-        - /metadata/resourceVersion
-        - /status
     
     # Ignore PVC dynamic provisioning
     - group: ""
@@ -73,12 +63,6 @@ spec:
         - /spec/volumeName
         - /spec/volumeMode
         - /status
-    
-    # Ignore ServiceMonitor metadata.resourceVersion
-    - group: monitoring.coreos.com
-      kind: ServiceMonitor
-      jsonPointers:
-        - /metadata/resourceVersion
     
     # Ignore managed fields metadata
     - group: "*"
@@ -91,10 +75,10 @@ spec:
   info:
     - name: Description
       value: |
-        Stage 02: Model Alignment with RAG + Llama Stack
-        - Llama Stack distribution for orchestration
-        - Milvus vector database for embeddings
-        - Docling operator for document processing
-        - Document ingestion pipelines (Red Hat, EU AI Act, ACME)
-        - RAG demo notebooks
+        Stage 03: Model Monitoring with TrustyAI + Observability
+        - TrustyAI LMEvalJobs for model quality assessment
+        - Grafana dashboards for visualization
+        - Prometheus ServiceMonitors for metrics
+        - OpenTelemetry Collector for traces
+        - Evaluation results notebook
 

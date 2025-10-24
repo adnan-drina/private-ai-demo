@@ -2,7 +2,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
-  name: stage02-rag-llama-stack
+  name: stage02-model-alignment
   namespace: openshift-gitops
 spec:
   description: Stage 02 - Model Alignment with RAG + Llama Stack
@@ -23,7 +23,7 @@ spec:
     - name: stage02-admin
       description: Admin access to Stage 02 resources
       policies:
-        - p, proj:stage02-rag-llama-stack:stage02-admin, applications, *, stage02-rag-llama-stack/*, allow
+        - p, proj:stage02-model-alignment:stage02-admin, applications, *, stage02-model-alignment/*, allow
       groups:
         - stage02-admins # Placeholder for RBAC groups
 

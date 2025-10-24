@@ -4,7 +4,7 @@ kind: Kustomization
 
 resources:
   - appproject-stage01.yaml
-  - appproject-stage02.yaml
-  - appproject-stage03.yaml
-  - appproject-stage04.yaml
+  - appproject-stage02-model-alignment.yaml
+  - appproject-stage03-model-monitoring.yaml
+  - appproject-stage04-model-integration.yaml
 

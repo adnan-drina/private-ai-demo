@@ -2,7 +2,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
-  name: stage03-trustyai-monitoring
+  name: stage03-model-monitoring
   namespace: openshift-gitops
 spec:
   description: Stage 03 - Model Monitoring with TrustyAI + Observability
@@ -27,7 +27,7 @@ spec:
     - name: stage03-admin
       description: Admin access to Stage 03 resources
       policies:
-        - p, proj:stage03-trustyai-monitoring:stage03-admin, applications, *, stage03-trustyai-monitoring/*, allow
+        - p, proj:stage03-model-monitoring:stage03-admin, applications, *, stage03-model-monitoring/*, allow
       groups:
         - stage03-admins # Placeholder for RBAC groups
 

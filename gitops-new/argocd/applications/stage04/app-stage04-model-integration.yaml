@@ -2,16 +2,16 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: stage03-trustyai-monitoring
+  name: stage04-model-integration
   namespace: openshift-gitops
   annotations:
     argocd.argoproj.io/tracking-method: Annotation
 spec:
-  project: stage03-trustyai-monitoring # Use the dedicated AppProject
+  project: stage04-model-integration # Use the dedicated AppProject
   source:
     repoURL: https://github.com/adnan-drina/private-ai-demo.git # Will be updated dynamically
-    targetRevision: feature/gitops-phase2-refactoring # Current branch
-    path: gitops-new/stage03-trustyai-monitoring # Path to Stage 03 manifests
+    targetRevision: feature/stage-alignment # Current branch
+    path: gitops-new/stage04-model-integration # Path to Stage 04 manifests
   destination:
     server: https://kubernetes.default.svc
     namespace: private-ai-demo # Target namespace for deployment
@@ -33,28 +33,11 @@ spec:
         factor: 2
         maxDuration: 3m
   ignoreDifferences:
-    # Ignore TrustyAI LMEvalJob status and metadata
-    - group: trustyai.opendatahub.io
-      kind: LMEvalJob
+    # Ignore HPA-managed replica counts
+    - group: apps
+      kind: Deployment
       jsonPointers:
-        - /status
-        - /metadata/resourceVersion
-    
-    # Ignore Grafana dashboard status
-    - group: grafana.integreatly.org
-      kind: GrafanaDashboard
-      jsonPointers:
-        - /status
-    
-    # Ignore ServiceMonitor and PodMonitor metadata
-    - group: monitoring.coreos.com
-      kind: ServiceMonitor
-      jsonPointers:
-        - /metadata/resourceVersion
-    - group: monitoring.coreos.com
-      kind: PodMonitor
-      jsonPointers:
-        - /metadata/resourceVersion
+        - /spec/replicas
     
     # Ignore PVC dynamic provisioning
     - group: ""
@@ -75,10 +58,10 @@ spec:
   info:
     - name: Description
       value: |
-        Stage 03: Model Monitoring with TrustyAI + Observability
-        - TrustyAI LMEvalJobs for model quality assessment
-        - Grafana dashboards for visualization
-        - Prometheus ServiceMonitors for metrics
-        - OpenTelemetry Collector for traces
-        - Evaluation results notebook
+        Stage 04: Model Integration with MCP + Agentic AI
+        - PostgreSQL database for equipment metadata
+        - MCP Database server for equipment queries
+        - MCP Slack server for notifications
+        - ACME Agent (Quarkus) for orchestration
+        - Integration demo notebook
 

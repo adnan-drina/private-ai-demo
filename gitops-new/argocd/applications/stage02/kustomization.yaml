@@ -3,5 +3,5 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-  - app-stage02-rag-llama-stack.yaml
+  - app-stage02-model-alignment.yaml
 
