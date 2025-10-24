@@ -3,6 +3,10 @@ kind: Kustomization
 
 namespace: openshift-machine-api
 
+commonLabels:
+  app.kubernetes.io/instance: stage00-gpu-infrastructure
+  app.kubernetes.io/part-of: stage00-ai-platform
+
 resources:
 - machineset-cluster-gmgrr-j2lhd-gpu-g6-4xlarge-us-east-2c.yaml
 - machineset-cluster-gmgrr-j2lhd-gpu-g6-12xlarge-us-east-2c.yaml

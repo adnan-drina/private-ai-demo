@@ -1,6 +1,10 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
+commonLabels:
+  app.kubernetes.io/instance: stage00-operators
+  app.kubernetes.io/part-of: stage00-ai-platform
+
 resources:
 # Namespaces
 - namespace-openshift-nfd.yaml
