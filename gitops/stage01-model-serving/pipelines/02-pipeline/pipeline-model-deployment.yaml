@@ -125,6 +125,12 @@ spec:
     - name: shared-workspace
       description: Shared workspace for build context and artifacts
 
+  # Timeout configuration
+  timeouts:
+    pipeline: "2h"    # Overall pipeline timeout
+    tasks: "2h"       # Individual task timeout
+    finally: "10m"    # Finally tasks timeout
+
   tasks:
     # Task 1: Prepare the ModelCar build context
     - name: prepare-context
@@ -143,6 +149,7 @@ spec:
     # Task 2: Build the ModelCar image and push to internal registry (Red Hat Buildah)
     - name: build-and-push
       runAfter: ["prepare-context"]
+      timeout: "2h"  # Extended timeout for large model downloads and builds
       taskRef:
         name: buildah-build-modelcar
         kind: Task
