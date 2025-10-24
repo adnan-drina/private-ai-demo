@@ -12,9 +12,8 @@ commonLabels:
 
 # Resources in deployment order
 resources:
-  # 1. Namespace and base infrastructure
-  - base-namespace
-  - base-secrets
+  # 1. Namespace
+  - project-namespace
   
   # 2. MinIO (Object storage for models and artifacts)
   - minio

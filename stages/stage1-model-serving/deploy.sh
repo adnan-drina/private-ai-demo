@@ -36,6 +36,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 GITOPS_PATH="$PROJECT_ROOT/gitops/stage01-model-serving"
+ENV_FILE="$PROJECT_ROOT/.env"
 
 # Colors for output
 RED='\033[0;31m'
@@ -128,11 +129,11 @@ check_prerequisites() {
   log_success "GitOps manifests found: $GITOPS_PATH"
   
   # Check .env file
-  if [ ! -f "$SCRIPT_DIR/.env" ] && [ "$SKIP_SECRETS" = false ]; then
-    log_error ".env file not found: $SCRIPT_DIR/.env"
+  if [ ! -f "$ENV_FILE" ] && [ "$SKIP_SECRETS" = false ]; then
+    log_error ".env file not found: $ENV_FILE"
     echo ""
     echo "Please create .env file from template:"
-    echo "  cd $SCRIPT_DIR"
+    echo "  cd $PROJECT_ROOT"
     echo "  cp env.template .env"
     echo "  # Edit .env and add your secrets"
     echo ""
@@ -141,8 +142,8 @@ check_prerequisites() {
     exit 1
   fi
   
-  if [ -f "$SCRIPT_DIR/.env" ]; then
-    log_success ".env file found (secrets will be loaded)"
+  if [ -f "$ENV_FILE" ]; then
+    log_success ".env file found: $ENV_FILE"
   fi
   
   # Validate kustomize build
@@ -164,9 +165,9 @@ load_env_file() {
   
   log_section "Loading Environment Variables from .env"
   
-  # Load .env file
+  # Load .env file from project root
   set -a  # Automatically export all variables
-  source "$SCRIPT_DIR/.env"
+  source "$ENV_FILE"
   set +a
   
   # Validate required secrets
@@ -190,7 +191,7 @@ load_env_file() {
       log_info "$var"
     done
     echo ""
-    echo "Please edit $SCRIPT_DIR/.env and set these variables"
+    echo "Please edit $ENV_FILE and set these variables"
     exit 1
   fi
   
