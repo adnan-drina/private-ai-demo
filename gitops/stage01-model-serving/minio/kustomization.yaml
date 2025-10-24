@@ -8,7 +8,7 @@ metadata:
 
 resources:
   # namespace.yaml removed - using parent namespace (private-ai-demo)
-  - secret.yaml
+  # secret.yaml excluded - managed by deploy.sh (not committed to Git)
   - pvc.yaml
   - deployment.yaml
   - service.yaml
