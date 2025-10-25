@@ -51,10 +51,6 @@ spec:
         echo "Destination: $(params.dest_image)"
         echo "════════════════════════════════════════════════════════════"
         
-        # Install jq for JSON parsing
-        echo "📦 Installing dependencies..."
-        microdnf install -y jq 2>&1 | grep -v "^$" || true
-        
         # Login to Quay.io
         echo "🔐 Authenticating to Quay.io..."
         skopeo login quay.io \
@@ -70,9 +66,10 @@ spec:
           "docker://$(params.src_image)" \
           "docker://$(params.dest_image)"
         
-        # Verify the copy
+        # Verify the copy (using python json.tool instead of jq to avoid extra dependencies)
         echo "✅ Verifying image..."
-        DIGEST=$(skopeo inspect "docker://$(params.dest_image)" | jq -r '.Digest')
+        INSPECT_OUTPUT=$(skopeo inspect "docker://$(params.dest_image)")
+        DIGEST=$(echo "$INSPECT_OUTPUT" | python3 -c "import sys, json; print(json.load(sys.stdin).get('Digest', 'N/A'))")
         echo "Image Digest: ${DIGEST}"
         
         echo "════════════════════════════════════════════════════════════"
