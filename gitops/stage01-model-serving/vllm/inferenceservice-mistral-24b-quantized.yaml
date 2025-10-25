@@ -11,30 +11,33 @@ metadata:
     app.openshift.io/runtime: python
     opendatahub.io/dashboard: "true"
     modelregistry.opendatahub.io/registered-model-id: "4"
-    modelregistry.opendatahub.io/model-version-id: "9"  # v1.1-quantized
+    modelregistry.opendatahub.io/model-version-id: "9"
+    modelregistry.opendatahub.io/name: private-ai-model-registry
+    modelregistry.opendatahub.io/inference-service-id: "11"
   annotations:
+    argocd.argoproj.io/sync-wave: "5"
     app.openshift.io/connects-to: '[{"apiVersion":"apps/v1","kind":"Deployment","name":"llama-stack"}]'
-    openshift.io/display-name: "Mistral 24B Quantized (W4A16)"
+    openshift.io/display-name: "Mistral-24B-quantized"
     serving.kserve.io/deploymentMode: "Serverless"
-    description: "Mistral Small 24B Instruct W4A16 quantized - 1 GPU deployment"
+    description: "Mistral Small 24B Instruct W4A16 quantized - 1 GPU deployment (ModelCar OCI image)"
     serving.knative.openshift.io/enablePassthrough: "true"
     sidecar.istio.io/inject: "true"
     sidecar.istio.io/rewriteAppHTTPProbers: "true"
     security.opendatahub.io/enable-auth: "true"
-    autoscaling.knative.dev/min-scale: "1"
-    autoscaling.knative.dev/scale-to-zero-pod-retention-period: "60m"
 spec:
   predictor:
-    serviceAccountName: ai-workload-sa
+    automountServiceAccountToken: false
+    imagePullSecrets:
+      - name: internal-registry-private-ai
     minReplicas: 1
     maxReplicas: 1
     model:
-      runtime: vllm-cuda-runtime  # Shared runtime for all vLLM models
       modelFormat:
         name: vLLM
-      # ModelCar approach: model is baked into the container image
-      storageUri: "oci://image-registry.openshift-image-registry.svc:5000/private-ai-demo/mistral-24b-quantized:w4a16-2501"
-      # Model-specific resources for 1-GPU quantized model
+      name: ""
+      runtime: vllm-cuda-runtime
+      # OCI image from ModelCar pipeline (stored in OpenShift internal registry)
+      storageUri: oci://image-registry.openshift-image-registry.svc:5000/private-ai-demo/mistral-24b-quantized:w4a16-2501
       resources:
         requests:
           cpu: "6"
@@ -44,17 +47,7 @@ spec:
           cpu: "10"
           memory: 20Gi
           nvidia.com/gpu: "1"
-      # Model-specific vLLM args for quantized model
-      args:
-        - --gpu-memory-utilization=0.85
-        - --max-model-len=8192
-        - --enable-chunked-prefill
-        - --enable-prefix-caching
-        - --trust-remote-code
-    # Node placement for g6.4xlarge (1 GPU node)
-    nodeSelector:
-      node.kubernetes.io/instance-type: g6.4xlarge
     tolerations:
-    - key: nvidia.com/gpu
-      operator: Exists
-      effect: NoSchedule
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule

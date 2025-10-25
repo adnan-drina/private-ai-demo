@@ -1,0 +1,38 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: stage01-model-serving
+  namespace: openshift-gitops
+  labels:
+    app.kubernetes.io/name: stage01-model-serving
+    app.kubernetes.io/part-of: private-ai-demo
+    app.kubernetes.io/component: app-of-apps
+    stage: "01"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  
+  source:
+    repoURL: https://github.com/adnan-drina/private-ai-demo.git
+    targetRevision: HEAD
+    path: gitops-apps/stage01
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: openshift-gitops
+  
+  syncPolicy:
+    automated:
+      prune: false  # Don't auto-prune app definitions
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+

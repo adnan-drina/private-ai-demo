@@ -62,6 +62,9 @@ spec:
           resources:
             requests:
               storage: 500Gi  # Critical: Model (48GB) + Buildah layers (48GB duplicate) + OCI image layers (100GB+) + temp build files (50GB+) = ~300GB actual usage. 500Gi provides safety margin.
+    - name: registry-auth
+      secret:
+        secretName: internal-registry-private-ai  # Docker registry auth for pushing to internal registry
   
   timeouts:
     pipeline: "4h"      # Increased timeout - full model is larger (~48GB) and COPY step is slow

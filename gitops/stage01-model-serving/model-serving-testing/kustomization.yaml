@@ -1,0 +1,24 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: private-ai-demo
+
+resources:
+  # Infrastructure (Wave 1)
+  - serviceaccount.yaml
+  - pvc.yaml
+  - rolebinding.yaml
+  
+  # Notebook ConfigMaps (Wave 1)
+  - configmap-notebook-guidellm.yaml
+  - configmap-notebook-lm-eval.yaml
+  
+  # Workbench (Wave 2)
+  - notebook.yaml
+
+# Labels for all resources
+commonLabels:
+  app.kubernetes.io/part-of: private-ai-demo
+  stage: "01"
+  managed-by: argocd

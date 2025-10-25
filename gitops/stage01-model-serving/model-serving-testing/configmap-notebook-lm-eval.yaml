@@ -1,0 +1,377 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: notebook-lm-eval-testing
+  namespace: private-ai-demo
+  labels:
+    app: model-serving-testing
+    app.kubernetes.io/name: lm-eval-notebook
+    app.kubernetes.io/component: workbench
+    app.kubernetes.io/part-of: private-ai-demo
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    openshift.io/display-name: "LM-Eval Testing Notebook"
+    description: "Interactive notebook for running LM-Eval quality assessments on deployed models"
+data:
+  02-lm-eval-testing.ipynb: |
+    {
+     "cells": [
+      {
+       "cell_type": "markdown",
+       "metadata": {},
+       "source": [
+        "# LM-Eval Testing\n",
+        "\n",
+        "This notebook provides an interactive interface to run LM-Eval quality assessments on deployed models.\n",
+        "\n",
+        "## Benefits of Notebook vs TrustyAI Jobs:\n",
+        "- **Interactive**: Run, modify, and re-run evaluations easily\n",
+        "- **Flexible**: Choose tasks and adjust parameters on the fly\n",
+        "- **Visual**: See results immediately with comparisons\n",
+        "- **Iterative**: Test different configurations quickly\n",
+        "- **Maintainable**: Easier to update than Job manifests\n",
+        "\n",
+        "## What We'll Test:\n",
+        "- Model quality metrics (accuracy, etc.)\n",
+        "- Standard evaluation tasks (ARC, HellaSwag, etc.)\n",
+        "- Compare quantized vs full precision\n",
+        "\n",
+        "## Evaluation Tasks:\n",
+        "1. **arc_easy**: AI2 Reasoning Challenge (easy)\n",
+        "2. **hellaswag**: Common sense reasoning\n",
+        "3. **truthfulqa_mc2**: Truthfulness assessment\n"
+       ]
+      },
+      {
+       "cell_type": "code",
+       "execution_count": null,
+       "metadata": {},
+       "outputs": [],
+       "source": [
+        "# Install dependencies\n",
+        "!pip install -q lm-eval pandas matplotlib tabulate"
+       ]
+      },
+      {
+       "cell_type": "code",
+       "execution_count": null,
+       "metadata": {},
+       "outputs": [],
+       "source": [
+        "import os\n",
+        "import json\n",
+        "import pandas as pd\n",
+        "import matplotlib.pyplot as plt\n",
+        "from datetime import datetime"
+       ]
+      },
+      {
+       "cell_type": "markdown",
+       "metadata": {},
+       "source": [
+        "## 1. Discover Model Endpoints\n",
+        "\n",
+        "Find the deployed InferenceService endpoints."
+       ]
+      },
+      {
+       "cell_type": "code",
+       "execution_count": null,
+       "metadata": {},
+       "outputs": [],
+       "source": [
+        "import subprocess\n",
+        "\n",
+        "def get_model_endpoints():\n",
+        "    \"\"\"Discover InferenceService endpoints\"\"\"\n",
+        "    try:\n",
+        "        result = subprocess.run(\n",
+        "            ['oc', 'get', 'inferenceservice', '-n', 'private-ai-demo', '-o', 'json'],\n",
+        "            capture_output=True, text=True, check=True\n",
+        "        )\n",
+        "        services = json.loads(result.stdout)\n",
+        "        \n",
+        "        endpoints = {}\n",
+        "        for svc in services.get('items', []):\n",
+        "            name = svc['metadata']['name']\n",
+        "            url = svc.get('status', {}).get('url', '')\n",
+        "            if url:\n",
+        "                # Convert to vLLM OpenAI-compatible endpoint\n",
+        "                endpoints[name] = url.rstrip('/') + '/v1'\n",
+        "        \n",
+        "        return endpoints\n",
+        "    except Exception as e:\n",
+        "        print(f\"Error discovering endpoints: {e}\")\n",
+        "        return {}\n",
+        "\n",
+        "endpoints = get_model_endpoints()\n",
+        "print(\"📍 Discovered Model Endpoints:\")\n",
+        "for name, url in endpoints.items():\n",
+        "    print(f\"  - {name}: {url}\")"
+       ]
+      },
+      {
+       "cell_type": "markdown",
+       "metadata": {},
+       "source": [
+        "## 2. Configure Evaluation Tasks\n",
+        "\n",
+        "Select evaluation tasks and parameters."
+       ]
+      },
+      {
+       "cell_type": "code",
+       "execution_count": null,
+       "metadata": {},
+       "outputs": [],
+       "source": [
+        "# Evaluation configuration\n",
+        "EVAL_TASKS = [\n",
+        "    \"arc_easy\",\n",
+        "    \"hellaswag\",\n",
+        "    \"truthfulqa_mc2\",\n",
+        "]\n",
+        "\n",
+        "EVAL_PARAMS = {\n",
+        "    \"limit\": 100,  # Number of examples per task (increase for production)\n",
+        "    \"batch_size\": 8,\n",
+        "    \"num_fewshot\": 0,\n",
+        "}\n",
+        "\n",
+        "print(f\"✅ Configured {len(EVAL_TASKS)} evaluation tasks\")\n",
+        "print(f\"   Limit: {EVAL_PARAMS['limit']} examples per task\")"
+       ]
+      },
+      {
+       "cell_type": "markdown",
+       "metadata": {},
+       "source": [
+        "## 3. Run Evaluations\n",
+        "\n",
+        "Execute LM-Eval for each model."
+       ]
+      },
+      {
+       "cell_type": "code",
+       "execution_count": null,
+       "metadata": {},
+       "outputs": [],
+       "source": [
+        "def run_lm_eval(model_name, endpoint_url, tasks):\n",
+        "    \"\"\"Run LM-Eval on a model endpoint\"\"\"\n",
+        "    print(f\"\\n🔄 Evaluating {model_name}...\")\n",
+        "    \n",
+        "    # LM-Eval CLI command\n",
+        "    cmd = [\n",
+        "        'lm_eval',\n",
+        "        '--model', 'local-completions',\n",
+        "        '--model_args', f'base_url={endpoint_url},model={model_name}',\n",
+        "        '--tasks', ','.join(tasks),\n",
+        "        '--limit', str(EVAL_PARAMS['limit']),\n",
+        "        '--batch_size', str(EVAL_PARAMS['batch_size']),\n",
+        "        '--num_fewshot', str(EVAL_PARAMS['num_fewshot']),\n",
+        "        '--output_path', f'/tmp/lm_eval_{model_name.replace(\"-\", \"_\")}',\n",
+        "        '--log_samples',\n",
+        "    ]\n",
+        "    \n",
+        "    try:\n",
+        "        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)\n",
+        "        \n",
+        "        if result.returncode == 0:\n",
+        "            print(f\"✅ Evaluation complete!\")\n",
+        "            \n",
+        "            # Parse results from output file\n",
+        "            output_file = f'/tmp/lm_eval_{model_name.replace(\"-\", \"_\")}/results.json'\n",
+        "            if os.path.exists(output_file):\n",
+        "                with open(output_file, 'r') as f:\n",
+        "                    results = json.load(f)\n",
+        "                return results\n",
+        "        else:\n",
+        "            print(f\"❌ Evaluation failed: {result.stderr}\")\n",
+        "            return None\n",
+        "    except Exception as e:\n",
+        "        print(f\"❌ Error: {e}\")\n",
+        "        return None\n",
+        "\n",
+        "# Run evaluations\n",
+        "results = {}\n",
+        "for model_name, endpoint_url in endpoints.items():\n",
+        "    result = run_lm_eval(model_name, endpoint_url, EVAL_TASKS)\n",
+        "    if result:\n",
+        "        results[model_name] = result\n",
+        "\n",
+        "print(\"\\n✅ All evaluations complete!\")"
+       ]
+      },
+      {
+       "cell_type": "markdown",
+       "metadata": {},
+       "source": [
+        "## 4. Compare Results\n",
+        "\n",
+        "Analyze and compare model quality metrics."
+       ]
+      },
+      {
+       "cell_type": "code",
+       "execution_count": null,
+       "metadata": {},
+       "outputs": [],
+       "source": [
+        "if results:\n",
+        "    # Compile results into comparison table\n",
+        "    comparison = []\n",
+        "    \n",
+        "    for model_name, eval_results in results.items():\n",
+        "        for task in EVAL_TASKS:\n",
+        "            if task in eval_results.get('results', {}):\n",
+        "                task_results = eval_results['results'][task]\n",
+        "                comparison.append({\n",
+        "                    'Model': model_name,\n",
+        "                    'Task': task,\n",
+        "                    'Accuracy': task_results.get('acc', 'N/A'),\n",
+        "                    'Acc Norm': task_results.get('acc_norm', 'N/A'),\n",
+        "                })\n",
+        "    \n",
+        "    df = pd.DataFrame(comparison)\n",
+        "    \n",
+        "    if not df.empty:\n",
+        "        print(\"📊 EVALUATION RESULTS\")\n",
+        "        print(\"=\"*80)\n",
+        "        display(df)\n",
+        "    else:\n",
+        "        print(\"⚠️  No results to display\")\n",
+        "else:\n",
+        "    print(\"⚠️  No evaluation results available\")"
+       ]
+      },
+      {
+       "cell_type": "markdown",
+       "metadata": {},
+       "source": [
+        "## 5. Visualize Quality Comparison\n",
+        "\n",
+        "Create charts to compare model quality."
+       ]
+      },
+      {
+       "cell_type": "code",
+       "execution_count": null,
+       "metadata": {},
+       "outputs": [],
+       "source": [
+        "if not df.empty:\n",
+        "    fig, ax = plt.subplots(figsize=(12, 6))\n",
+        "    \n",
+        "    # Accuracy comparison across tasks\n",
+        "    df_pivot = df.pivot(index='Task', columns='Model', values='Accuracy')\n",
+        "    df_pivot.plot(kind='bar', ax=ax, title='Model Quality Comparison (Accuracy by Task)')\n",
+        "    ax.set_ylabel('Accuracy')\n",
+        "    ax.set_xlabel('Evaluation Task')\n",
+        "    ax.legend(title='Model', bbox_to_anchor=(1.05, 1), loc='upper left')\n",
+        "    ax.grid(axis='y', alpha=0.3)\n",
+        "    \n",
+        "    plt.tight_layout()\n",
+        "    plt.show()\n",
+        "else:\n",
+        "    print(\"⚠️  No data to visualize\")"
+       ]
+      },
+      {
+       "cell_type": "markdown",
+       "metadata": {},
+       "source": [
+        "## 6. Quality Delta Analysis\n",
+        "\n",
+        "Calculate the quality impact of quantization."
+       ]
+      },
+      {
+       "cell_type": "code",
+       "execution_count": null,
+       "metadata": {},
+       "outputs": [],
+       "source": [
+        "if 'mistral-24b-quantized' in results and 'mistral-24b' in results:\n",
+        "    print(\"📊 QUANTIZATION IMPACT\")\n",
+        "    print(\"=\"*80)\n",
+        "    \n",
+        "    for task in EVAL_TASKS:\n",
+        "        full_acc = results['mistral-24b'].get('results', {}).get(task, {}).get('acc', 0)\n",
+        "        quant_acc = results['mistral-24b-quantized'].get('results', {}).get(task, {}).get('acc', 0)\n",
+        "        \n",
+        "        if full_acc and quant_acc:\n",
+        "            delta = ((quant_acc - full_acc) / full_acc) * 100\n",
+        "            print(f\"{task}:\")\n",
+        "            print(f\"  Full: {full_acc:.4f}\")\n",
+        "            print(f\"  Quantized: {quant_acc:.4f}\")\n",
+        "            print(f\"  Delta: {delta:+.2f}%\")\n",
+        "            print()\n",
+        "else:\n",
+        "    print(\"⚠️  Need both models for comparison\")"
+       ]
+      },
+      {
+       "cell_type": "markdown",
+       "metadata": {},
+       "source": [
+        "## 7. Save Results to Model Registry\n",
+        "\n",
+        "Store evaluation results as model metadata."
+       ]
+      },
+      {
+       "cell_type": "code",
+       "execution_count": null,
+       "metadata": {},
+       "outputs": [],
+       "source": [
+        "# TODO: Implement Model Registry integration\n",
+        "# This will store LM-Eval results as custom properties on model versions\n",
+        "\n",
+        "print(\"💾 Results saved locally (Model Registry integration pending)\")"
+       ]
+      },
+      {
+       "cell_type": "markdown",
+       "metadata": {},
+       "source": [
+        "## Summary\n",
+        "\n",
+        "This notebook replaces TrustyAI Job-based evaluations with an interactive workflow:\n",
+        "\n",
+        "**Advantages:**\n",
+        "- ✅ Interactive - modify tasks and parameters easily\n",
+        "- ✅ Flexible - run any LM-Eval task\n",
+        "- ✅ Visual - immediate comparison charts\n",
+        "- ✅ Iterative - test different configurations quickly\n",
+        "- ✅ Maintainable - easier to update than TrustyAI CRDs\n",
+        "\n",
+        "**Key Findings:**\n",
+        "- Compare quantized vs full precision quality\n",
+        "- Understand trade-offs (performance vs accuracy)\n",
+        "- Make informed deployment decisions\n",
+        "\n",
+        "**Next Steps:**\n",
+        "1. Review GuideLLM benchmark results\n",
+        "2. Combine performance + quality insights\n",
+        "3. Document findings in Model Registry\n"
+       ]
+      }
+     ],
+     "metadata": {
+      "kernelspec": {
+       "display_name": "Python 3",
+       "language": "python",
+       "name": "python3"
+      },
+      "language_info": {
+       "name": "python",
+       "version": "3.11.0"
+      }
+     },
+     "nbformat": 4,
+     "nbformat_minor": 4
+    }
+

@@ -100,6 +100,9 @@ spec:
   workspaces:
     - name: shared-workspace
       description: Shared workspace for build context and artifacts
+    - name: registry-auth
+      description: Docker registry authentication secret
+      optional: true
 
   # Note: Timeout configuration is set at PipelineRun level, not Pipeline level
   # Default PipelineRun timeout: 2h (set when creating PipelineRun)
@@ -142,6 +145,8 @@ spec:
       workspaces:
         - name: source
           workspace: shared-workspace
+        - name: registry-auth
+          workspace: registry-auth
     
     # Task 3: Mirror to Quay.io (optional - runs in parallel)
     - name: mirror-to-quay

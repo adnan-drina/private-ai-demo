@@ -1,0 +1,31 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Model Registry components
+# Deployed to: model-registry and rhoai-model-registries namespaces
+
+resources:
+  # MySQL database (model-registry namespace)
+  - mysql/deployment.yaml
+  - mysql/service.yaml
+  - mysql/pvc.yaml
+  - mysql/configmap.yaml
+  
+  # Model Registry instance (rhoai-model-registries namespace)
+  - model-registry-instance/modelregistry.yaml
+  - model-registry-instance/rbac.yaml
+  - model-registry-instance/network-policy.yaml
+  
+  # Model Registry connection (private-ai-demo namespace)
+  - model-registry/configmap.yaml
+  
+  # Network policy for access (rhoai-model-registries namespace)
+  - network-policy/allow-model-registry.yaml
+  
+  # RBAC for model registry access (model-registry namespace)
+  - project-namespace/role-model-registry-access.yaml
+  - project-namespace/rolebinding-model-registry-access.yaml
+
+# Note: Resources have explicit namespace declarations
+

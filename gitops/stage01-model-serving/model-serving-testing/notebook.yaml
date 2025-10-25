@@ -1,0 +1,97 @@
+apiVersion: kubeflow.org/v1
+kind: Notebook
+metadata:
+  name: model-serving-testing
+  namespace: private-ai-demo
+  labels:
+    app: model-serving-testing
+    app.kubernetes.io/name: model-serving-testing
+    app.kubernetes.io/component: notebook
+    app.kubernetes.io/part-of: private-ai-demo
+    app.openshift.io/runtime: python
+    opendatahub.io/dashboard: "true"
+  annotations:
+    app.openshift.io/connects-to: '[{"apiVersion":"serving.kserve.io/v1beta1","kind":"InferenceService","name":"mistral-24b-quantized"}]'
+    notebooks.opendatahub.io/inject-oauth: "true"
+    opendatahub.io/image-display-name: "Standard Data Science"
+    openshift.io/description: "Model Serving Testing Workbench - GuideLLM Benchmark & LM-Eval Testing"
+    openshift.io/display-name: "Model Serving Testing"
+spec:
+  template:
+    spec:
+      affinity: {}
+      containers:
+      - name: model-serving-testing
+        image: image-registry.openshift-image-registry.svc:5000/redhat-ods-applications/s2i-generic-data-science-notebook:2025.1
+        imagePullPolicy: Always
+        env:
+        - name: NOTEBOOK_ARGS
+          value: |
+            --ServerApp.port=8888
+            --ServerApp.token=''
+            --ServerApp.password=''
+            --ServerApp.base_url=/notebook/private-ai-demo/model-serving-testing
+            --ServerApp.quit_button=False
+        - name: JUPYTER_IMAGE
+          value: image-registry.openshift-image-registry.svc:5000/redhat-ods-applications/s2i-generic-data-science-notebook:2025.1
+        ports:
+        - containerPort: 8888
+          name: notebook-port
+          protocol: TCP
+        resources:
+          limits:
+            cpu: "2"
+            memory: 8Gi
+          requests:
+            cpu: "1"
+            memory: 8Gi
+        volumeMounts:
+        - mountPath: /opt/app-root/src
+          name: model-serving-testing
+        - mountPath: /dev/shm
+          name: shm
+        # Mount notebooks from ConfigMaps
+        - mountPath: /opt/app-root/src/01-guidellm-benchmark.ipynb
+          name: notebook-guidellm
+          subPath: 01-guidellm-benchmark.ipynb
+        - mountPath: /opt/app-root/src/02-lm-eval-testing.ipynb
+          name: notebook-lm-eval
+          subPath: 02-lm-eval-testing.ipynb
+        workingDir: /opt/app-root/src
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /notebook/private-ai-demo/model-serving-testing/api
+            port: notebook-port
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 1
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /notebook/private-ai-demo/model-serving-testing/api
+            port: notebook-port
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 1
+      enableServiceLinks: false
+      serviceAccountName: model-serving-testing
+      volumes:
+      - name: model-serving-testing
+        persistentVolumeClaim:
+          claimName: model-serving-testing
+      - emptyDir:
+          medium: Memory
+        name: shm
+      # Notebook ConfigMaps
+      - name: notebook-guidellm
+        configMap:
+          name: notebook-guidellm-benchmark
+      - name: notebook-lm-eval
+        configMap:
+          name: notebook-lm-eval-testing
+

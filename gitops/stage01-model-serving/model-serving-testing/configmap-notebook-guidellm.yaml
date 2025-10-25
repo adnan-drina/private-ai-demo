@@ -1,0 +1,326 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: notebook-guidellm-benchmark
+  namespace: private-ai-demo
+  labels:
+    app: model-serving-testing
+    app.kubernetes.io/name: guidellm-benchmark-notebook
+    app.kubernetes.io/component: workbench
+    app.kubernetes.io/part-of: private-ai-demo
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    openshift.io/display-name: "GuideLLM Benchmark Notebook"
+    description: "Interactive notebook for running GuideLLM benchmarks on deployed models"
+data:
+  01-guidellm-benchmark.ipynb: |
+    {
+     "cells": [
+      {
+       "cell_type": "markdown",
+       "metadata": {},
+       "source": [
+        "# GuideLLM Benchmark Testing\n",
+        "\n",
+        "This notebook provides an interactive interface to run GuideLLM benchmarks on deployed vLLM models.\n",
+        "\n",
+        "## Benefits of Notebook vs Jobs:\n",
+        "- **Interactive**: Run, modify, and re-run tests easily\n",
+        "- **Visual**: See results immediately with charts and tables\n",
+        "- **Flexible**: Easily adjust parameters and test scenarios\n",
+        "- **Educational**: Step-by-step execution helps understand the process\n",
+        "- **Shareable**: Easy to share and collaborate with team\n",
+        "\n",
+        "## What We'll Test:\n",
+        "1. Mistral 24B Quantized (W4A16) - 1 GPU\n",
+        "2. Mistral 24B Full Precision - 4 GPUs\n",
+        "\n",
+        "## Metrics:\n",
+        "- **Throughput**: Tokens/second\n",
+        "- **Latency**: Time to First Token (TTFT)\n",
+        "- **Scalability**: Performance under load (concurrent requests)\n"
+       ]
+      },
+      {
+       "cell_type": "code",
+       "execution_count": null,
+       "metadata": {},
+       "outputs": [],
+       "source": [
+        "# Install dependencies\n",
+        "!pip install -q guidellm pandas matplotlib tabulate"
+       ]
+      },
+      {
+       "cell_type": "code",
+       "execution_count": null,
+       "metadata": {},
+       "outputs": [],
+       "source": [
+        "import os\n",
+        "import json\n",
+        "import pandas as pd\n",
+        "import matplotlib.pyplot as plt\n",
+        "from datetime import datetime"
+       ]
+      },
+      {
+       "cell_type": "markdown",
+       "metadata": {},
+       "source": [
+        "## 1. Discover Model Endpoints\n",
+        "\n",
+        "Find the deployed InferenceService endpoints automatically."
+       ]
+      },
+      {
+       "cell_type": "code",
+       "execution_count": null,
+       "metadata": {},
+       "outputs": [],
+       "source": [
+        "import subprocess\n",
+        "\n",
+        "def get_model_endpoints():\n",
+        "    \"\"\"Discover InferenceService endpoints\"\"\"\n",
+        "    try:\n",
+        "        result = subprocess.run(\n",
+        "            ['oc', 'get', 'inferenceservice', '-n', 'private-ai-demo', '-o', 'json'],\n",
+        "            capture_output=True, text=True, check=True\n",
+        "        )\n",
+        "        services = json.loads(result.stdout)\n",
+        "        \n",
+        "        endpoints = {}\n",
+        "        for svc in services.get('items', []):\n",
+        "            name = svc['metadata']['name']\n",
+        "            url = svc.get('status', {}).get('url', '')\n",
+        "            if url:\n",
+        "                endpoints[name] = url\n",
+        "        \n",
+        "        return endpoints\n",
+        "    except Exception as e:\n",
+        "        print(f\"Error discovering endpoints: {e}\")\n",
+        "        return {}\n",
+        "\n",
+        "endpoints = get_model_endpoints()\n",
+        "print(\"📍 Discovered Model Endpoints:\")\n",
+        "for name, url in endpoints.items():\n",
+        "    print(f\"  - {name}: {url}\")"
+       ]
+      },
+      {
+       "cell_type": "markdown",
+       "metadata": {},
+       "source": [
+        "## 2. Configure Benchmark Scenarios\n",
+        "\n",
+        "Define test scenarios with different load levels."
+       ]
+      },
+      {
+       "cell_type": "code",
+       "execution_count": null,
+       "metadata": {},
+       "outputs": [],
+       "source": [
+        "# Benchmark configuration\n",
+        "SCENARIOS = [\n",
+        "    {\"name\": \"Light Load\", \"concurrent_requests\": 1, \"max_requests\": 10},\n",
+        "    {\"name\": \"Medium Load\", \"concurrent_requests\": 5, \"max_requests\": 25},\n",
+        "    {\"name\": \"Heavy Load\", \"concurrent_requests\": 10, \"max_requests\": 50},\n",
+        "]\n",
+        "\n",
+        "COMMON_PARAMS = {\n",
+        "    \"max_output_tokens\": 512,\n",
+        "    \"prompt\": \"Explain the benefits of model quantization in AI.\",\n",
+        "}\n",
+        "\n",
+        "print(\"✅ Configured {} test scenarios\".format(len(SCENARIOS)))"
+       ]
+      },
+      {
+       "cell_type": "markdown",
+       "metadata": {},
+       "source": [
+        "## 3. Run Benchmarks\n",
+        "\n",
+        "Execute GuideLLM benchmarks for each model and scenario."
+       ]
+      },
+      {
+       "cell_type": "code",
+       "execution_count": null,
+       "metadata": {},
+       "outputs": [],
+       "source": [
+        "def run_guidellm_benchmark(model_name, endpoint_url, scenario):\n",
+        "    \"\"\"Run GuideLLM benchmark\"\"\"\n",
+        "    print(f\"\\n🔄 Testing {model_name} - {scenario['name']}...\")\n",
+        "    \n",
+        "    cmd = [\n",
+        "        'guidellm',\n",
+        "        '--target', endpoint_url,\n",
+        "        '--model', model_name,\n",
+        "        '--rate-type', 'constant',\n",
+        "        '--request-rate', str(scenario['concurrent_requests']),\n",
+        "        '--max-requests', str(scenario['max_requests']),\n",
+        "        '--max-output-tokens', str(COMMON_PARAMS['max_output_tokens']),\n",
+        "        '--prompt', COMMON_PARAMS['prompt'],\n",
+        "        '--output-format', 'json',\n",
+        "    ]\n",
+        "    \n",
+        "    try:\n",
+        "        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)\n",
+        "        \n",
+        "        if result.returncode == 0:\n",
+        "            data = json.loads(result.stdout)\n",
+        "            print(f\"✅ Completed: {data.get('throughput', 'N/A')} tokens/s\")\n",
+        "            return data\n",
+        "        else:\n",
+        "            print(f\"❌ Failed: {result.stderr}\")\n",
+        "            return None\n",
+        "    except Exception as e:\n",
+        "        print(f\"❌ Error: {e}\")\n",
+        "        return None\n",
+        "\n",
+        "# Run benchmarks\n",
+        "results = {}\n",
+        "for model_name, endpoint_url in endpoints.items():\n",
+        "    results[model_name] = []\n",
+        "    for scenario in SCENARIOS:\n",
+        "        result = run_guidellm_benchmark(model_name, endpoint_url, scenario)\n",
+        "        if result:\n",
+        "            result['scenario'] = scenario['name']\n",
+        "            result['model'] = model_name\n",
+        "            results[model_name].append(result)\n",
+        "\n",
+        "print(\"\\n✅ All benchmarks complete!\")"
+       ]
+      },
+      {
+       "cell_type": "markdown",
+       "metadata": {},
+       "source": [
+        "## 4. Analyze Results\n",
+        "\n",
+        "Compare performance metrics across models and scenarios."
+       ]
+      },
+      {
+       "cell_type": "code",
+       "execution_count": null,
+       "metadata": {},
+       "outputs": [],
+       "source": [
+        "# Compile results into DataFrame\n",
+        "all_results = []\n",
+        "for model, tests in results.items():\n",
+        "    all_results.extend(tests)\n",
+        "\n",
+        "df = pd.DataFrame(all_results)\n",
+        "\n",
+        "if not df.empty:\n",
+        "    print(\"📊 BENCHMARK RESULTS\")\n",
+        "    print(\"=\"*80)\n",
+        "    display(df[['model', 'scenario', 'throughput', 'ttft_p50', 'ttft_p99']])\n",
+        "else:\n",
+        "    print(\"⚠️  No results to display\")"
+       ]
+      },
+      {
+       "cell_type": "markdown",
+       "metadata": {},
+       "source": [
+        "## 5. Visualize Performance\n",
+        "\n",
+        "Create charts to compare model performance."
+       ]
+      },
+      {
+       "cell_type": "code",
+       "execution_count": null,
+       "metadata": {},
+       "outputs": [],
+       "source": [
+        "if not df.empty:\n",
+        "    fig, axes = plt.subplots(1, 2, figsize=(15, 5))\n",
+        "    \n",
+        "    # Throughput comparison\n",
+        "    df.pivot(index='scenario', columns='model', values='throughput').plot(\n",
+        "        kind='bar', ax=axes[0], title='Throughput (tokens/s)'\n",
+        "    )\n",
+        "    axes[0].set_ylabel('Tokens/Second')\n",
+        "    axes[0].legend(title='Model')\n",
+        "    \n",
+        "    # Latency comparison (TTFT p99)\n",
+        "    df.pivot(index='scenario', columns='model', values='ttft_p99').plot(\n",
+        "        kind='bar', ax=axes[1], title='Time to First Token P99 (ms)', color=['red', 'blue']\n",
+        "    )\n",
+        "    axes[1].set_ylabel('Latency (ms)')\n",
+        "    axes[1].legend(title='Model')\n",
+        "    \n",
+        "    plt.tight_layout()\n",
+        "    plt.show()\n",
+        "else:\n",
+        "    print(\"⚠️  No data to visualize\")"
+       ]
+      },
+      {
+       "cell_type": "markdown",
+       "metadata": {},
+       "source": [
+        "## 6. Save Results to Model Registry\n",
+        "\n",
+        "Store benchmark results as model metadata."
+       ]
+      },
+      {
+       "cell_type": "code",
+       "execution_count": null,
+       "metadata": {},
+       "outputs": [],
+       "source": [
+        "# TODO: Implement Model Registry integration\n",
+        "# This will store results as custom properties on model versions\n",
+        "\n",
+        "print(\"💾 Results saved locally (Model Registry integration pending)\")"
+       ]
+      },
+      {
+       "cell_type": "markdown",
+       "metadata": {},
+       "source": [
+        "## Summary\n",
+        "\n",
+        "This notebook replaces the GuideLLM Job-based approach with an interactive workflow:\n",
+        "\n",
+        "**Advantages:**\n",
+        "- ✅ Interactive - modify and re-run easily\n",
+        "- ✅ Visual - immediate feedback with charts\n",
+        "- ✅ Flexible - adjust scenarios on the fly\n",
+        "- ✅ Educational - understand each step\n",
+        "- ✅ Maintainable - easier to update than Jobs\n",
+        "\n",
+        "**Next Steps:**\n",
+        "1. Run this notebook to benchmark both models\n",
+        "2. Check LM-Eval notebook for quality testing\n",
+        "3. Review results in Model Registry\n"
+       ]
+      }
+     ],
+     "metadata": {
+      "kernelspec": {
+       "display_name": "Python 3",
+       "language": "python",
+       "name": "python3"
+      },
+      "language_info": {
+       "name": "python",
+       "version": "3.11.0"
+      }
+     },
+     "nbformat": 4,
+     "nbformat_minor": 4
+    }
+

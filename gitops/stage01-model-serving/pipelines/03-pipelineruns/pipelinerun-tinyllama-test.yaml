@@ -1,25 +1,26 @@
+---
 apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
-  generateName: mistral-24b-quantized-modelcar-
+  generateName: tinyllama-test-modelcar-
   namespace: private-ai-demo
   labels:
     tekton.dev/pipeline: modelcar-build-deploy
     app.kubernetes.io/name: modelcar-pipeline
     app.kubernetes.io/component: mlops-pipeline
     app.kubernetes.io/part-of: private-ai-demo
-    model: mistral-24b-quantized
+    model: tinyllama-test
   annotations:
     argocd.argoproj.io/sync-wave: "5"
 spec:
   pipelineRef:
     name: modelcar-build-deploy
   taskRunTemplate:
-    serviceAccountName: model-pipeline-sa  # Required for pushing to internal registry
+    serviceAccountName: model-pipeline-sa
   params:
-    # Model source - Quantized Mistral 24B (W4A16)
+    # Model source - TinyLlama for quick testing
     - name: hf_repo
-      value: "RedHatAI/Mistral-Small-24B-Instruct-2501-quantized.w4a16"
+      value: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
     - name: hf_revision
       value: "main"
     
@@ -27,29 +28,29 @@ spec:
     - name: namespace
       value: "private-ai-demo"
     - name: image_stream_name
-      value: "mistral-24b-quantized"
+      value: "tinyllama-test"
     - name: image_tag
-      value: "w4a16-2501"
+      value: "1.1b-test"
     
-    # Quay mirror (optional) - shared repository with unique tags
+    # Quay mirror (optional)
     - name: quay_org
       value: "adrina"
     - name: quay_repo
       value: "private-ai"
     - name: quay_tag
-      value: "mistral-24b-quantized-w4a16-2501"
+      value: "tinyllama-1.1b-test"
     
     # Model Registry
     - name: model_name
-      value: "Mistral-Small-24B-Instruct"
+      value: "TinyLlama-Test"
     - name: version_name
-      value: "quantized-w4a16-2501"
+      value: "1.1b-test"
     - name: version_description
-      value: "Red Hat AI Mistral Small 24B Instruct quantized (W4A16), packaged as ModelCar. Requires 1 GPU for deployment."
+      value: "TinyLlama 1.1B Chat - Test pipeline to verify authentication fix"
     - name: base_model
-      value: "RedHatAI/Mistral-Small-24B-Instruct-2501-quantized.w4a16"
+      value: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
     - name: quantization
-      value: "w4a16"
+      value: "none"
     - name: gpu_requirement
       value: "1"
     
@@ -61,12 +62,12 @@ spec:
             - ReadWriteOnce
           resources:
             requests:
-              storage: 150Gi
+              storage: 20Gi  # TinyLlama is small (~4GB)
     - name: registry-auth
       secret:
-        secretName: internal-registry-private-ai  # Docker registry auth for pushing to internal registry
+        secretName: internal-registry-private-ai  # TEST: Docker registry auth
   
   timeouts:
-    pipeline: "2h30m"
-    tasks: "2h"
+    pipeline: "30m"  # TinyLlama should complete in ~10-15 minutes
+    tasks: "20m"
 

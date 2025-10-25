@@ -50,6 +50,9 @@ spec:
   workspaces:
     - name: source
       description: Workspace containing the build context
+    - name: registry-auth
+      description: Docker registry authentication secret
+      optional: true
 
   results:
     - name: IMAGE_DIGEST
@@ -137,29 +140,21 @@ spec:
         echo ""
         echo "📤 Pushing image to registry..."
         
-        # Authenticate using ServiceAccount token for internal registry
-        # NOTE: For long-running builds, we refresh the token right before push
-        # to avoid "authentication required" errors due to token expiration
-        if [ -f "/var/run/secrets/kubernetes.io/serviceaccount/token" ]; then
-          echo "🔐 Using ServiceAccount token for authentication"
-          # Read the token fresh (important for long-running pipelines >90min)
-          TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+        # Authenticate using mounted registry secret
+        # This secret contains the dockerconfigjson for internal registry
+        if [ -f "/workspace/registry-auth/.dockerconfigjson" ]; then
+          echo "🔐 Using registry auth secret for authentication"
+          export REGISTRY_AUTH_FILE=/workspace/registry-auth/.dockerconfigjson
           
-          # Login to registry with fresh token before push
-          echo "🔑 Logging in to internal registry..."
-          echo "${TOKEN}" | buildah login \
-            --username=serviceaccount \
-            --password-stdin \
-            image-registry.openshift-image-registry.svc:5000
-          
-          # Push the image (auth is cached from login)
+          # Push the image using mounted credentials
           buildah --root ${BUILDAH_STORAGE_ROOT} --storage-driver=vfs push \
+            --authfile ${REGISTRY_AUTH_FILE} \
             --tls-verify=$(params.TLSVERIFY) \
             --digestfile /tmp/image-digest \
             $(params.IMAGE) \
             docker://$(params.IMAGE)
         else
-          echo "⚠️  No ServiceAccount token found - attempting push without explicit auth"
+          echo "⚠️  No registry auth secret found - attempting push without explicit auth"
           # Fallback: Push without explicit credentials (may fail)
           buildah --root ${BUILDAH_STORAGE_ROOT} --storage-driver=vfs push \
             --tls-verify=$(params.TLSVERIFY) \

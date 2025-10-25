@@ -1,0 +1,71 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: stage01-application
+  namespace: openshift-gitops
+  labels:
+    app.kubernetes.io/name: stage01-application
+    app.kubernetes.io/part-of: private-ai-demo
+    app.kubernetes.io/component: application
+    stage: "01"
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  
+  source:
+    repoURL: https://github.com/adnan-drina/private-ai-demo.git
+    targetRevision: HEAD
+    path: gitops/stage01-model-serving
+    # TODO: This still deploys everything - needs refactoring
+    # Should only deploy: pipelines, vllm, imagestreams, workbench
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: private-ai-demo
+  
+  syncPolicy:
+    automated:
+      prune: true  # Safe to prune application resources
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  
+  ignoreDifferences:
+    # PipelineRuns are generated with generateName
+    - group: tekton.dev
+      kind: PipelineRun
+      jsonPointers:
+        - /metadata/generateName
+        - /status
+    
+    # ImageStreams are updated by pipeline pushes
+    - group: image.openshift.io
+      kind: ImageStream
+      jsonPointers:
+        - /status
+        - /spec/tags
+    
+    # InferenceServices managed by KServe
+    - group: serving.kserve.io
+      kind: InferenceService
+      jsonPointers:
+        - /status
+    
+    # Notebooks managed by workbench controller
+    - group: kubeflow.org
+      kind: Notebook
+      jsonPointers:
+        - /status
+

@@ -1,0 +1,29 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Stage 0: AI Platform Infrastructure
+# OpenShift AI platform components, operators, and infrastructure
+
+resources:
+  # Operators (Wave 1)
+  - operators/subscription-nfd.yaml
+  - operators/subscription-gpu-operator.yaml
+  - operators/subscription-pipelines.yaml
+  - operators/subscription-openshift-ai.yaml
+  - operators/subscription-serverless.yaml
+  - operators/subscription-servicemesh.yaml
+  
+  # DataScienceCluster (Wave 2)
+  - datasciencecluster/datasciencecluster.yaml
+  
+  # GPU Infrastructure (Wave 3)
+  - gpu-infrastructure/machineset-g6-4xlarge.yaml
+  - gpu-infrastructure/machineset-g6-12xlarge.yaml
+  
+  # Hardware Profiles (Wave 4)
+  - hardware-profiles/nvidia-l4-1gpu.yaml
+  - hardware-profiles/nvidia-l4-4gpu.yaml
+  - hardware-profiles/nvidia-l4-1gpu-dashboard.yaml
+  - hardware-profiles/nvidia-l4-4gpu-dashboard.yaml
+

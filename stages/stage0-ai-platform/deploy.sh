@@ -339,6 +339,32 @@ EOF
     log_info "Monitor with: watch -n 30 'oc get machines -n openshift-machine-api | grep gpu'"
     
     # ========================================================================
+    # Step 3.5: Hardware Profiles (for RHOAI Dashboard)
+    # ========================================================================
+    print_header "Step 3.5: Hardware Profiles"
+    
+    log_info "Deploying hardware profiles for GPU nodes..."
+    
+    # Deploy hardware profiles from GitOps
+    GITOPS_DIR="${SCRIPT_DIR}/../../gitops/stage00-ai-platform/hardware-profiles"
+    
+    if [ -d "$GITOPS_DIR" ]; then
+        oc apply -k "$GITOPS_DIR"
+        log_success "Hardware profiles deployed"
+        
+        # Verify deployment
+        if oc get hardwareprofile -n redhat-ods-applications 2>/dev/null | grep -q "nvidia-l4"; then
+            log_success "HardwareProfiles created"
+        fi
+        
+        if oc get acceleratorprofile -n redhat-ods-applications 2>/dev/null | grep -q "nvidia-l4"; then
+            log_success "AcceleratorProfiles created"
+        fi
+    else
+        log_warning "Hardware profiles directory not found: $GITOPS_DIR"
+    fi
+    
+    # ========================================================================
     # Step 4: Red Hat OpenShift AI Operator 2.25
     # ========================================================================
     print_header "Step 4: Red Hat OpenShift AI Operator 2.25"
@@ -488,6 +514,7 @@ EOF
     echo "  • Node Feature Discovery Operator"
     echo "  • NVIDIA GPU Operator"
     echo "  • GPU MachineSets (g6.4xlarge, g6.12xlarge)"
+    echo "  • Hardware Profiles (nvidia-l4-1gpu, nvidia-l4-4gpu)"
     echo "  • Red Hat OpenShift AI Operator 2.25"
     echo "  • DataScienceCluster with Model Registry"
     echo ""
