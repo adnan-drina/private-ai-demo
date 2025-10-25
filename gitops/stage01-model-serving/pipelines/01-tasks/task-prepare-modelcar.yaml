@@ -32,6 +32,11 @@ spec:
     - name: source
       description: Workspace where the build context will be created
 
+  stepTemplate:
+    securityContext:
+      runAsUser: 0
+      runAsGroup: 0
+
   steps:
     - name: create-build-context
       image: registry.access.redhat.com/ubi9/python-311:latest
