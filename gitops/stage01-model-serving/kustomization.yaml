@@ -27,9 +27,9 @@ resources:
 # Optional components (uncomment when needed)
 # Note: These are optional and can be deployed on-demand
 #
-  - minio              # Object storage for models and artifacts
+# - minio              # Object storage for models and artifacts (commented out - not needed)
   - vllm               # InferenceServices and ServingRuntimes (ModelCar-based)
-  - benchmarking       # Benchmark jobs and results storage
+# - benchmarking       # Benchmark jobs and results storage (commented out - use Model Registry instead)
   - workbench          # Jupyter notebooks for testing
 
 # Configuration for all resources
