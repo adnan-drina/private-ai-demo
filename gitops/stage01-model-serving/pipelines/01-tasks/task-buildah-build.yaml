@@ -138,14 +138,23 @@ spec:
         echo "📤 Pushing image to registry..."
         
         # Authenticate using ServiceAccount token for internal registry
+        # NOTE: For long-running builds, we refresh the token right before push
+        # to avoid "authentication required" errors due to token expiration
         if [ -f "/var/run/secrets/kubernetes.io/serviceaccount/token" ]; then
           echo "🔐 Using ServiceAccount token for authentication"
+          # Read the token fresh (important for long-running pipelines >90min)
           TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
           
-          # Push the image with SA credentials (using PVC storage)
+          # Login to registry with fresh token before push
+          echo "🔑 Logging in to internal registry..."
+          echo "${TOKEN}" | buildah login \
+            --username=serviceaccount \
+            --password-stdin \
+            image-registry.openshift-image-registry.svc:5000
+          
+          # Push the image (auth is cached from login)
           buildah --root ${BUILDAH_STORAGE_ROOT} --storage-driver=vfs push \
             --tls-verify=$(params.TLSVERIFY) \
-            --creds="serviceaccount:${TOKEN}" \
             --digestfile /tmp/image-digest \
             $(params.IMAGE) \
             docker://$(params.IMAGE)
