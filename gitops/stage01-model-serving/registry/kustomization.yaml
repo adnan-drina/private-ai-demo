@@ -18,10 +18,10 @@ commonLabels:
 
 resources:
   # MySQL database backend for Model Registry
-  - ../mysql
+  - mysql
   
   # ModelRegistry Custom Resource
-  - ../model-registry-instance
+  - model-registry-instance
 
 # Note: Model Registry ConfigMap is in the application kustomization
 # because it's used by pipelines running in private-ai-demo namespace

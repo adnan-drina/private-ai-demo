@@ -17,25 +17,19 @@ commonLabels:
 # Resources in deployment order
 resources:
   # Wave 0: Namespace infrastructure
-  - ../project-namespace
+  - project-namespace
   
   # Wave 1: Infrastructure
-  - ../network-policy              # NetworkPolicy for Model Registry access
-  - ../imagestreams                # ImageStreams for ModelCar images
-  - ../workspaces                  # PVCs for pipeline workspace
-  - ../model-registry              # Model Registry ConfigMap (used by pipelines)
+  - network-policy              # NetworkPolicy for Model Registry access
+  - imagestreams                # ImageStreams for ModelCar images
+  - workspaces                  # PVCs for pipeline workspace
+  - model-registry              # Model Registry ConfigMap (used by pipelines)
   
   # Wave 2: MLOps Pipeline
-  - ../pipelines                   # Tekton pipelines and tasks
+  - pipelines                   # Tekton pipelines and tasks
   
   # Wave 3: Model Serving
-  - ../vllm                        # InferenceServices and ServingRuntimes
+  - vllm                        # InferenceServices and ServingRuntimes
   
   # Wave 4: Development Tools
-  - ../model-serving-testing       # Interactive notebooks for testing
-
-# Optional components (commented out)
-#
-# - ../model-loader                # Download models from HuggingFace (use ModelCar pipeline instead)
-
-# Note: kustomizeconfig.yaml not needed here as we're not using transformers
+  - model-serving-testing       # Interactive notebooks for testing
