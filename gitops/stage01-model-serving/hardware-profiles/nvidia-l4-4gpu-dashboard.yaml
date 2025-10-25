@@ -1,0 +1,30 @@
+---
+# Dashboard-compatible accelerator profile (deprecated but still used by UI)
+apiVersion: dashboard.opendatahub.io/v1
+kind: AcceleratorProfile
+metadata:
+  name: nvidia-l4-4gpu
+  namespace: redhat-ods-applications
+  labels:
+    app.kubernetes.io/name: nvidia-l4-4gpu
+    app.kubernetes.io/component: accelerator-profile
+    app.kubernetes.io/part-of: private-ai-demo
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  displayName: "NVIDIA L4 (4 GPUs)"
+  enabled: true
+  identifier: "nvidia.com/gpu"
+  description: |
+    NVIDIA L4 Tensor Core GPU optimized for AI inference with 4-way configuration.
+    Required for full precision large language models.
+    
+    Specifications:
+    - 4x NVIDIA L4 GPUs
+    - 96GB Total Memory (24GB per GPU)
+    - Instance: g6.12xlarge (AWS)
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
+

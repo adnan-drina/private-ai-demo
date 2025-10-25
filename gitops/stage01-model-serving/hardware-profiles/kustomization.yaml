@@ -5,8 +5,12 @@ kind: Kustomization
 namespace: redhat-ods-applications
 
 resources:
+  # New infrastructure API (RHOAI 2.25+)
   - nvidia-l4-1gpu.yaml
   - nvidia-l4-4gpu.yaml
+  # Dashboard-compatible API (deprecated but needed for UI)
+  - nvidia-l4-1gpu-dashboard.yaml
+  - nvidia-l4-4gpu-dashboard.yaml
 
 commonLabels:
   app.kubernetes.io/managed-by: argocd
