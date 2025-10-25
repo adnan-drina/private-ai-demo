@@ -18,7 +18,7 @@ spec:
         memory: "128Gi"
       min:
         cpu: "10m"
-        memory: "64Mi"
+        memory: "8Mi"  # Lowered from 64Mi to allow Knative/Istio sidecars (queue-proxy requests ~15Mi)
     - type: Pod
       max:
         cpu: "128"  # Increased to support multi-GPU workloads
