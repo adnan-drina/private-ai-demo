@@ -19,9 +19,7 @@ spec:
   source:
     repoURL: https://github.com/adnan-drina/private-ai-demo.git
     targetRevision: HEAD
-    path: gitops/stage01-model-serving
-    # TODO: This still deploys everything - needs refactoring
-    # Should only deploy: pipelines, vllm, imagestreams, workbench
+    path: gitops/stage01-model-serving/application
   
   destination:
     server: https://kubernetes.default.svc

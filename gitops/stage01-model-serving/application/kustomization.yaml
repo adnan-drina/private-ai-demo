@@ -2,65 +2,40 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
+# Model Serving Application
+# Deployed in: private-ai-demo namespace
+# Purpose: MLOps pipeline, model serving, workbench
+
 namespace: private-ai-demo
 
-resources:
-  # Project namespace and base RBAC
-  - project-namespace/namespace.yaml
-  - project-namespace/rolebinding-pipelines.yaml
-  
-  # Secrets and connections
-  - project-namespace/secret-internal-registry.yaml
-  - project-namespace/secret-minio-client.yaml
-  
-  # ImageStreams for models
-  - imagestreams/imagestream-mistral-24b-quantized.yaml
-  - imagestreams/imagestream-mistral-24b-full.yaml
-  - imagestreams/imagestream-tinyllama-test.yaml
-  
-  # Pipelines infrastructure
-  - pipelines/00-sa-rbac/serviceaccount.yaml
-  - pipelines/00-sa-rbac/role.yaml
-  - pipelines/00-sa-rbac/rolebinding.yaml
-  - pipelines/00-sa-rbac/rolebinding-registry.yaml
-  
-  # Pipeline tasks
-  - pipelines/01-tasks/task-prepare-context.yaml
-  - pipelines/01-tasks/task-buildah-build.yaml
-  - pipelines/01-tasks/task-mirror-to-quay.yaml
-  - pipelines/01-tasks/task-register-model.yaml
-  - pipelines/01-tasks/task-cleanup-workspace.yaml
-  
-  # Pipeline definition
-  - pipelines/02-pipeline/pipeline-model-deployment.yaml
-  
-  # PipelineRuns (generate-name resources)
-  - pipelines/03-pipelineruns/pipelinerun-mistral-24b-quantized.yaml
-  - pipelines/03-pipelineruns/pipelinerun-mistral-24b-full.yaml
-  - pipelines/03-pipelineruns/pipelinerun-tinyllama-test.yaml
-  
-  # vLLM model serving
-  - vllm/servingruntime.yaml
-  - vllm/inferenceservice-mistral-24b-quantized.yaml
-  
-  # Workbench for testing
-  - model-serving-testing/serviceaccount.yaml
-  - model-serving-testing/pvc.yaml
-  - model-serving-testing/rolebinding.yaml
-  - model-serving-testing/configmap-notebook-guidellm.yaml
-  - model-serving-testing/configmap-notebook-lm-eval.yaml
-  - model-serving-testing/notebook.yaml
-  
-  # Optional workspaces
-  - workspaces/pvc-pipeline-workspace.yaml
-
-# Configuration
-configurations:
-  - kustomizeconfig.yaml
-
-# Common labels for application resources
+# Common labels for all application resources
 commonLabels:
   app.kubernetes.io/part-of: private-ai-demo
   stage: "01"
   managed-by: argocd
 
+# Resources in deployment order
+resources:
+  # Wave 0: Namespace infrastructure
+  - ../project-namespace
+  
+  # Wave 1: Infrastructure
+  - ../network-policy              # NetworkPolicy for Model Registry access
+  - ../imagestreams                # ImageStreams for ModelCar images
+  - ../workspaces                  # PVCs for pipeline workspace
+  - ../model-registry              # Model Registry ConfigMap (used by pipelines)
+  
+  # Wave 2: MLOps Pipeline
+  - ../pipelines                   # Tekton pipelines and tasks
+  
+  # Wave 3: Model Serving
+  - ../vllm                        # InferenceServices and ServingRuntimes
+  
+  # Wave 4: Development Tools
+  - ../model-serving-testing       # Interactive notebooks for testing
+
+# Optional components (commented out)
+#
+# - ../model-loader                # Download models from HuggingFace (use ModelCar pipeline instead)
+
+# Note: kustomizeconfig.yaml not needed here as we're not using transformers

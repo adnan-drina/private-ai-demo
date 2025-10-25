@@ -19,11 +19,11 @@ spec:
   source:
     repoURL: https://github.com/adnan-drina/private-ai-demo.git
     targetRevision: HEAD
-    path: gitops/stage01-model-serving/model-registry
+    path: gitops/stage01-model-serving/model-registry-app
   
   destination:
     server: https://kubernetes.default.svc
-    # No namespace - resources deployed to model-registry, rhoai-model-registries, private-ai-demo
+    namespace: rhoai-model-registries
   
   syncPolicy:
     automated:
