@@ -5,9 +5,11 @@ metadata:
   name: vllm-cuda-runtime
   namespace: private-ai-demo
   annotations:
+    opendatahub.io/accelerator-name: ""
     opendatahub.io/apiProtocol: REST
     opendatahub.io/recommended-accelerators: '["nvidia.com/gpu"]'
-    opendatahub.io/runtime-version: v0.9.1.0
+    opendatahub.io/runtime-version: v0.10.1.1
+    opendatahub.io/serving-runtime-scope: global
     opendatahub.io/template-display-name: vLLM NVIDIA GPU ServingRuntime for KServe
     opendatahub.io/template-name: vllm-cuda-runtime
     openshift.io/display-name: vLLM NVIDIA GPU ServingRuntime for KServe
@@ -20,7 +22,8 @@ spec:
     prometheus.io/port: "8080"
   containers:
   - name: kserve-container
-    image: quay.io/modh/vllm@sha256:56aa86c6ed6ba6cc9557a8583ff9d4ee535193f6cda030bd1268064bc70120e3
+    # Official Red Hat OpenShift AI vLLM image (v0.10.1.1)
+    image: registry.redhat.io/rhoai/odh-vllm-cuda-rhel9@sha256:fb84fbf103bf450ef5b060fc5f21a9cf16b166dba207a3c50aa91bccd919d604
     command:
     - python
     - -m
@@ -42,7 +45,7 @@ spec:
   - name: shm
     emptyDir:
       medium: Memory
-      sizeLimit: 16Gi
+      sizeLimit: 2Gi  # Aligned with Model Registry default
   multiModel: false
   supportedModelFormats:
   - name: vLLM
