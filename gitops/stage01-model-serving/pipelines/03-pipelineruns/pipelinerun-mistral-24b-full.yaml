@@ -59,9 +59,9 @@ spec:
             - ReadWriteOnce
           resources:
             requests:
-              storage: 200Gi
+              storage: 300Gi  # Increased from 200Gi - model is 48GB, needs space for: download (48GB) + buildah storage (48GB) + layers (100GB+) + temp (50GB)
   
   timeouts:
-    pipeline: "3h"      # Longer timeout - full model is larger (~48GB)
-    tasks: "2h30m"
+    pipeline: "4h"      # Increased timeout - full model is larger (~48GB) and COPY step is slow
+    tasks: "3h"         # Increased from 2h30m to accommodate slow COPY operation
 
