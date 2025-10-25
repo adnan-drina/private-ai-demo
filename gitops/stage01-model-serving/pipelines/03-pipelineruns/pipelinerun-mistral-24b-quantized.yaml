@@ -12,6 +12,7 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "5"
 spec:
+  serviceAccountName: model-pipeline-sa  # Required for pushing to internal registry
   pipelineRef:
     name: modelcar-build-deploy
   params:

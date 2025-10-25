@@ -12,6 +12,7 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "5"
 spec:
+  serviceAccountName: model-pipeline-sa  # Required for pushing to internal registry
   pipelineRef:
     name: modelcar-build-deploy
   params:
@@ -59,7 +60,7 @@ spec:
             - ReadWriteOnce
           resources:
             requests:
-              storage: 300Gi  # Increased from 200Gi - model is 48GB, needs space for: download (48GB) + buildah storage (48GB) + layers (100GB+) + temp (50GB)
+              storage: 500Gi  # Critical: Model (48GB) + Buildah layers (48GB duplicate) + OCI image layers (100GB+) + temp build files (50GB+) = ~300GB actual usage. 500Gi provides safety margin.
   
   timeouts:
     pipeline: "4h"      # Increased timeout - full model is larger (~48GB) and COPY step is slow
