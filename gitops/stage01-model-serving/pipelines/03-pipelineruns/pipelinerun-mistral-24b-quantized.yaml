@@ -1,7 +1,7 @@
 apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
-  name: mistral-24b-quantized-modelcar
+  generateName: mistral-24b-quantized-modelcar-
   namespace: private-ai-demo
   labels:
     tekton.dev/pipeline: modelcar-build-deploy
