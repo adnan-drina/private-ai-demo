@@ -8,10 +8,13 @@ kind: Kustomization
 
 namespace: rhoai-model-registries
 
-# Common annotations for tracking (labels managed by ArgoCD)
+# Minimal labels for ArgoCD resource tracking (avoid conflicts with app-level labels)
+commonLabels:
+  argocd.argoproj.io/instance: stage01-model-registry
+
+# Annotations for additional metadata
 commonAnnotations:
   app.kubernetes.io/managed-by: argocd
-  argocd.argoproj.io/instance: stage01-model-registry
 
 resources:
   # MySQL database backend for Model Registry

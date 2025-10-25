@@ -8,10 +8,13 @@ kind: Kustomization
 
 namespace: private-ai-demo
 
-# Common annotations for tracking (labels managed by ArgoCD)
+# Minimal labels for ArgoCD resource tracking (avoid conflicts with app-level labels)
+commonLabels:
+  argocd.argoproj.io/instance: stage01-model-serving
+
+# Annotations for additional metadata
 commonAnnotations:
   app.kubernetes.io/managed-by: argocd
-  argocd.argoproj.io/instance: stage01-model-serving
 
 # Resources in deployment order
 resources:
