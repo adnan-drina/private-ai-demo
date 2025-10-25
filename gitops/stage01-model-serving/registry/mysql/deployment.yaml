@@ -8,8 +8,6 @@ metadata:
     app.kubernetes.io/name: mysql
     app.kubernetes.io/component: database
     app.kubernetes.io/part-of: model-registry
-  annotations:
-    argocd.argoproj.io/sync-wave: "2"
 spec:
   replicas: 1
   strategy:
