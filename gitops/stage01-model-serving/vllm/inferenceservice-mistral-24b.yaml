@@ -31,7 +31,8 @@ spec:
       runtime: vllm-cuda-runtime  # Shared runtime for all vLLM models
       modelFormat:
         name: vLLM
-      storageUri: "pvc://mistral-24b-pvc/mistral-24b"
+      # ModelCar approach: model is baked into the container image
+      storageUri: "oci://image-registry.openshift-image-registry.svc:5000/private-ai-demo/mistral-24b-full:fp16-2501"
       # Model-specific resources for 4-GPU full precision model
       resources:
         requests:

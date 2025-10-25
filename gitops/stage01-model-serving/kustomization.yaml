@@ -28,7 +28,7 @@ resources:
 # to enable/disable independently without risking deletion of core resources.
 #
 # - minio              # Object storage for models and artifacts
-# - vllm               # InferenceServices and ServingRuntimes
+  - vllm               # InferenceServices and ServingRuntimes (ModelCar-based)
 # - benchmarking       # Benchmark jobs and results storage
 # - workbench          # Jupyter notebooks for testing
 
