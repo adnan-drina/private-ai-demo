@@ -8,13 +8,10 @@ kind: Kustomization
 
 namespace: rhoai-model-registries
 
-# Common labels for all Model Registry resources
-commonLabels:
-  app.kubernetes.io/name: model-registry
-  app.kubernetes.io/component: infrastructure
-  app.kubernetes.io/part-of: private-ai-demo
-  stage: "01"
-  managed-by: argocd
+# Common annotations for tracking (labels managed by ArgoCD)
+commonAnnotations:
+  app.kubernetes.io/managed-by: argocd
+  argocd.argoproj.io/instance: stage01-model-registry
 
 resources:
   # MySQL database backend for Model Registry
