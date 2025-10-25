@@ -12,9 +12,10 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "5"
 spec:
-  serviceAccountName: model-pipeline-sa  # Required for pushing to internal registry
   pipelineRef:
     name: modelcar-build-deploy
+  taskRunTemplate:
+    serviceAccountName: model-pipeline-sa  # Required for pushing to internal registry
   params:
     # Model source - Quantized Mistral 24B (W4A16)
     - name: hf_repo
