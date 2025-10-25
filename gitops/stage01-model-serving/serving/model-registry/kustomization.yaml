@@ -4,6 +4,14 @@ kind: Kustomization
 
 namespace: private-ai-demo
 
+# ArgoCD tracking labels (must match parent app)
+commonLabels:
+  argocd.argoproj.io/instance: stage01-model-serving
+
+# Annotations for GitOps management
+commonAnnotations:
+  app.kubernetes.io/managed-by: argocd
+
 resources:
   - configmap.yaml
 

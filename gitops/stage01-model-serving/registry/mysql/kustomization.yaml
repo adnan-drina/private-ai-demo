@@ -5,6 +5,14 @@ kind: Kustomization
 # Force namespace for all MySQL resources (overrides parent)
 namespace: rhoai-model-registries
 
+# ArgoCD tracking labels (must match parent app)
+commonLabels:
+  argocd.argoproj.io/instance: stage01-model-registry
+
+# Annotations for GitOps management
+commonAnnotations:
+  app.kubernetes.io/managed-by: argocd
+
 resources:
   # Namespace already exists (created by OpenShift AI operator)
   # - namespace.yaml

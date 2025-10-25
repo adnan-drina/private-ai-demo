@@ -9,6 +9,7 @@ resources:
   - pipelinerun-mistral-24b-full.yaml
 
 commonLabels:
+  argocd.argoproj.io/instance: stage01-model-serving
   app.kubernetes.io/instance: stage01-pipelineruns
   app.kubernetes.io/managed-by: argocd
 

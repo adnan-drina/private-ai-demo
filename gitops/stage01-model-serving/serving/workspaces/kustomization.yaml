@@ -5,6 +5,7 @@ resources:
   - pvc-pipeline-workspace.yaml
 
 commonLabels:
+  argocd.argoproj.io/instance: stage01-model-serving
   app.kubernetes.io/instance: stage01-workspaces
   app.kubernetes.io/managed-by: argocd
 
