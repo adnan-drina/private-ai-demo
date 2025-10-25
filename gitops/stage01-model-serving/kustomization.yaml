@@ -1,0 +1,22 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Stage 1: Model Serving with vLLM
+# Root kustomization that combines all stage1 components
+
+resources:
+  # Model Registry Infrastructure (rhoai-model-registries namespace)
+  # Deployed first as it's a dependency for model registration
+  - registry
+  
+  # Model Serving Application (private-ai-demo namespace)
+  # Includes: vLLM InferenceServices, pipelines, benchmarks, workbench
+  - serving
+
+# Note: This root kustomization does NOT apply commonLabels
+# because child apps have different argocd.argoproj.io/instance labels:
+#   - registry/* -> stage01-model-registry
+#   - serving/*  -> stage01-model-serving
+# Each child maintains its own labels for proper ArgoCD tracking
+
