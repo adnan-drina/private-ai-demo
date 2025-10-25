@@ -2,15 +2,13 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: stage01-model-registry
+  name: stage01
   namespace: openshift-gitops
   labels:
-    app.kubernetes.io/name: stage01-model-registry
+    app.kubernetes.io/name: stage01
     app.kubernetes.io/part-of: private-ai-demo
-    app.kubernetes.io/component: model-registry
+    app.kubernetes.io/component: app-of-apps
     stage: "01"
-  annotations:
-    argocd.argoproj.io/sync-wave: "2"
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
@@ -19,31 +17,22 @@ spec:
   source:
     repoURL: https://github.com/adnan-drina/private-ai-demo.git
     targetRevision: HEAD
-    path: gitops/stage01-model-serving/model-registry-app
+    path: gitops-apps/stage01
   
   destination:
     server: https://kubernetes.default.svc
-    namespace: rhoai-model-registries
+    namespace: openshift-gitops
   
   syncPolicy:
     automated:
-      prune: false  # Don't auto-prune Model Registry for safety
+      prune: false  # Don't auto-prune app definitions
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-      - ServerSideApply=true
-      - RespectIgnoreDifferences=true
     retry:
       limit: 3
       backoff:
         duration: 5s
         factor: 2
         maxDuration: 3m
-  
-  ignoreDifferences:
-    # Model Registry may be managed by RHOAI operator
-    - group: modelregistry.opendatahub.io
-      kind: ModelRegistry
-      jsonPointers:
-        - /status
 

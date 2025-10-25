@@ -6,26 +6,26 @@ This directory contains the **App-of-Apps** pattern for Stage 01 (Model Serving)
 
 ## ArgoCD Applications
 
-### 1. `stage01-model-serving` (App-of-Apps)
-- **Type**: App-of-Apps (parent)
+### 1. `stage01` (App-of-Apps)
+- **Type**: App-of-Apps (parent orchestrator)
 - **Purpose**: Orchestrates the two child applications
 - **Path**: `gitops-apps/stage01/`
 - **Sync Wave**: 1
 
 ### 2. `stage01-model-registry`
 - **Namespace**: `rhoai-model-registries`
-- **Purpose**: Model Registry infrastructure
-- **Path**: `gitops/stage01-model-serving/model-registry-app/`
+- **Purpose**: Model Registry infrastructure backend
+- **Path**: `gitops/stage01-model-serving/registry/`
 - **Sync Wave**: 2
 - **Resources**:
   - MySQL database (Deployment, Service, PVC, ConfigMap, Secret)
   - ModelRegistry CR
   - RBAC (cross-namespace access for pipelines and dashboard)
 
-### 3. `stage01-application`
+### 3. `stage01-model-serving`
 - **Namespace**: `private-ai-demo`
 - **Purpose**: MLOps pipeline and model serving workload
-- **Path**: `gitops/stage01-model-serving/application/`
+- **Path**: `gitops/stage01-model-serving/serving/`
 - **Sync Wave**: 3
 - **Resources**:
   - Namespace infrastructure (Namespace, LimitRange, ResourceQuota, ServiceAccount)

@@ -2,12 +2,12 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: stage01-application
+  name: stage01-model-serving
   namespace: openshift-gitops
   labels:
-    app.kubernetes.io/name: stage01-application
+    app.kubernetes.io/name: stage01-model-serving
     app.kubernetes.io/part-of: private-ai-demo
-    app.kubernetes.io/component: application
+    app.kubernetes.io/component: model-serving
     stage: "01"
   annotations:
     argocd.argoproj.io/sync-wave: "3"
@@ -19,7 +19,7 @@ spec:
   source:
     repoURL: https://github.com/adnan-drina/private-ai-demo.git
     targetRevision: HEAD
-    path: gitops/stage01-model-serving/application
+    path: gitops/stage01-model-serving/serving
   
   destination:
     server: https://kubernetes.default.svc
