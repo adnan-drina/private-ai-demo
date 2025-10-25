@@ -137,12 +137,27 @@ spec:
         echo ""
         echo "📤 Pushing image to registry..."
         
-        # Push the image (using PVC storage)
-        buildah --root ${BUILDAH_STORAGE_ROOT} --storage-driver=vfs push \
-          --tls-verify=$(params.TLSVERIFY) \
-          --digestfile /tmp/image-digest \
-          $(params.IMAGE) \
-          docker://$(params.IMAGE)
+        # Authenticate using ServiceAccount token for internal registry
+        if [ -f "/var/run/secrets/kubernetes.io/serviceaccount/token" ]; then
+          echo "🔐 Using ServiceAccount token for authentication"
+          TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+          
+          # Push the image with SA credentials (using PVC storage)
+          buildah --root ${BUILDAH_STORAGE_ROOT} --storage-driver=vfs push \
+            --tls-verify=$(params.TLSVERIFY) \
+            --creds="serviceaccount:${TOKEN}" \
+            --digestfile /tmp/image-digest \
+            $(params.IMAGE) \
+            docker://$(params.IMAGE)
+        else
+          echo "⚠️  No ServiceAccount token found - attempting push without explicit auth"
+          # Fallback: Push without explicit credentials (may fail)
+          buildah --root ${BUILDAH_STORAGE_ROOT} --storage-driver=vfs push \
+            --tls-verify=$(params.TLSVERIFY) \
+            --digestfile /tmp/image-digest \
+            $(params.IMAGE) \
+            docker://$(params.IMAGE)
+        fi
         
         # Save results
         cat /tmp/image-digest | tee /tekton/results/IMAGE_DIGEST
