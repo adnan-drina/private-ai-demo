@@ -24,14 +24,13 @@ resources:
   - model-registry              # Wave 1: Model Registry configuration
   - pipelines                   # Wave 2: Tekton pipelines and tasks
 
-# Optional components (deploy via separate ArgoCD apps or uncomment when needed)
-# Recommendation: Create separate ArgoCD Applications for these components
-# to enable/disable independently without risking deletion of core resources.
+# Optional components (uncomment when needed)
+# Note: These are optional and can be deployed on-demand
 #
-# - minio              # Object storage for models and artifacts
+  - minio              # Object storage for models and artifacts
   - vllm               # InferenceServices and ServingRuntimes (ModelCar-based)
-# - benchmarking       # Benchmark jobs and results storage
-# - workbench          # Jupyter notebooks for testing
+  - benchmarking       # Benchmark jobs and results storage
+  - workbench          # Jupyter notebooks for testing
 
 # Configuration for all resources
 configurations:
