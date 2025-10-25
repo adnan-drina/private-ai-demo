@@ -18,6 +18,7 @@ resources:
   - project-namespace           # Wave 0: Namespace
   - mysql                       # Wave 0-2: MySQL database for Model Registry
   - model-registry-instance     # Wave 3-4: ModelRegistry CR and RBAC
+  - hardware-profiles           # Wave 1: GPU hardware profiles for model serving
   - imagestreams                # Wave 1: ImageStreams for ModelCar images
   - workspaces                  # Wave 1: PVCs for pipeline workspace
   - model-registry              # Wave 1: Model Registry configuration

@@ -1,0 +1,14 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: redhat-ods-applications
+
+resources:
+  - nvidia-l4-1gpu.yaml
+  - nvidia-l4-4gpu.yaml
+
+commonLabels:
+  app.kubernetes.io/managed-by: argocd
+  app.kubernetes.io/instance: stage01-hardware-profiles
+
