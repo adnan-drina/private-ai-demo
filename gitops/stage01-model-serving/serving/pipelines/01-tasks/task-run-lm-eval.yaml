@@ -113,6 +113,7 @@ spec:
 
     - name: run-evaluation
       image: registry.access.redhat.com/ubi9/python-311:latest
+      workingDir: /workspace/results
       env:
         - name: HOME
           value: /tmp
@@ -127,11 +128,11 @@ spec:
         #!/bin/bash
         set -e
         
-        MODEL_URL=$(cat /workspace/results/model_url.txt)
+        MODEL_URL=$(cat model_url.txt)
         
         echo "🧪 Running LM-Eval"
         echo "════════════════════════════════════════════════════════════"
-        echo "Model URL: https://${MODEL_URL}"
+        echo "Model URL: ${MODEL_URL}"
         echo "Model Name: $(params.model_name)"
         echo "Tasks: $(params.tasks)"
         echo "Limit: $(params.limit) samples per task"
@@ -145,8 +146,8 @@ spec:
         echo "✅ Installation complete"
         echo ""
         
-        # Create output directory
-        mkdir -p /workspace/results/eval
+        # Create output directory (in /tmp to avoid permission issues)
+        mkdir -p /tmp/eval
         
         echo "🚀 Starting evaluation..."
         echo ""
@@ -154,12 +155,12 @@ spec:
         # Run lm-eval using local-completions model (for vLLM OpenAI-compatible endpoint)
         lm_eval \
           --model local-completions \
-          --model_args "model=$(params.model_name),base_url=https://${MODEL_URL}/v1/completions,num_concurrent=2,max_retries=5,timeout=600" \
+          --model_args "model=$(params.model_name),base_url=${MODEL_URL}/v1/completions,num_concurrent=2,max_retries=5,timeout=600" \
           --tasks $(params.tasks) \
           --limit $(params.limit) \
-          --output_path /workspace/results/eval \
+          --output_path /tmp/eval \
           --log_samples \
-          2>&1 | tee /workspace/results/eval.log
+          2>&1 | tee /tmp/eval.log
         
         echo ""
         echo "════════════════════════════════════════════════════════════"
@@ -167,7 +168,7 @@ spec:
         echo "════════════════════════════════════════════════════════════"
         
         # Check for results
-        if [ -f "/workspace/results/eval/results.json" ]; then
+        if [ -f "/tmp/eval/results.json" ]; then
           echo "✅ Results file found"
           echo ""
           
@@ -175,15 +176,15 @@ spec:
           echo "📊 Results Summary:"
           echo "────────────────────────────────────────────────────────────"
           
-          # Install jq for JSON processing
-          pip install --quiet jq
+          # Display results (using python json.tool, no extra deps needed)
+          cat /tmp/eval/results.json | python3 -m json.tool | grep -A 5 '"results"'
           
-          # Display results
-          cat /workspace/results/eval/results.json | python3 -m json.tool | grep -A 5 '"results"'
+          # Copy results to workspace for downstream tasks
+          cp -r /tmp/eval/* /workspace/results/ || true
           
           # Save task results
           echo -n "succeeded" > $(results.EVAL_STATUS.path)
-          echo -n "/workspace/results/eval/results.json" > $(results.RESULTS_FILE.path)
+          echo -n "/workspace/results/results.json" > $(results.RESULTS_FILE.path)
           echo -n "Evaluation completed" > $(results.ACCURACY_SUMMARY.path)
           
           echo "────────────────────────────────────────────────────────────"
