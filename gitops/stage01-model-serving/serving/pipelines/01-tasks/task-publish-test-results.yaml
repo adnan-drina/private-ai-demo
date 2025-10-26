@@ -48,7 +48,7 @@ spec:
 
   steps:
     - name: get-model-registry-endpoint
-      image: registry.access.redhat.com/openshift4/ose-cli:latest
+      image: registry.redhat.io/openshift4/ose-cli:latest
       script: |
         #!/bin/bash
         set -e
