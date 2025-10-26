@@ -146,25 +146,17 @@ spec:
         echo "✅ Installation complete"
         echo ""
         
-        # NOW set SSL bypass env vars (after pip install completes)
-        export PYTHONHTTPSVERIFY=0
-        export REQUESTS_CA_BUNDLE=""
-        export CURL_CA_BUNDLE=""
-        export SSL_CERT_FILE=""
-        export PYTHONWARNINGS="ignore"
-        
-        echo "🔓 SSL verification disabled for lm-eval"
-        echo ""
+        # Create wrapper script using base64 to avoid YAML issues
+        echo "aW1wb3J0IHNzbCwgd2FybmluZ3MsIHN5cwp3YXJuaW5ncy5maWx0ZXJ3YXJuaW5ncygnaWdub3JlJykKaW1wb3J0IHVybGxpYjMKdXJsbGxpYjMuZGlzYWJsZV93YXJuaW5ncyh1cmxsaWIzLmV4Y2VwdGlvbnMuSW5zZWN1cmVSZXF1ZXN0V2FybmluZykKZnJvbSB1cmxsaWIzLmNvbm5lY3Rpb25wb29sIGltcG9ydCBIVFRQU0Nvbm5lY3Rpb25Qb29sCm9yaWdpbmFsX2luaXQgPSBIVFRQU0Nvbm5lY3Rpb25Qb29sLl9faW5pdF9fCmRlZiBwYXRjaGVkX2luaXQoc2VsZiwgKmFyZ3MsICoqa3dhcmdzKToKICAgIGt3YXJnc1snY2VydF9yZXFzJ10gPSBzc2wuQ0VSVF9OT05FCiAgICBrd2FyZ3NbJ2Fzc2VydF9ob3N0bmFtZSddID0gRmFsc2UKICAgIHJldHVybiBvcmlnaW5hbF9pbml0KHNlbGYsICphcmdzLCAqKmt3YXJncykKSFRUUFNDb25uZWN0aW9uUG9vbC5fX2luaXRfXyA9IHBhdGNoZWRfaW5pdApwcmludCgi8J+UkyBTU0wgdmVyaWZpY2F0aW9uIGRpc2FibGVkIikKZnJvbSBsbV9ldmFsLl9fbWFpbl9fIGltcG9ydCBjbGlfZXZhbHVhdGUKc3lzLmV4aXQoY2xpX2V2YWx1YXRlKCkpCg==" | base64 -d > /tmp/run_lm_eval.py
         
         # Create output directory
         mkdir -p /tmp/eval
         
-        echo "🚀 Starting evaluation..."
+        echo "🚀 Starting evaluation with SSL patch..."
         echo ""
         
-        # Use local-completions with environment-based SSL bypass
-        # REQUESTS_CA_BUNDLE=/dev/null makes urllib3/requests skip SSL verification
-        python3 -m lm_eval \
+        # Run via wrapper that patches urllib3 before lm-eval loads
+        python3 /tmp/run_lm_eval.py \
           --model local-completions \
           --model_args "model=mistralai/Mistral-Small-24B-Instruct-2501,base_url=${MODEL_URL}/v1/completions,num_concurrent=1,max_retries=3,timeout=300" \
           --tasks $(params.tasks) \
