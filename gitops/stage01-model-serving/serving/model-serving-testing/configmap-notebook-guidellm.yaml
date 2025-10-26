@@ -49,8 +49,9 @@ data:
        "outputs": [],
        "source": [
         "# Install dependencies\n",
-        "# Fix pydantic version conflict (guidellm needs pydantic<2)\n",
-        "!pip install -q 'pydantic<2' guidellm pandas matplotlib tabulate"
+        "# Use specific compatible versions to avoid conflicts\n",
+        "!pip install -q --upgrade pip\n",
+        "!pip install -q 'guidellm>=0.3.1' pandas matplotlib tabulate"
        ]
       },
       {
