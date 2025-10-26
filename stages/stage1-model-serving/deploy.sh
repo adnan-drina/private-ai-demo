@@ -185,6 +185,14 @@ load_env_file() {
     missing_vars+=("MINIO_SECRET_KEY")
   fi
   
+  if [ -z "${QUAY_USERNAME:-}" ]; then
+    missing_vars+=("QUAY_USERNAME")
+  fi
+  
+  if [ -z "${QUAY_PASSWORD:-}" ]; then
+    missing_vars+=("QUAY_PASSWORD")
+  fi
+  
   if [ ${#missing_vars[@]} -gt 0 ]; then
     log_error "Missing required variables in .env:"
     for var in "${missing_vars[@]}"; do
@@ -200,6 +208,8 @@ echo ""
   log_info "HF_TOKEN: ${HF_TOKEN:0:10}... (${#HF_TOKEN} characters)"
   log_info "MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}"
   log_info "MINIO_SECRET_KEY: ****** (${#MINIO_SECRET_KEY} characters)"
+  log_info "QUAY_USERNAME: ${QUAY_USERNAME}"
+  log_info "QUAY_PASSWORD: ****** (${#QUAY_PASSWORD} characters)"
   
   # Set defaults
   PROJECT_NAME="${PROJECT_NAME:-private-ai-demo}"
@@ -251,6 +261,27 @@ create_secrets() {
       -n "$PROJECT_NAME" \
       --dry-run=client -o yaml | oc apply -f -
     log_success "Secret created: minio-credentials"
+  fi
+  
+  # Quay.io credentials secret (for mirroring ModelCar images)
+  log_info "Creating Quay credentials secret..."
+  if [ "$DRY_RUN" = true ]; then
+    log_info "[DRY-RUN] Would create secret: quay-credentials"
+  else
+    oc create secret docker-registry quay-credentials \
+      --docker-server=quay.io \
+      --docker-username="${QUAY_USERNAME}" \
+      --docker-password="${QUAY_PASSWORD}" \
+      -n "$PROJECT_NAME" \
+      --dry-run=client -o yaml | \
+      oc label --local -f - \
+        app.kubernetes.io/name=quay-credentials \
+        app.kubernetes.io/component=credentials \
+        app.kubernetes.io/part-of=private-ai-demo \
+        argocd.argoproj.io/instance=stage01-model-serving \
+        --dry-run=client -o yaml | \
+      oc apply -f -
+    log_success "Secret created: quay-credentials"
   fi
   
   # Internal Registry Connection for OpenShift AI Dashboard
