@@ -122,7 +122,7 @@ spec:
           valueFrom:
             secretKeyRef:
               name: huggingface-token
-              key: token
+              key: HF_TOKEN
       script: |
         #!/bin/bash
         set -e
