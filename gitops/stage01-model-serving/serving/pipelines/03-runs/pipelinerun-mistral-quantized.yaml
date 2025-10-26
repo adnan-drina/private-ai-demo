@@ -68,5 +68,7 @@ spec:
       secret:
         secretName: quay-auth
   
-  timeout: "2h"
+  timeouts:
+    pipeline: "2h30m"   # Total pipeline timeout
+    tasks: "2h"         # Individual task timeout
 
