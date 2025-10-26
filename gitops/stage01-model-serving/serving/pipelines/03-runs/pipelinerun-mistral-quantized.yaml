@@ -14,7 +14,7 @@ metadata:
 spec:
   serviceAccountName: model-pipeline-sa
   pipelineRef:
-    name: modelcar-build-deploy
+    name: modelcar-build-deploy-v2
   
   params:
     # Model source
@@ -44,29 +44,29 @@ spec:
       value: "quantized-w4a16-2501"
     - name: version_description
       value: "Mistral Small 24B Instruct quantized (w4a16) - optimized for single GPU inference"
-    
-    # Deployment configuration
-    - name: service_name
-      value: "mistral-24b-quantized"
-    - name: runtime_name
-      value: "vllm-nvidia-gpu"
-    - name: gpu_count
-      value: "1"
-    - name: cpu_request
-      value: "4"
-    - name: memory_request
-      value: "32Gi"
-    - name: memory_limit
-      value: "48Gi"
-    - name: node_selector_label
-      value: "node.kubernetes.io/instance-type=g6.4xlarge"
-    - name: tensor_parallel_size
+    - name: base_model
+      value: "mistralai/Mistral-Small-24B-Instruct-2501"
+    - name: quantization
+      value: "w4a16"
+    - name: gpu_requirement
       value: "1"
   
   workspaces:
     - name: shared-workspace
-      persistentVolumeClaim:
-        claimName: pipeline-workspace
+      volumeClaimTemplate:
+        spec:
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 150Gi  # Quantized model (~8GB) + Buildah layers (~8GB) + build artifacts (~20GB) + safety margin
+          storageClassName: gp3-csi
+    - name: registry-auth
+      secret:
+        secretName: registry-auth
+    - name: quay-auth
+      secret:
+        secretName: quay-auth
   
   timeout: "2h"
 
