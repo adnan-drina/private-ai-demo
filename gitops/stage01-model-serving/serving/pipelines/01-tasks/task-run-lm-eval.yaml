@@ -150,13 +150,33 @@ spec:
         echo "✅ Installation complete"
         echo ""
         
+        # Create SSL patch for aiohttp (sitecustomize.py is auto-loaded)
+        mkdir -p /tmp/site-packages
+        {
+          echo "import ssl"
+          echo "try:"
+          echo "    import aiohttp.connector"
+          echo "    _init = aiohttp.connector.TCPConnector.__init__"
+          echo "    def patch(self, *a, **k):"
+          echo "        if 'ssl' not in k:"
+          echo "            c = ssl.create_default_context()"
+          echo "            c.check_hostname = False"
+          echo "            c.verify_mode = ssl.CERT_NONE"
+          echo "            k['ssl'] = c"
+          echo "        return _init(self, *a, **k)"
+          echo "    aiohttp.connector.TCPConnector.__init__ = patch"
+          echo "except: pass"
+        } > /tmp/site-packages/sitecustomize.py
+        
+        export PYTHONPATH="/tmp/site-packages:$PYTHONPATH"
+        
         # Create output directory
         mkdir -p /tmp/eval
         
         echo "🚀 Starting evaluation (SSL verification disabled for self-signed certs)..."
         echo ""
         
-        # Run lm-eval - SSL verification disabled via env vars
+        # Run lm-eval
         lm_eval \
           --model local-completions \
           --model_args "model=mistralai/Mistral-Small-24B-Instruct-2501,base_url=${MODEL_URL}/v1/completions,num_concurrent=2,max_retries=5,timeout=600,tokenizer_backend=huggingface" \
