@@ -14,11 +14,11 @@ metadata:
     app.kubernetes.io/part-of: private-ai-demo
     stage: "01"
 spec:
-  project: stage01-model-serving
+  project: default
   
   source:
     repoURL: https://github.com/adnan-drina/private-ai-demo.git
-    targetRevision: feature/stage-alignment
+    targetRevision: gitops-refactoring-clean
     path: gitops/stage01-model-serving
     
     kustomize:
