@@ -203,14 +203,19 @@ spec:
         echo "✅ Evaluation Complete!"
         echo "════════════════════════════════════════════════════════════"
         
-        # Check for results (lm-eval saves to /tmp/eval/*.json)
+        # Check for results (lm-eval saves to /tmp/eval/<model_name>/*.json)
         echo ""
         echo "📁 Checking for results files..."
-        ls -la /tmp/eval/ || echo "Directory not found"
+        ls -laR /tmp/eval/ || echo "Directory not found"
         echo ""
         
-        # Find the actual results file
-        RESULTS_FILE=$(find /tmp/eval -name "*.json" -type f | head -1)
+        # Find the actual results file (recursively search for results.json)
+        RESULTS_FILE=$(find /tmp/eval -name "results.json" -type f | head -1)
+        
+        # If results.json not found, look for any JSON file
+        if [ -z "$RESULTS_FILE" ]; then
+          RESULTS_FILE=$(find /tmp/eval -name "*.json" -type f | head -1)
+        fi
         
         if [ ! -z "$RESULTS_FILE" ] && [ -f "$RESULTS_FILE" ]; then
           echo "✅ Results file found: $RESULTS_FILE"
