@@ -270,7 +270,8 @@ data:
        "metadata": {},
        "outputs": [],
        "source": [
-        "if not df.empty:\n",
+        "# Check if results were generated and df exists\n",
+        "if 'df' in locals() and not df.empty:\n",
         "    fig, ax = plt.subplots(figsize=(12, 6))\n",
         "    \n",
         "    # Accuracy comparison across tasks\n",
@@ -284,7 +285,12 @@ data:
         "    plt.tight_layout()\n",
         "    plt.show()\n",
         "else:\n",
-        "    print(\"⚠️  No data to visualize\")"
+        "    print(\"⚠️  No evaluation data available to visualize\")\n",
+        "    print(\"\")\n",
+        "    if 'results' in locals():\n",
+        "        print(f\"Debug: results = {results}\")\n",
+        "    else:\n",
+        "        print(\"Debug: 'results' variable not found. Re-run cell 3 to evaluate models.\")"
        ]
       },
       {
