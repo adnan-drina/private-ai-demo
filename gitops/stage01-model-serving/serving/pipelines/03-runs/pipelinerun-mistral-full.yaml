@@ -70,20 +70,5 @@ spec:
         secretName: quay-auth
   
   timeouts:
-    pipeline: "4h"      # Total pipeline timeout (download + build + push + register)
-  
-  # Tekton v1: Task-level timeouts via taskRunSpecs
-  taskRunSpecs:
-    - pipelineTaskName: download-model
-      taskServiceAccountName: model-pipeline-sa
-      timeout: "1h"
-    - pipelineTaskName: build-image
-      taskServiceAccountName: model-pipeline-sa
-      timeout: "3h"
-    - pipelineTaskName: push-to-registry
-      taskServiceAccountName: model-pipeline-sa
-      timeout: "30m"
-    - pipelineTaskName: register-model
-      taskServiceAccountName: model-pipeline-sa
-      timeout: "15m"
+    pipeline: "4h"      # Total pipeline timeout
 

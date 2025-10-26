@@ -120,6 +120,7 @@ spec:
   tasks:
     # Task 1: Download model from HuggingFace
     - name: download-model
+      timeout: "1h"
       taskRef:
         name: download-model-from-hf
         kind: Task
@@ -136,6 +137,7 @@ spec:
     
     # Task 2: Build ModelCar image
     - name: build-image
+      timeout: "3h"
       runAfter: ["download-model"]
       taskRef:
         name: build-modelcar-image
@@ -155,6 +157,7 @@ spec:
     
     # Task 3a: Push to OpenShift internal registry (parallel)
     - name: push-to-internal
+      timeout: "30m"
       runAfter: ["build-image"]
       taskRef:
         name: push-to-internal-registry
@@ -172,6 +175,7 @@ spec:
     
     # Task 3b: Push to Quay.io (parallel with push-to-internal)
     - name: push-to-quay
+      timeout: "30m"
       runAfter: ["build-image"]
       taskRef:
         name: push-to-quay
@@ -195,6 +199,7 @@ spec:
     
     # Task 4: Register model (after both pushes complete)
     - name: register-model
+      timeout: "15m"
       runAfter: ["push-to-internal", "push-to-quay"]
       taskRef:
         name: register-model
