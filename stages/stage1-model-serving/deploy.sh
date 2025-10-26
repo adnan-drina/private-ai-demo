@@ -317,6 +317,17 @@ create_secrets() {
     fi
   fi
   
+  # Grant pipeline SA permissions to push to internal registry
+  log_info "Granting registry permissions to pipeline ServiceAccount..."
+  if [ "$DRY_RUN" = true ]; then
+    log_info "[DRY-RUN] Would grant system:image-builder and registry-editor roles to pipeline SA"
+  else
+    # These permissions are required for ModelCar pipeline to push images to OpenShift internal registry
+    oc policy add-role-to-user system:image-builder -z pipeline -n $PROJECT_NAME 2>/dev/null || true
+    oc policy add-role-to-user registry-editor -z pipeline -n $PROJECT_NAME 2>/dev/null || true
+    log_success "Registry permissions granted to pipeline SA"
+  fi
+  
   log_success "All secrets created successfully"
   log_warning "Remember: Secrets are NOT in Git (managed imperatively)"
 }

@@ -114,12 +114,19 @@ spec:
         
         # Build the image (using PVC storage)
         # Pass HF_TOKEN as build arg if set
+        # Performance optimizations for large model images:
+        #   --layers=false   : Skip intermediate layer commits (HUGE speedup for 48GB models!)
+        #   --squash         : Single final layer (reduces image size)
+        #   --ulimit nofile  : Increase file handle limit for parallel operations
         if [ -n "${HF_TOKEN}" ]; then
           echo "🔐 Using HF_TOKEN for model download authentication"
           buildah --root ${BUILDAH_STORAGE_ROOT} --storage-driver=vfs bud \
             --format=$(params.FORMAT) \
             --tls-verify=$(params.TLSVERIFY) \
             --no-cache \
+            --layers=false \
+            --squash \
+            --ulimit nofile=4096:8192 \
             --build-arg=HF_TOKEN="${HF_TOKEN}" \
             -f $(params.DOCKERFILE) \
             -t $(params.IMAGE) \
@@ -131,6 +138,9 @@ spec:
             --format=$(params.FORMAT) \
             --tls-verify=$(params.TLSVERIFY) \
             --no-cache \
+            --layers=false \
+            --squash \
+            --ulimit nofile=4096:8192 \
             -f $(params.DOCKERFILE) \
             -t $(params.IMAGE) \
             $(params.BUILD_EXTRA_ARGS) \
