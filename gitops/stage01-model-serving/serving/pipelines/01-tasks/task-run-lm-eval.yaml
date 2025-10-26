@@ -143,44 +143,24 @@ spec:
         echo "════════════════════════════════════════════════════════════"
         echo ""
         
-        # Install lm-eval with API dependencies
-        echo "📦 Installing lm-evaluation-harness..."
-        pip install --quiet --no-cache-dir "lm-eval[api]"
+        # Install lm-eval with vllm backend
+        echo "📦 Installing lm-evaluation-harness with vllm backend..."
+        pip install --quiet --no-cache-dir "lm-eval[vllm]"
         
         echo "✅ Installation complete"
         echo ""
         
-        # Create comprehensive SSL patch using echo (avoid heredoc YAML issues)
-        echo 'import ssl' > /tmp/ssl_patch.py
-        echo 'import warnings' >> /tmp/ssl_patch.py
-        echo 'warnings.filterwarnings("ignore", message="Unverified HTTPS request")' >> /tmp/ssl_patch.py
-        echo '_orig = ssl.create_default_context' >> /tmp/ssl_patch.py
-        echo 'def _noverify(*a, **k):' >> /tmp/ssl_patch.py
-        echo '    ctx = _orig(*a, **k)' >> /tmp/ssl_patch.py
-        echo '    ctx.check_hostname = False' >> /tmp/ssl_patch.py
-        echo '    ctx.verify_mode = ssl.CERT_NONE' >> /tmp/ssl_patch.py
-        echo '    return ctx' >> /tmp/ssl_patch.py
-        echo 'ssl.create_default_context = _noverify' >> /tmp/ssl_patch.py
-        echo 'try:' >> /tmp/ssl_patch.py
-        echo '    import aiohttp' >> /tmp/ssl_patch.py
-        echo '    _orig_init = aiohttp.TCPConnector.__init__' >> /tmp/ssl_patch.py
-        echo '    def _patched_init(self, *a, **k):' >> /tmp/ssl_patch.py
-        echo '        k["ssl"] = False' >> /tmp/ssl_patch.py
-        echo '        _orig_init(self, *a, **k)' >> /tmp/ssl_patch.py
-        echo '    aiohttp.TCPConnector.__init__ = _patched_init' >> /tmp/ssl_patch.py
-        echo 'except ImportError: pass' >> /tmp/ssl_patch.py
-        
         # Create output directory
         mkdir -p /tmp/eval
         
-        echo "🚀 Starting evaluation (SSL verification disabled)..."
+        echo "🚀 Starting evaluation (using vllm backend)..."
         echo ""
         
-        # Run lm-eval with openai backend (uses requests, not aiohttp)
-        # This avoids aiohttp SSL session issues
-        python3 -c 'import sys; exec(open("/tmp/ssl_patch.py").read()); from lm_eval.__main__ import cli_evaluate; sys.exit(cli_evaluate())' \
-          --model local-chat-completions \
-          --model_args "model=mistralai/Mistral-Small-24B-Instruct-2501,base_url=${MODEL_URL}/v1,num_concurrent=1,max_retries=5,tokenized_requests=False,tokenizer_backend=huggingface" \
+        # Use vllm backend which connects directly to vLLM server
+        # This avoids SSL issues with generic HTTP clients
+        python3 -m lm_eval \
+          --model vllm \
+          --model_args "base_url=${MODEL_URL},tokenizer=mistralai/Mistral-Small-24B-Instruct-2501" \
           --tasks $(params.tasks) \
           --limit $(params.limit) \
           --output_path /tmp/eval \
