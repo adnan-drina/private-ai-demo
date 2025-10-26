@@ -203,30 +203,38 @@ spec:
         echo "✅ Evaluation Complete!"
         echo "════════════════════════════════════════════════════════════"
         
-        # Check for results
-        if [ -f "/tmp/eval/results.json" ]; then
-          echo "✅ Results file found"
+        # Check for results (lm-eval saves to /tmp/eval/*.json)
+        echo ""
+        echo "📁 Checking for results files..."
+        ls -la /tmp/eval/ || echo "Directory not found"
+        echo ""
+        
+        # Find the actual results file
+        RESULTS_FILE=$(find /tmp/eval -name "*.json" -type f | head -1)
+        
+        if [ ! -z "$RESULTS_FILE" ] && [ -f "$RESULTS_FILE" ]; then
+          echo "✅ Results file found: $RESULTS_FILE"
           echo ""
           
           # Extract and display summary
           echo "📊 Results Summary:"
           echo "────────────────────────────────────────────────────────────"
-          
-          # Display results (using python json.tool, no extra deps needed)
-          cat /tmp/eval/results.json | python3 -m json.tool | grep -A 5 '"results"'
+          cat "$RESULTS_FILE" | python3 -m json.tool 2>/dev/null || cat "$RESULTS_FILE"
+          echo "────────────────────────────────────────────────────────────"
           
           # Copy results to workspace for downstream tasks
-          cp -r /tmp/eval/* /workspace/results/ || true
+          mkdir -p /workspace/results
+          cp -r /tmp/eval/* /workspace/results/ 2>/dev/null || true
           
           # Save task results
           echo -n "succeeded" > $(results.EVAL_STATUS.path)
-          echo -n "/workspace/results/results.json" > $(results.RESULTS_FILE.path)
-          echo -n "Evaluation completed" > $(results.ACCURACY_SUMMARY.path)
-          
-          echo "────────────────────────────────────────────────────────────"
+          echo -n "$RESULTS_FILE" > $(results.RESULTS_FILE.path)
+          echo -n "Evaluation completed successfully" > $(results.ACCURACY_SUMMARY.path)
         else
-          echo "❌ ERROR: Results file not found!"
+          echo "❌ ERROR: Results file not found in /tmp/eval/"
           echo -n "failed" > $(results.EVAL_STATUS.path)
+          echo -n "none" > $(results.RESULTS_FILE.path)
+          echo -n "Evaluation failed - no results" > $(results.ACCURACY_SUMMARY.path)
           exit 1
         fi
         
