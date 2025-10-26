@@ -181,10 +181,17 @@ spec:
         echo "🚀 Starting evaluation..."
         echo ""
         
-        # Run lm-eval (sitecustomize.py loads automatically)
+        # Get actual model name from vLLM /v1/models endpoint
+        VLLM_MODEL_NAME=$(curl -ks "${MODEL_URL}/v1/models" | python3 -c "import sys, json; print(json.load(sys.stdin)['data'][0]['id'])" || echo "mistral-24b-quantized")
+        echo "📋 vLLM model name: ${VLLM_MODEL_NAME}"
+        echo ""
+        
+        # Run lm-eval with correct model name
+        # - model= is for vLLM API (e.g., mistral-24b-quantized)
+        # - tokenizer= is for HuggingFace (e.g., mistralai/Mistral-Small-24B-Instruct-2501)
         python3 -m lm_eval \
           --model local-completions \
-          --model_args "model=mistralai/Mistral-Small-24B-Instruct-2501,base_url=${MODEL_URL}/v1/completions,num_concurrent=1,max_retries=3,timeout=300" \
+          --model_args "model=${VLLM_MODEL_NAME},tokenizer=mistralai/Mistral-Small-24B-Instruct-2501,base_url=${MODEL_URL}/v1/completions,num_concurrent=1,max_retries=3,timeout=300" \
           --tasks $(params.tasks) \
           --limit $(params.limit) \
           --output_path /tmp/eval \
