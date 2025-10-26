@@ -96,48 +96,12 @@ spec:
         # Create target directory
         mkdir -p "$(params.target_path)"
         
-        # Create download script
-        cat > download.py << 'EOFPY'
-from huggingface_hub import snapshot_download
-import os
-import sys
-
-repo = "$(params.hf_repo)"
-revision = "$(params.hf_revision)"
-target = "$(params.target_path)"
-
-print(f"\n📥 Downloading {repo} (revision: {revision})...")
-print(f"   Target: {target}\n")
-
-try:
-    # Optimized download with parallel workers
-    snapshot_download(
-        repo_id=repo,
-        revision=revision,
-        local_dir=target,
-        max_workers=20,              # Parallel downloads (2-3x speedup)
-        etag_timeout=5,              # Faster metadata checks
-        allow_patterns=[
-            "*.safetensors",
-            "*.bin",
-            "*.json",
-            "*.txt",
-            "*.model",
-            "*.py",
-            "tokenizer*",
-            "config*",
-            "generation*",
-            "special_tokens*"
-        ]
-    )
-    print(f"\n✅ Successfully downloaded {repo}")
-except Exception as e:
-    print(f"\n❌ Error downloading model: {e}", file=sys.stderr)
-    sys.exit(1)
-EOFPY
-        
-        # Download the model
-        python download.py
+        # Download model using huggingface-cli (simpler than Python script)
+        huggingface-cli download \
+          "$(params.hf_repo)" \
+          --revision "$(params.hf_revision)" \
+          --local-dir "$(params.target_path)" \
+          --include "*.safetensors" "*.bin" "*.json" "*.txt" "*.model" "*.py" "tokenizer*" "config*" "generation*" "special_tokens*"
         
         # Calculate download time
         END_TIME=$(date +%s)

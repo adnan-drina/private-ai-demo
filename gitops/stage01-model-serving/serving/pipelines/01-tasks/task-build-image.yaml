@@ -66,26 +66,12 @@ spec:
         echo "📝 Creating Containerfile"
         echo "════════════════════════════════════════════════════════════"
         
-        # Create simple Containerfile that just packages the model
-        cat > Containerfile << 'EOF'
-FROM registry.access.redhat.com/ubi9/ubi-micro:9.5
-
-# Copy model files from workspace
-COPY $(params.MODEL_PATH) /models
-
-# Set ownership and permissions
-USER 1001
-
-# Labels for OpenShift
-LABEL name="modelcar" \
-      vendor="Red Hat" \
-      version="1.0" \
-      summary="ModelCar container with AI model" \
-      description="This image contains an AI model packaged as a ModelCar for use with vLLM"
-
-# Default command
-CMD ["/bin/sh", "-c", "echo 'ModelCar ready. Model files at /models'"]
-EOF
+        # Create Containerfile using echo (avoid heredoc in YAML script block)
+        echo "FROM registry.access.redhat.com/ubi9/ubi-micro:9.5" > Containerfile
+        echo "COPY $(params.MODEL_PATH) /models" >> Containerfile
+        echo "USER 1001" >> Containerfile
+        echo 'LABEL name="modelcar" vendor="Red Hat" version="1.0"' >> Containerfile
+        echo 'CMD ["/bin/sh", "-c", "echo ModelCar ready"]' >> Containerfile
         
         echo "✅ Containerfile created"
         echo ""
