@@ -172,8 +172,8 @@ spec:
         echo '    return _orig_request(self, *args, **kwargs)' >> $SITE_PACKAGES/sitecustomize.py
         echo 'requests.Session.request = _insecure_request' >> $SITE_PACKAGES/sitecustomize.py
         echo '' >> $SITE_PACKAGES/sitecustomize.py
-        echo 'print("🔥 SSL verification disabled: ALL requests use verify=False")' >> $SITE_PACKAGES/sitecustomize.py
-        echo "✅ Complete SSL bypass installed"
+        # Don't print from sitecustomize.py as it interferes with command output
+        echo "✅ Complete SSL bypass installed (no verification, no warnings)"
         
         # Create output directory
         mkdir -p /tmp/eval
