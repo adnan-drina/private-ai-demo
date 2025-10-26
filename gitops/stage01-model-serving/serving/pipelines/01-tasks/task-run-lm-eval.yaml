@@ -1,0 +1,195 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: run-lm-eval
+  namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/name: run-lm-eval
+    app.kubernetes.io/component: pipeline-task
+    app.kubernetes.io/part-of: private-ai-demo
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+    tekton.dev/pipelines.minVersion: "0.17.0"
+    tekton.dev/tags: "evaluation,lm-eval,trustyai"
+    tekton.dev/displayName: "Run LM-Eval on Deployed Model"
+spec:
+  description: >-
+    Runs language model evaluation (lm-eval) against a deployed InferenceService.
+    Uses TrustyAI operator integration for standardized evaluation tasks.
+    
+    This task evaluates model accuracy on benchmark datasets like:
+    - hellaswag: Commonsense reasoning
+    - arc_easy: Science Q&A
+    - gsm8k: Math problem solving
+    - truthfulqa_mc2: Truthfulness evaluation
+    
+    Results are saved as JSON for downstream processing.
+
+  timeout: 45m0s
+
+  params:
+    - name: inference_service_name
+      type: string
+      description: Name of the deployed InferenceService to evaluate
+    
+    - name: namespace
+      type: string
+      description: Namespace where the InferenceService is deployed
+      default: "private-ai-demo"
+    
+    - name: model_name
+      type: string
+      description: Model name for results identification
+    
+    - name: tasks
+      type: string
+      description: Comma-separated list of evaluation tasks
+      default: "hellaswag,arc_easy"
+    
+    - name: limit
+      type: string
+      description: Limit number of samples per task (for faster evaluation)
+      default: "500"
+    
+    - name: max_model_len
+      type: string
+      description: Maximum context length for the model
+      default: "8192"
+
+  workspaces:
+    - name: results
+      description: Workspace to store evaluation results
+
+  results:
+    - name: EVAL_STATUS
+      description: Status of evaluation (succeeded/failed)
+    
+    - name: RESULTS_FILE
+      description: Path to results JSON file
+    
+    - name: ACCURACY_SUMMARY
+      description: Summary of accuracy scores
+
+  steps:
+    - name: get-inference-url
+      image: registry.access.redhat.com/openshift4/ose-cli:latest
+      script: |
+        #!/bin/bash
+        set -e
+        
+        echo "🔍 Discovering InferenceService URL"
+        echo "════════════════════════════════════════════════════════════"
+        echo "InferenceService: $(params.inference_service_name)"
+        echo "Namespace: $(params.namespace)"
+        echo ""
+        
+        # Get the InferenceService URL
+        ISVC_URL=$(oc get inferenceservice $(params.inference_service_name) \
+          -n $(params.namespace) \
+          -o jsonpath='{.status.url}' 2>/dev/null || echo "")
+        
+        if [ -z "$ISVC_URL" ]; then
+          echo "❌ ERROR: InferenceService $(params.inference_service_name) not found or not ready"
+          exit 1
+        fi
+        
+        echo "✅ InferenceService URL: ${ISVC_URL}"
+        echo ""
+        
+        # Test connectivity
+        echo "🔗 Testing connectivity..."
+        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -k "${ISVC_URL}/v1/models" || echo "000")
+        
+        if [ "$HTTP_CODE" = "200" ]; then
+          echo "✅ Model endpoint is accessible"
+        else
+          echo "⚠️  Warning: Got HTTP ${HTTP_CODE} from model endpoint"
+          echo "   (Continuing anyway - vLLM may respond differently)"
+        fi
+        
+        # Save URL for next step
+        echo -n "${ISVC_URL}" > /workspace/results/model_url.txt
+        
+        echo ""
+        echo "════════════════════════════════════════════════════════════"
+
+    - name: run-evaluation
+      image: ghcr.io/trustyai-explainability/trustyai-service-lm-eval-job:latest
+      env:
+        - name: HOME
+          value: /tmp
+        - name: HF_HOME
+          value: /tmp/.cache/huggingface
+      script: |
+        #!/bin/bash
+        set -e
+        
+        MODEL_URL=$(cat /workspace/results/model_url.txt)
+        
+        echo "🧪 Running LM-Eval"
+        echo "════════════════════════════════════════════════════════════"
+        echo "Model URL: ${MODEL_URL}"
+        echo "Model Name: $(params.model_name)"
+        echo "Tasks: $(params.tasks)"
+        echo "Limit: $(params.limit) samples per task"
+        echo "Max Length: $(params.max_model_len)"
+        echo "════════════════════════════════════════════════════════════"
+        echo ""
+        
+        # Create cache directories
+        mkdir -p ${HF_HOME}
+        mkdir -p /workspace/results/eval
+        
+        # Run lm-eval using vLLM backend
+        echo "🚀 Starting evaluation..."
+        echo ""
+        
+        lm_eval \
+          --model vllm \
+          --model_args "pretrained=${MODEL_URL},tensor_parallel_size=1,dtype=auto,gpu_memory_utilization=0.9,max_model_len=$(params.max_model_len),trust_remote_code=true" \
+          --tasks $(params.tasks) \
+          --limit $(params.limit) \
+          --output_path /workspace/results/eval \
+          --log_samples \
+          2>&1 | tee /workspace/results/eval.log
+        
+        echo ""
+        echo "════════════════════════════════════════════════════════════"
+        echo "✅ Evaluation Complete!"
+        echo "════════════════════════════════════════════════════════════"
+        
+        # Check for results
+        if [ -f "/workspace/results/eval/results.json" ]; then
+          echo "✅ Results saved to: /workspace/results/eval/results.json"
+          echo ""
+          
+          # Extract summary
+          echo "📊 Results Summary:"
+          echo "────────────────────────────────────────────────────────────"
+          cat /workspace/results/eval/results.json | jq -r '.results | to_entries[] | "\(.key): \(.value.acc // .value.exact_match // "N/A")"'
+          echo "────────────────────────────────────────────────────────────"
+          
+          # Save summary for results
+          SUMMARY=$(cat /workspace/results/eval/results.json | jq -r '.results | to_entries[] | "\(.key)=\(.value.acc // .value.exact_match // "N/A")"' | tr '\n' ';')
+          echo -n "$SUMMARY" > $(results.ACCURACY_SUMMARY.path)
+          
+          echo -n "succeeded" > $(results.EVAL_STATUS.path)
+          echo -n "/workspace/results/eval/results.json" > $(results.RESULTS_FILE.path)
+        else
+          echo "❌ ERROR: Results file not found!"
+          echo -n "failed" > $(results.EVAL_STATUS.path)
+          exit 1
+        fi
+        
+        echo ""
+        echo "════════════════════════════════════════════════════════════"
+      
+      resources:
+        requests:
+          memory: "4Gi"
+          cpu: "2"
+        limits:
+          memory: "8Gi"
+          cpu: "4"
+
+
