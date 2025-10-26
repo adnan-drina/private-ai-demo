@@ -49,7 +49,8 @@ data:
        "outputs": [],
        "source": [
         "# Install dependencies\n",
-        "!pip install -q guidellm pandas matplotlib tabulate"
+        "# Fix pydantic version conflict (guidellm needs pydantic<2)\n",
+        "!pip install -q 'pydantic<2' guidellm pandas matplotlib tabulate"
        ]
       },
       {
@@ -163,11 +164,15 @@ data:
         "    target_url = f\"{endpoint_url}/v1\"\n",
         "    \n",
         "    # GuideLLM uses 'benchmark run' subcommand\n",
-        "    # Set environment variable to disable SSL verification for self-signed certs\n",
+        "    # Disable SSL verification for self-signed certs via environment variables\n",
         "    import os as os_module\n",
+        "    import ssl\n",
+        "    \n",
         "    env = os_module.environ.copy()\n",
         "    env['CURL_CA_BUNDLE'] = ''\n",
         "    env['REQUESTS_CA_BUNDLE'] = ''\n",
+        "    env['SSL_CERT_FILE'] = ''\n",
+        "    env['PYTHONHTTPSVERIFY'] = '0'\n",
         "    \n",
         "    cmd = [\n",
         "        'guidellm',\n",
@@ -180,7 +185,6 @@ data:
         "        f'--rate={scenario[\"concurrent_requests\"]}',\n",
         "        '--max-seconds=120',\n",
         "        '--output-path=/tmp/guidellm_results.json',\n",
-        "        '--request-args={\"verify\": false}',\n",
         "    ]\n",
         "    \n",
         "    try:\n",
