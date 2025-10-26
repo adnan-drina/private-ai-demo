@@ -176,10 +176,11 @@ spec:
         echo "🚀 Starting evaluation (SSL verification disabled)..."
         echo ""
         
-        # Run lm-eval with SSL patch
+        # Run lm-eval with openai backend (uses requests, not aiohttp)
+        # This avoids aiohttp SSL session issues
         python3 -c 'import sys; exec(open("/tmp/ssl_patch.py").read()); from lm_eval.__main__ import cli_evaluate; sys.exit(cli_evaluate())' \
-          --model local-completions \
-          --model_args "model=mistralai/Mistral-Small-24B-Instruct-2501,base_url=${MODEL_URL}/v1/completions,num_concurrent=2,max_retries=5,timeout=600,tokenizer_backend=huggingface" \
+          --model local-chat-completions \
+          --model_args "model=mistralai/Mistral-Small-24B-Instruct-2501,base_url=${MODEL_URL}/v1,num_concurrent=1,max_retries=5,tokenized_requests=False,tokenizer_backend=huggingface" \
           --tasks $(params.tasks) \
           --limit $(params.limit) \
           --output_path /tmp/eval \
