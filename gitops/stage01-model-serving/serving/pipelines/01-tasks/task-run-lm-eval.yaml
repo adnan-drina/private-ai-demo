@@ -150,34 +150,18 @@ spec:
         echo "✅ Installation complete"
         echo ""
         
-        # Create SSL patch for aiohttp (sitecustomize.py is auto-loaded)
-        mkdir -p /tmp/site-packages
-        {
-          echo "import ssl"
-          echo "try:"
-          echo "    import aiohttp.connector"
-          echo "    _init = aiohttp.connector.TCPConnector.__init__"
-          echo "    def patch(self, *a, **k):"
-          echo "        if 'ssl' not in k:"
-          echo "            c = ssl.create_default_context()"
-          echo "            c.check_hostname = False"
-          echo "            c.verify_mode = ssl.CERT_NONE"
-          echo "            k['ssl'] = c"
-          echo "        return _init(self, *a, **k)"
-          echo "    aiohttp.connector.TCPConnector.__init__ = patch"
-          echo "except: pass"
-        } > /tmp/site-packages/sitecustomize.py
-        
-        export PYTHONPATH="/tmp/site-packages:$PYTHONPATH"
+        # Create wrapper script (patches aiohttp SSL before lm_eval runs)
+        echo "IyEvdXNyL2Jpbi9lbnYgcHl0aG9uMwppbXBvcnQgc3NsCmltcG9ydCBhaW9odHRwLmNvbm5lY3RvcgoKIyBQYXRjaCBiZWZvcmUgbG1fZXZhbCBpbXBvcnRzCl9pbml0ID0gYWlvaHR0cC5jb25uZWN0b3IuVENQQ29ubmVjdG9yLl9faW5pdF9fCmRlZiBwYXRjaGVkKHNlbGYsICphcmdzLCAqKmt3YXJncyk6CiAgICBpZiAnc3NsJyBub3QgaW4ga3dhcmdzOgogICAgICAgIGN0eCA9IHNzbC5jcmVhdGVfZGVmYXVsdF9jb250ZXh0KCkKICAgICAgICBjdHguY2hlY2tfaG9zdG5hbWUgPSBGYWxzZQogICAgICAgIGN0eC52ZXJpZnlfbW9kZSA9IHNzbC5DRVJUX05PTkUKICAgICAgICBrd2FyZ3NbJ3NzbCddID0gY3R4CiAgICByZXR1cm4gX2luaXQoc2VsZiwgKmFyZ3MsICoqa3dhcmdzKQphaW9odHRwLmNvbm5lY3Rvci5UQ1BDb25uZWN0b3IuX19pbml0X18gPSBwYXRjaGVkCgojIE5vdyBydW4gbG1fZXZhbApmcm9tIGxtX2V2YWwuX19tYWluX18gaW1wb3J0IGNsaV9ldmFsdWF0ZQppbXBvcnQgc3lzCnN5cy5leGl0KGNsaV9ldmFsdWF0ZSgpKQo=" | base64 -d > /tmp/lm_eval_wrapper.py
+        chmod +x /tmp/lm_eval_wrapper.py
         
         # Create output directory
         mkdir -p /tmp/eval
         
-        echo "🚀 Starting evaluation (SSL verification disabled for self-signed certs)..."
+        echo "🚀 Starting evaluation (SSL verification disabled via wrapper)..."
         echo ""
         
-        # Run lm-eval
-        lm_eval \
+        # Run via wrapper (patches aiohttp before import)
+        python3 /tmp/lm_eval_wrapper.py \
           --model local-completions \
           --model_args "model=mistralai/Mistral-Small-24B-Instruct-2501,base_url=${MODEL_URL}/v1/completions,num_concurrent=2,max_retries=5,timeout=600,tokenizer_backend=huggingface" \
           --tasks $(params.tasks) \
