@@ -113,15 +113,21 @@ spec:
         echo ""
         echo "════════════════════════════════════════════════════════════"
 
-    - name: create-lmevaljob
-      image: registry.redhat.io/openshift4/ose-cli:latest
+    - name: run-evaluation
+      image: registry.access.redhat.com/ubi9/python-311:latest
+      workingDir: /workspace/results
+      env:
+        - name: HOME
+          value: /tmp
+        - name: HF_HOME
+          value: /tmp/.cache/huggingface
       script: |
         #!/bin/bash
         set -e
         
         MODEL_URL=$(cat /workspace/results/model_url.txt)
         
-        echo "🧪 Creating TrustyAI LMEvalJob"
+        echo "🧪 Running LM-Eval (Standard Harness)"
         echo "════════════════════════════════════════════════════════════"
         echo "Model URL: https://${MODEL_URL}"
         echo "Model Name: $(params.model_name)"
@@ -130,79 +136,83 @@ spec:
         echo "════════════════════════════════════════════════════════════"
         echo ""
         
-        # Create LMEvalJob using TrustyAI operator (Red Hat way!)
-        cat <<EOF | oc apply -f -
-        apiVersion: trustyai.opendatahub.io/v1alpha1
-        kind: LMEvalJob
-        metadata:
-          generateName: eval-$(params.inference_service_name)-
-          namespace: $(params.namespace)
-          labels:
-            app.kubernetes.io/name: lm-eval
-            app.kubernetes.io/component: trustyai-eval
-            pipeline-task: "true"
-        spec:
-          model: local-completions
-          modelArgs:
-            - name: model
-              value: "$(params.model_name)"
-            - name: base_url
-              value: "https://${MODEL_URL}/v1/completions"
-            - name: num_concurrent
-              value: "2"
-            - name: max_retries
-              value: "5"
-            - name: timeout
-              value: "600"
-          taskList:
-            taskNames: [$(echo "$(params.tasks)" | sed 's/,/", "/g' | sed 's/^/"/' | sed 's/$/"/')]
-          limit: "$(params.limit)"
-          batchSize: "1"
-          logSamples: true
-          offlineMode: "false"
-        EOF
+        # Install lm-eval
+        echo "📦 Installing lm-evaluation-harness..."
+        pip install --quiet lm-eval openai
         
-        # Get the created job name
-        sleep 5
-        JOB_NAME=$(oc get lmevaljob -n $(params.namespace) -l pipeline-task=true --sort-by=.metadata.creationTimestamp -o name | tail -1 | cut -d'/' -f2)
+        echo "✅ Installation complete"
         echo ""
-        echo "✅ LMEvalJob created: ${JOB_NAME}"
-        echo -n "${JOB_NAME}" > /workspace/results/lmevaljob_name.txt
+        
+        # Create output directory
+        mkdir -p /workspace/results/eval
+        
+        echo "🚀 Starting evaluation..."
+        echo "════════════════════════════════════════════════════════════"
+        echo ""
+        
+        # Run lm-eval using local-completions model (for vLLM)
+        lm_eval \
+          --model local-completions \
+          --model_args "model=$(params.model_name),base_url=https://${MODEL_URL}/v1/completions,num_concurrent=2,max_retries=5" \
+          --tasks $(params.tasks) \
+          --limit $(params.limit) \
+          --output_path /workspace/results/eval \
+          --log_samples \
+          2>&1 | tee /workspace/results/eval.log
         
         echo ""
-        echo "⏳ Waiting for evaluation to complete..."
+        echo "════════════════════════════════════════════════════════════"
+        echo "✅ Evaluation Complete!"
         echo "════════════════════════════════════════════════════════════"
         
-        # Wait for job to complete (timeout after 45 minutes)
-        TIMEOUT=2700
-        ELAPSED=0
-        while [ $ELAPSED -lt $TIMEOUT ]; do
-          STATUS=$(oc get lmevaljob ${JOB_NAME} -n $(params.namespace) -o jsonpath='{.status.state}' 2>/dev/null || echo "Unknown")
+        # Check for results
+        if [ -f "/workspace/results/eval/results.json" ]; then
+          echo "✅ Results saved to: /workspace/results/eval/results.json"
+          echo ""
           
-          if [ "$STATUS" == "Complete" ]; then
-            echo "✅ Evaluation completed successfully!"
-            break
-          elif [ "$STATUS" == "Failed" ]; then
-            echo "❌ Evaluation failed!"
-            exit 1
-          fi
+          # Extract summary
+          echo "📊 Results Summary:"
+          echo "────────────────────────────────────────────────────────────"
+          python3 -c "
+import json
+with open('/workspace/results/eval/results.json', 'r') as f:
+    data = json.load(f)
+    for task, metrics in data.get('results', {}).items():
+        acc = metrics.get('acc', metrics.get('exact_match', 'N/A'))
+        print(f'{task}: {acc}')
+"
+          echo "────────────────────────────────────────────────────────────"
           
-          echo "Status: ${STATUS} (${ELAPSED}s elapsed)"
-          sleep 30
-          ELAPSED=$((ELAPSED + 30))
-        done
-        
-        if [ $ELAPSED -ge $TIMEOUT ]; then
-          echo "❌ Timeout waiting for evaluation"
+          # Save summary for results
+          SUMMARY=$(python3 -c "
+import json
+with open('/workspace/results/eval/results.json', 'r') as f:
+    data = json.load(f)
+    parts = []
+    for task, metrics in data.get('results', {}).items():
+        acc = metrics.get('acc', metrics.get('exact_match', 'N/A'))
+        parts.append(f'{task}={acc}')
+    print(';'.join(parts))
+")
+          echo -n "$SUMMARY" > $(results.ACCURACY_SUMMARY.path)
+          
+          echo -n "succeeded" > $(results.EVAL_STATUS.path)
+          echo -n "/workspace/results/eval/results.json" > $(results.RESULTS_FILE.path)
+        else
+          echo "❌ ERROR: Results file not found!"
+          echo -n "failed" > $(results.EVAL_STATUS.path)
           exit 1
         fi
         
         echo ""
         echo "════════════════════════════════════════════════════════════"
-        
-        # Save results
-        echo -n "succeeded" > $(results.EVAL_STATUS.path)
-        echo -n "/workspace/results/eval/${JOB_NAME}.json" > $(results.RESULTS_FILE.path)
-        echo -n "See LMEvalJob: ${JOB_NAME}" > $(results.ACCURACY_SUMMARY.path)
+      
+      resources:
+        requests:
+          memory: "2Gi"
+          cpu: "1"
+        limits:
+          memory: "4Gi"
+          cpu: "2"
 
 
