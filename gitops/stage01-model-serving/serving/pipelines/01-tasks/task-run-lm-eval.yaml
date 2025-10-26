@@ -150,17 +150,17 @@ spec:
         echo "✅ Installation complete"
         echo ""
         
-        # Create wrapper script (patches aiohttp SSL before lm_eval runs)
-        echo "IyEvdXNyL2Jpbi9lbnYgcHl0aG9uMwppbXBvcnQgc3NsCmltcG9ydCBhaW9odHRwLmNvbm5lY3RvcgoKIyBQYXRjaCBiZWZvcmUgbG1fZXZhbCBpbXBvcnRzCl9pbml0ID0gYWlvaHR0cC5jb25uZWN0b3IuVENQQ29ubmVjdG9yLl9faW5pdF9fCmRlZiBwYXRjaGVkKHNlbGYsICphcmdzLCAqKmt3YXJncyk6CiAgICBpZiAnc3NsJyBub3QgaW4ga3dhcmdzOgogICAgICAgIGN0eCA9IHNzbC5jcmVhdGVfZGVmYXVsdF9jb250ZXh0KCkKICAgICAgICBjdHguY2hlY2tfaG9zdG5hbWUgPSBGYWxzZQogICAgICAgIGN0eC52ZXJpZnlfbW9kZSA9IHNzbC5DRVJUX05PTkUKICAgICAgICBrd2FyZ3NbJ3NzbCddID0gY3R4CiAgICByZXR1cm4gX2luaXQoc2VsZiwgKmFyZ3MsICoqa3dhcmdzKQphaW9odHRwLmNvbm5lY3Rvci5UQ1BDb25uZWN0b3IuX19pbml0X18gPSBwYXRjaGVkCgojIE5vdyBydW4gbG1fZXZhbApmcm9tIGxtX2V2YWwuX19tYWluX18gaW1wb3J0IGNsaV9ldmFsdWF0ZQppbXBvcnQgc3lzCnN5cy5leGl0KGNsaV9ldmFsdWF0ZSgpKQo=" | base64 -d > /tmp/lm_eval_wrapper.py
+        # Create wrapper that patches SSL at the lowest level
+        echo "IyEvdXNyL2Jpbi9lbnYgcHl0aG9uMwppbXBvcnQgc3NsCgojIFBhdGNoIFNTTCBhdCB0aGUgbG93ZXN0IGxldmVsCl9vcmlnX2NyZWF0ZV9kZWZhdWx0X2NvbnRleHQgPSBzc2wuY3JlYXRlX2RlZmF1bHRfY29udGV4dApkZWYgX25vdmVyaWZ5X2NvbnRleHQoKmFyZ3MsICoqa3dhcmdzKToKICAgIGN0eCA9IF9vcmlnX2NyZWF0ZV9kZWZhdWx0X2NvbnRleHQoKmFyZ3MsICoqa3dhcmdzKQogICAgY3R4LmNoZWNrX2hvc3RuYW1lID0gRmFsc2UKICAgIGN0eC52ZXJpZnlfbW9kZSA9IHNzbC5DRVJUX05PTkUKICAgIHJldHVybiBjdHgKc3NsLmNyZWF0ZV9kZWZhdWx0X2NvbnRleHQgPSBfbm92ZXJpZnlfY29udGV4dAoKIyBOb3cgcnVuIGxtX2V2YWwKZnJvbSBsbV9ldmFsLl9fbWFpbl9fIGltcG9ydCBjbGlfZXZhbHVhdGUKaW1wb3J0IHN5cwpzeXMuZXhpdChjbGlfZXZhbHVhdGUoKSkK" | base64 -d > /tmp/lm_eval_wrapper.py
         chmod +x /tmp/lm_eval_wrapper.py
         
         # Create output directory
         mkdir -p /tmp/eval
         
-        echo "🚀 Starting evaluation (SSL verification disabled via wrapper)..."
+        echo "🚀 Starting evaluation (SSL patched at ssl.create_default_context)..."
         echo ""
         
-        # Run via wrapper (patches aiohttp before import)
+        # Run via wrapper
         python3 /tmp/lm_eval_wrapper.py \
           --model local-completions \
           --model_args "model=mistralai/Mistral-Small-24B-Instruct-2501,base_url=${MODEL_URL}/v1/completions,num_concurrent=2,max_retries=5,timeout=600,tokenizer_backend=huggingface" \
