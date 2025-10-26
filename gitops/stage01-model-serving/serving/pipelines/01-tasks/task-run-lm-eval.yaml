@@ -127,17 +127,14 @@ spec:
         # Disable SSL verification globally (safe for demo with self-signed certs)
         - name: PYTHONHTTPSVERIFY
           value: "0"
-        - name: CURL_CA_BUNDLE
-          value: ""
         - name: REQUESTS_CA_BUNDLE
-          value: ""
+          value: "/dev/null"
+        - name: CURL_CA_BUNDLE
+          value: "/dev/null"
         - name: SSL_CERT_FILE
-          value: ""
+          value: "/dev/null"
         - name: PYTHONWARNINGS
-          value: "ignore:Unverified HTTPS request"
-        # For aiohttp
-        - name: AIOHTTP_NO_EXTENSIONS
-          value: "1"
+          value: "ignore::urllib3.exceptions.InsecureRequestWarning"
       script: |
         #!/bin/bash
         set -e
@@ -160,44 +157,20 @@ spec:
         echo "✅ Installation complete"
         echo ""
         
-        # Create a sitecustomize.py that FORCES requests to never verify SSL
-        # This must patch requests.Session.request to always use verify=False
-        echo 'import ssl, warnings' > /tmp/sitecustomize.py
-        echo 'warnings.filterwarnings("ignore")' >> /tmp/sitecustomize.py
-        echo 'ssl._create_default_https_context = ssl._create_unverified_context' >> /tmp/sitecustomize.py
-        echo 'def patch_requests():' >> /tmp/sitecustomize.py
-        echo '    try:' >> /tmp/sitecustomize.py
-        echo '        import requests' >> /tmp/sitecustomize.py
-        echo '        orig_request = requests.Session.request' >> /tmp/sitecustomize.py
-        echo '        def no_verify_request(self, *a, **k):' >> /tmp/sitecustomize.py
-        echo '            k["verify"] = False' >> /tmp/sitecustomize.py
-        echo '            return orig_request(self, *a, **k)' >> /tmp/sitecustomize.py
-        echo '        requests.Session.request = no_verify_request' >> /tmp/sitecustomize.py
-        echo '        print("requests SSL verification disabled")' >> /tmp/sitecustomize.py
-        echo '    except: pass' >> /tmp/sitecustomize.py
-        echo 'import sys' >> /tmp/sitecustomize.py
-        echo 'if "requests" in sys.modules: patch_requests()' >> /tmp/sitecustomize.py
-        echo 'else:' >> /tmp/sitecustomize.py
-        echo '    import importlib.abc, importlib.machinery' >> /tmp/sitecustomize.py
-        echo '    class RequestsPatcher(importlib.abc.MetaPathFinder):' >> /tmp/sitecustomize.py
-        echo '        def find_module(self, name, path=None):' >> /tmp/sitecustomize.py
-        echo '            if name == "requests": return self' >> /tmp/sitecustomize.py
-        echo '        def load_module(self, name):' >> /tmp/sitecustomize.py
-        echo '            import requests; patch_requests(); return requests' >> /tmp/sitecustomize.py
-        echo '    sys.meta_path.insert(0, RequestsPatcher())' >> /tmp/sitecustomize.py
-        
-        # Install sitecustomize.py
-        SITE_PACKAGES=$(python3 -c "import site; print(site.getsitepackages()[0])")
-        cp /tmp/sitecustomize.py $SITE_PACKAGES/
-        echo "✅ requests SSL bypass installed"
+        # Verify environment variables are set
+        echo "🔍 SSL Configuration:"
+        echo "  REQUESTS_CA_BUNDLE=$REQUESTS_CA_BUNDLE"
+        echo "  PYTHONHTTPSVERIFY=$PYTHONHTTPSVERIFY"
+        echo ""
         
         # Create output directory
         mkdir -p /tmp/eval
         
-        echo "🚀 Starting evaluation (SSL verification bypassed)..."
+        echo "🚀 Starting evaluation..."
         echo ""
         
-        # Use local-completions backend with SSL bypass in place
+        # Use local-completions with environment-based SSL bypass
+        # REQUESTS_CA_BUNDLE=/dev/null makes urllib3/requests skip SSL verification
         python3 -m lm_eval \
           --model local-completions \
           --model_args "model=mistralai/Mistral-Small-24B-Instruct-2501,base_url=${MODEL_URL}/v1/completions,num_concurrent=1,max_retries=3,timeout=300" \
