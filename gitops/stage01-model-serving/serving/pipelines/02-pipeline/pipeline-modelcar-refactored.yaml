@@ -17,7 +17,7 @@ spec:
   description: >-
     Refactored ModelCar pipeline with 4 separate tasks for better visibility and reusability:
     1. download-model: Downloads model from HuggingFace to workspace PVC (~12min)
-    2. build-image: Builds ModelCar container with optimizations (~5-10min)
+    2. build-image: Builds ModelCar container with optimizations (~5-10min for quantized, ~2h for full)
     3a. push-to-internal: Pushes to OpenShift registry (parallel, ~3-5min)
     3b. push-to-quay: Pushes to Quay.io (parallel, ~3-5min)
     4. register-model: Registers in Model Registry (after both pushes complete)
@@ -28,6 +28,10 @@ spec:
     - Easier debugging (clear failure points)
     - Parallel pushes (faster overall time)
     - Reusable downloads (multiple builds from same download)
+    
+    Timeout: 4h total (download 30min + build 3h + push 30min)
+
+  timeout: 4h0m0s
 
   params:
     # Model source parameters

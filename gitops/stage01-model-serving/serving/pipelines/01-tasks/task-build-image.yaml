@@ -19,6 +19,10 @@ spec:
     - Clear visibility of build phase
     - Optimized buildah performance with --layers=false and --squash
     - Reusable model downloads (build multiple times without re-download)
+    
+    Timeout: 3h to handle large models (48GB full model ~2h, 8GB quantized ~13min)
+
+  timeout: 3h0m0s
 
   params:
     - name: IMAGE
@@ -80,14 +84,14 @@ spec:
     - name: build-image
       image: registry.redhat.io/rhel9/buildah:latest
       workingDir: $(workspaces.source.path)
-      # Resource requirements for large model builds
+      # Increased resources for large model builds (48GB models)
       computeResources:
         requests:
           memory: "8Gi"
-          cpu: "2"
+          cpu: "4"
         limits:
           memory: "16Gi"
-          cpu: "4"
+          cpu: "8"
       # Use workspace subdirectory for buildah storage
       env:
         - name: BUILDAH_STORAGE_ROOT
@@ -124,16 +128,22 @@ spec:
         echo "🚀 Performance optimizations enabled:"
         echo "  --layers=false   : Skip intermediate layer commits (HUGE speedup!)"
         echo "  --squash         : Single final layer (reduces image size)"
-        echo "  --ulimit nofile  : Increased file handle limit"
+        echo "  --isolation chroot : Faster than default namespace isolation"
+        echo "  --ulimit nofile  : Increased file handle limit (8192)"
+        echo "  --jobs 4         : Parallel processing where possible"
+        echo ""
+        echo "⏱️  Timeout: 3h (Full model ~2h, Quantized ~13min)"
         echo ""
         
-        # Build the image with optimizations
+        # Build the image with ALL optimizations (A + B)
         buildah --root ${BUILDAH_STORAGE_ROOT} --storage-driver=vfs bud \
           --format=$(params.FORMAT) \
           --tls-verify=$(params.TLSVERIFY) \
           --no-cache \
           --layers=false \
           --squash \
+          --isolation chroot \
+          --jobs 4 \
           --ulimit nofile=4096:8192 \
           -f Containerfile \
           -t $(params.IMAGE) \
