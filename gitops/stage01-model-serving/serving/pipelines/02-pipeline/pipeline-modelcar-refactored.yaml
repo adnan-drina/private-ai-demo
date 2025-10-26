@@ -120,7 +120,7 @@ spec:
   tasks:
     # Task 1: Download model from HuggingFace
     - name: download-model
-      timeout: "1h"
+      timeout: "5m"  # TEST: Short timeout to verify configuration works
       taskRef:
         name: download-model-from-hf
         kind: Task
