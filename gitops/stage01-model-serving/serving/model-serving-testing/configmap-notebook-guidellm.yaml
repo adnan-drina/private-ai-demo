@@ -192,6 +192,8 @@ data:
         "        f'--rate={scenario[\"concurrent_requests\"]}',\n",
         "        '--max-seconds=120',\n",
         "        '--output-path=/tmp/guidellm_results.json',\n",
+        "        # Disable SSL verification for self-signed certificates\n",
+        "        '--backend-args={\\\"verify\\\":false}',\n",
         "    ]\n",
         "    \n",
         "    try:\n",
