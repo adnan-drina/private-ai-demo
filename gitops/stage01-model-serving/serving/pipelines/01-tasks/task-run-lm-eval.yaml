@@ -160,22 +160,36 @@ spec:
         echo "✅ Installation complete"
         echo ""
         
-        # Create a sitecustomize.py that disables SSL verification BEFORE any imports
-        # This runs automatically when Python starts - no heredoc to avoid YAML issues
-        echo 'import ssl' > /tmp/sitecustomize.py
-        echo 'import warnings' >> /tmp/sitecustomize.py
+        # Create a sitecustomize.py that FORCES requests to never verify SSL
+        # This must patch requests.Session.request to always use verify=False
+        echo 'import ssl, warnings' > /tmp/sitecustomize.py
         echo 'warnings.filterwarnings("ignore")' >> /tmp/sitecustomize.py
-        echo '_orig = ssl.create_default_context' >> /tmp/sitecustomize.py
-        echo 'def _insecure(*a, **k):' >> /tmp/sitecustomize.py
-        echo '    c = _orig(*a, **k); c.check_hostname = False; c.verify_mode = ssl.CERT_NONE; return c' >> /tmp/sitecustomize.py
-        echo 'ssl.create_default_context = _insecure' >> /tmp/sitecustomize.py
         echo 'ssl._create_default_https_context = ssl._create_unverified_context' >> /tmp/sitecustomize.py
-        echo 'print("SSL verification disabled")' >> /tmp/sitecustomize.py
+        echo 'def patch_requests():' >> /tmp/sitecustomize.py
+        echo '    try:' >> /tmp/sitecustomize.py
+        echo '        import requests' >> /tmp/sitecustomize.py
+        echo '        orig_request = requests.Session.request' >> /tmp/sitecustomize.py
+        echo '        def no_verify_request(self, *a, **k):' >> /tmp/sitecustomize.py
+        echo '            k["verify"] = False' >> /tmp/sitecustomize.py
+        echo '            return orig_request(self, *a, **k)' >> /tmp/sitecustomize.py
+        echo '        requests.Session.request = no_verify_request' >> /tmp/sitecustomize.py
+        echo '        print("requests SSL verification disabled")' >> /tmp/sitecustomize.py
+        echo '    except: pass' >> /tmp/sitecustomize.py
+        echo 'import sys' >> /tmp/sitecustomize.py
+        echo 'if "requests" in sys.modules: patch_requests()' >> /tmp/sitecustomize.py
+        echo 'else:' >> /tmp/sitecustomize.py
+        echo '    import importlib.abc, importlib.machinery' >> /tmp/sitecustomize.py
+        echo '    class RequestsPatcher(importlib.abc.MetaPathFinder):' >> /tmp/sitecustomize.py
+        echo '        def find_module(self, name, path=None):' >> /tmp/sitecustomize.py
+        echo '            if name == "requests": return self' >> /tmp/sitecustomize.py
+        echo '        def load_module(self, name):' >> /tmp/sitecustomize.py
+        echo '            import requests; patch_requests(); return requests' >> /tmp/sitecustomize.py
+        echo '    sys.meta_path.insert(0, RequestsPatcher())' >> /tmp/sitecustomize.py
         
-        # Install sitecustomize.py so Python loads it automatically
+        # Install sitecustomize.py
         SITE_PACKAGES=$(python3 -c "import site; print(site.getsitepackages()[0])")
         cp /tmp/sitecustomize.py $SITE_PACKAGES/
-        echo "✅ SSL bypass installed in $SITE_PACKAGES"
+        echo "✅ requests SSL bypass installed"
         
         # Create output directory
         mkdir -p /tmp/eval
