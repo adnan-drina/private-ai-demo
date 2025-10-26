@@ -146,16 +146,34 @@ spec:
         echo "✅ Installation complete"
         echo ""
         
-        # Install sitecustomize.py (model-car-importer pattern)  
+        # Install sitecustomize.py with COMPLETE SSL bypass (requests.Session.request patch)
         SITE_PACKAGES=$(python3 -c "import site; print(site.getsitepackages()[0])")
         echo 'import ssl, warnings' > $SITE_PACKAGES/sitecustomize.py
         echo 'warnings.filterwarnings("ignore")' >> $SITE_PACKAGES/sitecustomize.py
-        echo '_orig = ssl.create_default_context' >> $SITE_PACKAGES/sitecustomize.py
-        echo 'def _insecure(*a, **k):' >> $SITE_PACKAGES/sitecustomize.py
-        echo '    c = _orig(*a, **k); c.check_hostname = False; c.verify_mode = ssl.CERT_NONE; return c' >> $SITE_PACKAGES/sitecustomize.py
-        echo 'ssl.create_default_context = _insecure' >> $SITE_PACKAGES/sitecustomize.py
+        echo '' >> $SITE_PACKAGES/sitecustomize.py
+        echo '# 1. Kill SSL verification at the socket layer' >> $SITE_PACKAGES/sitecustomize.py
         echo 'ssl._create_default_https_context = ssl._create_unverified_context' >> $SITE_PACKAGES/sitecustomize.py
-        echo "✅ sitecustomize.py installed"
+        echo 'def _insecure_ctx(*args, **kwargs):' >> $SITE_PACKAGES/sitecustomize.py
+        echo '    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)' >> $SITE_PACKAGES/sitecustomize.py
+        echo '    ctx.check_hostname = False' >> $SITE_PACKAGES/sitecustomize.py
+        echo '    ctx.verify_mode = ssl.CERT_NONE' >> $SITE_PACKAGES/sitecustomize.py
+        echo '    return ctx' >> $SITE_PACKAGES/sitecustomize.py
+        echo 'ssl.create_default_context = _insecure_ctx' >> $SITE_PACKAGES/sitecustomize.py
+        echo '' >> $SITE_PACKAGES/sitecustomize.py
+        echo '# 2. Silence urllib3 insecure warnings' >> $SITE_PACKAGES/sitecustomize.py
+        echo 'import urllib3' >> $SITE_PACKAGES/sitecustomize.py
+        echo 'urllib3.disable_warnings()' >> $SITE_PACKAGES/sitecustomize.py
+        echo '' >> $SITE_PACKAGES/sitecustomize.py
+        echo '# 3. Force requests to ALWAYS send verify=False (THE FIX!)' >> $SITE_PACKAGES/sitecustomize.py
+        echo 'import requests' >> $SITE_PACKAGES/sitecustomize.py
+        echo '_orig_request = requests.Session.request' >> $SITE_PACKAGES/sitecustomize.py
+        echo 'def _insecure_request(self, *args, **kwargs):' >> $SITE_PACKAGES/sitecustomize.py
+        echo '    kwargs["verify"] = False' >> $SITE_PACKAGES/sitecustomize.py
+        echo '    return _orig_request(self, *args, **kwargs)' >> $SITE_PACKAGES/sitecustomize.py
+        echo 'requests.Session.request = _insecure_request' >> $SITE_PACKAGES/sitecustomize.py
+        echo '' >> $SITE_PACKAGES/sitecustomize.py
+        echo 'print("🔥 SSL verification disabled: ALL requests use verify=False")' >> $SITE_PACKAGES/sitecustomize.py
+        echo "✅ Complete SSL bypass installed"
         
         # Create output directory
         mkdir -p /tmp/eval
