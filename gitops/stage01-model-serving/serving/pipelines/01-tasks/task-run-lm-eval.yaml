@@ -139,9 +139,9 @@ spec:
         echo "════════════════════════════════════════════════════════════"
         echo ""
         
-        # Install lm-eval
+        # Install lm-eval with API dependencies
         echo "📦 Installing lm-evaluation-harness..."
-        pip install --quiet --no-cache-dir lm-eval openai
+        pip install --quiet --no-cache-dir "lm-eval[api]"
         
         echo "✅ Installation complete"
         echo ""
