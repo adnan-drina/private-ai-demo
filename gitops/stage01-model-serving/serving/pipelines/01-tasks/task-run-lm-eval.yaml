@@ -115,19 +115,23 @@ spec:
 
     - name: run-evaluation
       image: registry.access.redhat.com/ubi9/python-311:latest
-      workingDir: /workspace/results
       env:
         - name: HOME
           value: /tmp
         - name: HF_HOME
           value: /tmp/.cache/huggingface
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: huggingface-token
+              key: token
       script: |
         #!/bin/bash
         set -e
         
         MODEL_URL=$(cat /workspace/results/model_url.txt)
         
-        echo "🧪 Running LM-Eval (Standard Harness)"
+        echo "🧪 Running LM-Eval"
         echo "════════════════════════════════════════════════════════════"
         echo "Model URL: https://${MODEL_URL}"
         echo "Model Name: $(params.model_name)"
@@ -138,7 +142,7 @@ spec:
         
         # Install lm-eval
         echo "📦 Installing lm-evaluation-harness..."
-        pip install --quiet lm-eval openai
+        pip install --quiet --no-cache-dir lm-eval openai
         
         echo "✅ Installation complete"
         echo ""
@@ -147,13 +151,12 @@ spec:
         mkdir -p /workspace/results/eval
         
         echo "🚀 Starting evaluation..."
-        echo "════════════════════════════════════════════════════════════"
         echo ""
         
-        # Run lm-eval using local-completions model (for vLLM)
+        # Run lm-eval using local-completions model (for vLLM OpenAI-compatible endpoint)
         lm_eval \
           --model local-completions \
-          --model_args "model=$(params.model_name),base_url=https://${MODEL_URL}/v1/completions,num_concurrent=2,max_retries=5" \
+          --model_args "model=$(params.model_name),base_url=https://${MODEL_URL}/v1/completions,num_concurrent=2,max_retries=5,timeout=600" \
           --tasks $(params.tasks) \
           --limit $(params.limit) \
           --output_path /workspace/results/eval \
@@ -167,37 +170,25 @@ spec:
         
         # Check for results
         if [ -f "/workspace/results/eval/results.json" ]; then
-          echo "✅ Results saved to: /workspace/results/eval/results.json"
+          echo "✅ Results file found"
           echo ""
           
-          # Extract summary
+          # Extract and display summary
           echo "📊 Results Summary:"
           echo "────────────────────────────────────────────────────────────"
-          python3 -c "
-import json
-with open('/workspace/results/eval/results.json', 'r') as f:
-    data = json.load(f)
-    for task, metrics in data.get('results', {}).items():
-        acc = metrics.get('acc', metrics.get('exact_match', 'N/A'))
-        print(f'{task}: {acc}')
-"
-          echo "────────────────────────────────────────────────────────────"
           
-          # Save summary for results
-          SUMMARY=$(python3 -c "
-import json
-with open('/workspace/results/eval/results.json', 'r') as f:
-    data = json.load(f)
-    parts = []
-    for task, metrics in data.get('results', {}).items():
-        acc = metrics.get('acc', metrics.get('exact_match', 'N/A'))
-        parts.append(f'{task}={acc}')
-    print(';'.join(parts))
-")
-          echo -n "$SUMMARY" > $(results.ACCURACY_SUMMARY.path)
+          # Install jq for JSON processing
+          pip install --quiet jq
           
+          # Display results
+          cat /workspace/results/eval/results.json | python3 -m json.tool | grep -A 5 '"results"'
+          
+          # Save task results
           echo -n "succeeded" > $(results.EVAL_STATUS.path)
           echo -n "/workspace/results/eval/results.json" > $(results.RESULTS_FILE.path)
+          echo -n "Evaluation completed" > $(results.ACCURACY_SUMMARY.path)
+          
+          echo "────────────────────────────────────────────────────────────"
         else
           echo "❌ ERROR: Results file not found!"
           echo -n "failed" > $(results.EVAL_STATUS.path)
