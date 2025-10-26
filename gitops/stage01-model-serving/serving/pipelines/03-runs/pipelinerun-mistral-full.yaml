@@ -12,7 +12,8 @@ metadata:
     argocd.argoproj.io/hook: Skip
     description: "Pipeline run for Mistral 24B Full Precision model"
 spec:
-  serviceAccountName: model-pipeline-sa
+  taskRunTemplate:
+    serviceAccountName: model-pipeline-sa
   pipelineRef:
     name: modelcar-build-deploy-v2
   

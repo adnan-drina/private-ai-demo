@@ -12,7 +12,8 @@ metadata:
     argocd.argoproj.io/hook: Skip
     description: "Test pipeline for Mistral 24B Quantized model (already deployed)"
 spec:
-  serviceAccountName: model-pipeline-sa
+  taskRunTemplate:
+    serviceAccountName: model-pipeline-sa
   pipelineRef:
     name: model-testing
   
