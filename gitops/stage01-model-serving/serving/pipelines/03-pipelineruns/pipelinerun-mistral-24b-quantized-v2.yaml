@@ -73,6 +73,6 @@ spec:
         secretName: quay-credentials
   
   timeouts:
-    pipeline: "1h30m"
-    tasks: "1h"
+    pipeline: "3h"      # Extended for potential slow downloads
+    tasks: "1h30m"      # Quantized model is smaller but allow buffer
 

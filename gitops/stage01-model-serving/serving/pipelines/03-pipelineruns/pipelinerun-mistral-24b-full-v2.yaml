@@ -73,6 +73,6 @@ spec:
         secretName: quay-credentials
   
   timeouts:
-    pipeline: "2h"
-    tasks: "1h30m"
+    pipeline: "4h"      # Extended for slow downloads
+    tasks: "2h"         # Each task gets 2h (download can take 1h+)
 
