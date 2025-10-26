@@ -49,9 +49,11 @@ data:
        "outputs": [],
        "source": [
         "# Install dependencies\n",
-        "# Use specific compatible versions to avoid conflicts\n",
+        "# Base image has codeflare-sdk 0.30.0 which requires pydantic<2\n",
+        "# But guidellm>=0.3.x requires pydantic>=2\n",
+        "# Solution: Use older guidellm version compatible with pydantic v1\n",
         "!pip install -q --upgrade pip\n",
-        "!pip install -q 'guidellm>=0.3.1' pandas matplotlib tabulate"
+        "!pip install -q 'guidellm<0.3' 'pydantic<2' pandas matplotlib tabulate"
        ]
       },
       {
