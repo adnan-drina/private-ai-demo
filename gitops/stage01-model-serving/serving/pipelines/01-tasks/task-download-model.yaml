@@ -96,11 +96,14 @@ spec:
         # Create target directory
         mkdir -p "$(params.target_path)"
         
-        # Download model using huggingface-cli (simpler than Python script)
+        # Download model using huggingface-cli with optimizations
         huggingface-cli download \
           "$(params.hf_repo)" \
           --revision "$(params.hf_revision)" \
           --local-dir "$(params.target_path)" \
+          --local-dir-use-symlinks false \
+          --resume-download \
+          --max-workers 20 \
           --include "*.safetensors" "*.bin" "*.json" "*.txt" "*.model" "*.py" "tokenizer*" "config*" "generation*" "special_tokens*"
         
         # Calculate download time
