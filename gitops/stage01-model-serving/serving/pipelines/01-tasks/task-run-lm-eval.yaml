@@ -146,17 +146,25 @@ spec:
         echo "✅ Installation complete"
         echo ""
         
-        # Create wrapper script using base64 to avoid YAML issues
-        echo "aW1wb3J0IHNzbCwgd2FybmluZ3MsIHN5cwp3YXJuaW5ncy5maWx0ZXJ3YXJuaW5ncygnaWdub3JlJykKaW1wb3J0IHVybGxpYjMKdXJsbGliMy5kaXNhYmxlX3dhcm5pbmdzKHVybGxpYjMuZXhjZXB0aW9ucy5JbnNlY3VyZVJlcXVlc3RXYXJuaW5nKQpmcm9tIHVybGxpYjMuY29ubmVjdGlvbnBvb2wgaW1wb3J0IEhUVFBTQ29ubmVjdGlvblBvb2wKb3JpZ2luYWxfaW5pdCA9IEhUVFBTQ29ubmVjdGlvblBvb2wuX19pbml0X18KZGVmIHBhdGNoZWRfaW5pdChzZWxmLCAqYXJncywgKiprd2FyZ3MpOgogICAga3dhcmdzWydjZXJ0X3JlcXMnXSA9IHNzbC5DRVJUX05PTkUKICAgIGt3YXJnc1snYXNzZXJ0X2hvc3RuYW1lJ10gPSBGYWxzZQogICAgcmV0dXJuIG9yaWdpbmFsX2luaXQoc2VsZiwgKmFyZ3MsICoqa3dhcmdzKQpIVFRQU0Nvbm5lY3Rpb25Qb29sLl9faW5pdF9fID0gcGF0Y2hlZF9pbml0CnByaW50KCLwn5STIFNTTCB2ZXJpZmljYXRpb24gZGlzYWJsZWQiKQpmcm9tIGxtX2V2YWwuX19tYWluX18gaW1wb3J0IGNsaV9ldmFsdWF0ZQpzeXMuZXhpdChjbGlfZXZhbHVhdGUoKSkK" | base64 -d > /tmp/run_lm_eval.py
+        # Install sitecustomize.py (model-car-importer pattern)  
+        SITE_PACKAGES=$(python3 -c "import site; print(site.getsitepackages()[0])")
+        echo 'import ssl, warnings' > $SITE_PACKAGES/sitecustomize.py
+        echo 'warnings.filterwarnings("ignore")' >> $SITE_PACKAGES/sitecustomize.py
+        echo '_orig = ssl.create_default_context' >> $SITE_PACKAGES/sitecustomize.py
+        echo 'def _insecure(*a, **k):' >> $SITE_PACKAGES/sitecustomize.py
+        echo '    c = _orig(*a, **k); c.check_hostname = False; c.verify_mode = ssl.CERT_NONE; return c' >> $SITE_PACKAGES/sitecustomize.py
+        echo 'ssl.create_default_context = _insecure' >> $SITE_PACKAGES/sitecustomize.py
+        echo 'ssl._create_default_https_context = ssl._create_unverified_context' >> $SITE_PACKAGES/sitecustomize.py
+        echo "✅ sitecustomize.py installed"
         
         # Create output directory
         mkdir -p /tmp/eval
         
-        echo "🚀 Starting evaluation with SSL patch..."
+        echo "🚀 Starting evaluation..."
         echo ""
         
-        # Run via wrapper that patches urllib3 before lm-eval loads
-        python3 /tmp/run_lm_eval.py \
+        # Run lm-eval (sitecustomize.py loads automatically)
+        python3 -m lm_eval \
           --model local-completions \
           --model_args "model=mistralai/Mistral-Small-24B-Instruct-2501,base_url=${MODEL_URL}/v1/completions,num_concurrent=1,max_retries=3,timeout=300" \
           --tasks $(params.tasks) \
