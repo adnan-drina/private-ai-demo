@@ -101,7 +101,7 @@ spec:
           "$(params.hf_repo)" \
           --revision "$(params.hf_revision)" \
           --local-dir "$(params.target_path)" \
-          --local-dir-use-symlinks false \
+          --local-dir-use-symlinks False \
           --resume-download \
           --max-workers 20 \
           --include "*.safetensors" "*.bin" "*.json" "*.txt" "*.model" "*.py" "tokenizer*" "config*" "generation*" "special_tokens*"
