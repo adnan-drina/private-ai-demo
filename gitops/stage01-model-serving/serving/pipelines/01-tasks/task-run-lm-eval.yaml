@@ -124,6 +124,10 @@ spec:
             secretKeyRef:
               name: huggingface-token
               key: HF_TOKEN
+        - name: PYTHONHTTPSVERIFY
+          value: "0"
+        - name: PYTHONWARNINGS
+          value: ignore:Unverified HTTPS request
       script: |
         #!/bin/bash
         set -e
@@ -146,14 +150,13 @@ spec:
         echo "✅ Installation complete"
         echo ""
         
-        # Create output directory (in /tmp to avoid permission issues)
+        # Create output directory
         mkdir -p /tmp/eval
         
-        echo "🚀 Starting evaluation..."
+        echo "🚀 Starting evaluation (SSL verification disabled for self-signed certs)..."
         echo ""
         
-        # Run lm-eval using local-completions model (for vLLM OpenAI-compatible endpoint)
-        # Note: Using mistralai/Mistral-Small-24B-Instruct-2501 for tokenizer reference
+        # Run lm-eval - SSL verification disabled via env vars
         lm_eval \
           --model local-completions \
           --model_args "model=mistralai/Mistral-Small-24B-Instruct-2501,base_url=${MODEL_URL}/v1/completions,num_concurrent=2,max_retries=5,timeout=600,tokenizer_backend=huggingface" \
