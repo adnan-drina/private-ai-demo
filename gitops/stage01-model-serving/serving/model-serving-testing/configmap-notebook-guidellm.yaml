@@ -58,7 +58,7 @@ data:
         "# Install guidellm without dependencies\n",
         "!pip install -q --no-deps 'guidellm==0.2.1'\n",
         "# Manually install guidellm dependencies (will upgrade pydantic to v2, breaking codeflare-sdk)\n",
-        "!pip install -q 'pydantic>=2.0.0' 'pydantic-settings>=2.0.0' 'loguru' 'datasets' 'ftfy>=6.0.0' 'transformers' 'pandas' 'matplotlib' 'tabulate' 'httpx' 'click' 'rich' 'openai' 'numpy' 'tqdm'"
+        "!pip install -q 'pydantic>=2.0.0' 'pydantic-settings>=2.0.0' 'loguru' 'datasets' 'ftfy>=6.0.0' 'transformers' 'pandas' 'matplotlib' 'tabulate' 'httpx[http2]' 'click' 'rich' 'openai' 'numpy' 'tqdm'"
        ]
       },
       {
