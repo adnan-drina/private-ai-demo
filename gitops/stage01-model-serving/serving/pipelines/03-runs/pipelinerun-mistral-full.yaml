@@ -64,10 +64,10 @@ spec:
           storageClassName: gp3-csi
     - name: registry-auth
       secret:
-        secretName: registry-auth
+        secretName: internal-registry-private-ai
     - name: quay-auth
       secret:
-        secretName: quay-auth
+        secretName: quay-credentials
   
   timeouts:
     pipeline: "4h"      # Total pipeline timeout
