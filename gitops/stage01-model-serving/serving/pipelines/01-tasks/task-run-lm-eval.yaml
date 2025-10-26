@@ -124,10 +124,20 @@ spec:
             secretKeyRef:
               name: huggingface-token
               key: HF_TOKEN
+        # Disable SSL verification globally (safe for demo with self-signed certs)
         - name: PYTHONHTTPSVERIFY
           value: "0"
+        - name: CURL_CA_BUNDLE
+          value: ""
+        - name: REQUESTS_CA_BUNDLE
+          value: ""
+        - name: SSL_CERT_FILE
+          value: ""
         - name: PYTHONWARNINGS
-          value: ignore:Unverified HTTPS request
+          value: "ignore:Unverified HTTPS request"
+        # For aiohttp
+        - name: AIOHTTP_NO_EXTENSIONS
+          value: "1"
       script: |
         #!/bin/bash
         set -e
@@ -143,24 +153,40 @@ spec:
         echo "════════════════════════════════════════════════════════════"
         echo ""
         
-        # Install lm-eval with vllm backend
-        echo "📦 Installing lm-evaluation-harness with vllm backend..."
-        pip install --quiet --no-cache-dir "lm-eval[vllm]"
+        # Install lm-eval with API dependencies (back to original)
+        echo "📦 Installing lm-evaluation-harness..."
+        pip install --quiet --no-cache-dir "lm-eval[api]" urllib3
         
         echo "✅ Installation complete"
         echo ""
         
+        # Create a sitecustomize.py that disables SSL verification BEFORE any imports
+        # This runs automatically when Python starts - no heredoc to avoid YAML issues
+        echo 'import ssl' > /tmp/sitecustomize.py
+        echo 'import warnings' >> /tmp/sitecustomize.py
+        echo 'warnings.filterwarnings("ignore")' >> /tmp/sitecustomize.py
+        echo '_orig = ssl.create_default_context' >> /tmp/sitecustomize.py
+        echo 'def _insecure(*a, **k):' >> /tmp/sitecustomize.py
+        echo '    c = _orig(*a, **k); c.check_hostname = False; c.verify_mode = ssl.CERT_NONE; return c' >> /tmp/sitecustomize.py
+        echo 'ssl.create_default_context = _insecure' >> /tmp/sitecustomize.py
+        echo 'ssl._create_default_https_context = ssl._create_unverified_context' >> /tmp/sitecustomize.py
+        echo 'print("SSL verification disabled")' >> /tmp/sitecustomize.py
+        
+        # Install sitecustomize.py so Python loads it automatically
+        SITE_PACKAGES=$(python3 -c "import site; print(site.getsitepackages()[0])")
+        cp /tmp/sitecustomize.py $SITE_PACKAGES/
+        echo "✅ SSL bypass installed in $SITE_PACKAGES"
+        
         # Create output directory
         mkdir -p /tmp/eval
         
-        echo "🚀 Starting evaluation (using vllm backend)..."
+        echo "🚀 Starting evaluation (SSL verification bypassed)..."
         echo ""
         
-        # Use vllm backend which connects directly to vLLM server
-        # This avoids SSL issues with generic HTTP clients
+        # Use local-completions backend with SSL bypass in place
         python3 -m lm_eval \
-          --model vllm \
-          --model_args "base_url=${MODEL_URL},tokenizer=mistralai/Mistral-Small-24B-Instruct-2501" \
+          --model local-completions \
+          --model_args "model=mistralai/Mistral-Small-24B-Instruct-2501,base_url=${MODEL_URL}/v1/completions,num_concurrent=1,max_retries=3,timeout=300" \
           --tasks $(params.tasks) \
           --limit $(params.limit) \
           --output_path /tmp/eval \
