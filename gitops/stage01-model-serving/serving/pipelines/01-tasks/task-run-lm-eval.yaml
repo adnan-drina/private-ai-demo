@@ -124,17 +124,6 @@ spec:
             secretKeyRef:
               name: huggingface-token
               key: HF_TOKEN
-        # Disable SSL verification globally (safe for demo with self-signed certs)
-        - name: PYTHONHTTPSVERIFY
-          value: "0"
-        - name: REQUESTS_CA_BUNDLE
-          value: "/dev/null"
-        - name: CURL_CA_BUNDLE
-          value: "/dev/null"
-        - name: SSL_CERT_FILE
-          value: "/dev/null"
-        - name: PYTHONWARNINGS
-          value: "ignore::urllib3.exceptions.InsecureRequestWarning"
       script: |
         #!/bin/bash
         set -e
@@ -150,17 +139,21 @@ spec:
         echo "════════════════════════════════════════════════════════════"
         echo ""
         
-        # Install lm-eval with API dependencies (back to original)
+        # Install lm-eval with API dependencies
         echo "📦 Installing lm-evaluation-harness..."
-        pip install --quiet --no-cache-dir "lm-eval[api]" urllib3
+        pip install --quiet --no-cache-dir "lm-eval[api]"
         
         echo "✅ Installation complete"
         echo ""
         
-        # Verify environment variables are set
-        echo "🔍 SSL Configuration:"
-        echo "  REQUESTS_CA_BUNDLE=$REQUESTS_CA_BUNDLE"
-        echo "  PYTHONHTTPSVERIFY=$PYTHONHTTPSVERIFY"
+        # NOW set SSL bypass env vars (after pip install completes)
+        export PYTHONHTTPSVERIFY=0
+        export REQUESTS_CA_BUNDLE=""
+        export CURL_CA_BUNDLE=""
+        export SSL_CERT_FILE=""
+        export PYTHONWARNINGS="ignore"
+        
+        echo "🔓 SSL verification disabled for lm-eval"
         echo ""
         
         # Create output directory
