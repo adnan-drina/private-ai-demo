@@ -93,6 +93,9 @@ spec:
         echo "📦 Installing dependencies..."
         pip install --quiet --no-cache-dir huggingface-hub
         
+        # Add user bin to PATH for huggingface-cli
+        export PATH=$PATH:$HOME/.local/bin
+        
         # Create target directory
         mkdir -p "$(params.target_path)"
         
