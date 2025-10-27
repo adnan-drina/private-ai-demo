@@ -83,6 +83,49 @@ spec:
         echo "Dest:   $QUAY_IMAGE"
         echo "════════════════════════════════════════════════════════════"
         
+        # Wait for OCI archive to be accessible (handles fsGroup permission race condition)
+        echo "⏳ Waiting for OCI archive to be accessible..."
+        OCI_PATH="$(workspaces.source.path)/oci/image.tar"
+        RETRY_COUNT=0
+        MAX_RETRIES=30
+        
+        while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+          if [ -f "$OCI_PATH" ] && [ -r "$OCI_PATH" ]; then
+            echo "✅ OCI archive is accessible (attempt $((RETRY_COUNT + 1)))"
+            break
+          fi
+          RETRY_COUNT=$((RETRY_COUNT + 1))
+          if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+            echo "❌ ERROR: OCI archive not accessible after $MAX_RETRIES attempts"
+            ls -lh "$OCI_PATH" 2>&1 || echo "File does not exist"
+            exit 1
+          fi
+          echo "   Attempt $RETRY_COUNT/$MAX_RETRIES - waiting 2s for fsGroup permissions..."
+          sleep 2
+        done
+        echo ""
+        
+        # Debug: Security context and file access
+        echo "════════════════════════════════════════════════════════════"
+        echo "🔍 DEBUG: Security Context & File Access"
+        echo "════════════════════════════════════════════════════════════"
+        echo "Current user:"
+        id
+        echo ""
+        echo "Workspace listing:"
+        ls -la $(workspaces.source.path)/oci/ || echo "⚠️  ls failed: $?"
+        echo ""
+        echo "File stat:"
+        stat $(workspaces.source.path)/oci/image.tar || echo "⚠️  stat failed: $?"
+        echo ""
+        echo "Verify OCI archive integrity:"
+        skopeo inspect oci-archive:$(workspaces.source.path)/oci/image.tar 2>&1 | head -20 || echo "⚠️  skopeo inspect failed: $?"
+        echo ""
+        echo "PVC mount info:"
+        mount | grep workspace || true
+        echo "════════════════════════════════════════════════════════════"
+        echo ""
+        
         # Copy from OCI archive (on PVC) to Quay - NO ephemeral storage needed!
         echo "🚀 Copying from OCI archive to Quay..."
         if [ -f "/workspace/quay-auth/.dockerconfigjson" ]; then

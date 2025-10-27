@@ -178,6 +178,12 @@ spec:
         echo "✅ OCI archive created: $(workspaces.source.path)/oci/image.tar"
         ls -lh $(workspaces.source.path)/oci/image.tar
         
+        # Force filesystem sync (belt-and-braces for network storage)
+        echo "💾 Syncing to storage..."
+        sync
+        
+        echo "✅ OCI archive export complete (validation will occur in push tasks)"
+        
         # Save results
         cat /tmp/image-digest | tee $(results.IMAGE_DIGEST.path)
         echo -n "$(params.IMAGE)" | tee $(results.IMAGE_URL.path)

@@ -171,10 +171,10 @@ spec:
         - name: registry-auth
           workspace: registry-auth
     
-    # Task 3b: Push to Quay.io (parallel with push-to-internal)
+    # Task 3b: Push to Quay.io (AFTER push-to-internal for deterministic sequence)
     - name: push-to-quay
       timeout: "30m"
-      runAfter: ["build-image"]
+      runAfter: ["push-to-internal"]
       taskRef:
         name: push-to-quay
         kind: Task
