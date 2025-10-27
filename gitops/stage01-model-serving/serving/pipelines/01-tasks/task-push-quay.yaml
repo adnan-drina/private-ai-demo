@@ -59,20 +59,15 @@ spec:
 
   steps:
     - name: push-to-quay
-      image: registry.redhat.io/rhel9/buildah:latest
-      workingDir: $(workspaces.source.path)
+      image: quay.io/skopeo/stable:latest
+      workingDir: /tmp
       computeResources:
         requests:
+          memory: "2Gi"
+          cpu: "500m"
+        limits:
           memory: "4Gi"
           cpu: "1"
-        limits:
-          memory: "8Gi"
-          cpu: "2"
-      env:
-        - name: BUILDAH_STORAGE_ROOT
-          value: $(workspaces.source.path)/.buildah-storage
-        - name: STORAGE_DRIVER
-          value: vfs
       script: |
         #!/bin/bash
         set -e
@@ -88,31 +83,38 @@ spec:
         echo "Dest:   $QUAY_IMAGE"
         echo "════════════════════════════════════════════════════════════"
         
-        # Tag the image for Quay
-        echo "🏷️  Tagging image for Quay..."
-        buildah --root ${BUILDAH_STORAGE_ROOT} --storage-driver=vfs tag \
-          $(params.SOURCE_IMAGE) \
-          $QUAY_IMAGE
+        # Get ServiceAccount token for internal registry authentication
+        TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
         
-        # Authenticate and push using Quay secret
+        # Copy image from internal registry to Quay using skopeo
+        echo "🚀 Copying image to Quay..."
         if [ -f "/workspace/quay-auth/.dockerconfigjson" ]; then
           echo "🔐 Using Quay auth secret"
-          export REGISTRY_AUTH_FILE=/workspace/quay-auth/.dockerconfigjson
           
-          buildah --root ${BUILDAH_STORAGE_ROOT} --storage-driver=vfs push \
-            --authfile ${REGISTRY_AUTH_FILE} \
-            --tls-verify=$(params.TLSVERIFY) \
-            --digestfile /tmp/image-digest \
-            $QUAY_IMAGE \
+          skopeo copy \
+            --src-creds="serviceaccount:${TOKEN}" \
+            --src-tls-verify=false \
+            --dest-authfile /workspace/quay-auth/.dockerconfigjson \
+            --dest-tls-verify=$(params.TLSVERIFY) \
+            --format v2s2 \
+            docker://$(params.SOURCE_IMAGE) \
             docker://$QUAY_IMAGE
         else
           echo "⚠️  No Quay auth secret - push may fail"
-          buildah --root ${BUILDAH_STORAGE_ROOT} --storage-driver=vfs push \
-            --tls-verify=$(params.TLSVERIFY) \
-            --digestfile /tmp/image-digest \
-            $QUAY_IMAGE \
+          skopeo copy \
+            --src-creds="serviceaccount:${TOKEN}" \
+            --src-tls-verify=false \
+            --dest-tls-verify=$(params.TLSVERIFY) \
+            --format v2s2 \
+            docker://$(params.SOURCE_IMAGE) \
             docker://$QUAY_IMAGE
         fi
+        
+        # Get image digest
+        echo "📋 Getting image digest..."
+        INSPECT_OUTPUT=$(skopeo inspect --tls-verify=$(params.TLSVERIFY) docker://$QUAY_IMAGE)
+        # Extract digest without jq (grep and sed)
+        DIGEST=$(echo "$INSPECT_OUTPUT" | grep -o '"Digest":"sha256:[^"]*"' | head -1 | sed 's/"Digest":"//;s/"//')
         
         END_TIME=$(date +%s)
         PUSH_TIME=$((END_TIME - START_TIME))
@@ -122,13 +124,13 @@ spec:
         echo "✅ Push to Quay.io Complete!"
         echo "════════════════════════════════════════════════════════════"
         echo "Image:  $QUAY_IMAGE"
-        echo "Digest: $(cat /tmp/image-digest)"
+        echo "Digest: $DIGEST"
         echo "Time:   ${PUSH_TIME}s"
         echo "════════════════════════════════════════════════════════════"
         
         # Save results
         echo -n "$QUAY_IMAGE" | tee $(results.IMAGE_URL.path)
-        cat /tmp/image-digest | tee $(results.IMAGE_DIGEST.path)
+        echo -n "$DIGEST" | tee $(results.IMAGE_DIGEST.path)
         echo -n "$PUSH_TIME" > $(results.PUSH_TIME.path)
       
       securityContext:

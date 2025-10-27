@@ -44,11 +44,17 @@ spec:
     # Model Registry metadata
     - name: model_name
       type: string
-      description: Registered model name in Model Registry
+      description: Registered model name in Model Registry (e.g., "Mistral-Small-24B-Instruct")
     
     - name: version_name
       type: string
-      description: Model version identifier
+      description: Model version identifier in Model Registry (e.g., "quantized-w4a16-1gpu")
+    
+    # vLLM model identification (separate from Model Registry name)
+    - name: vllm_model_name
+      type: string
+      description: vLLM model name as known by the InferenceService (e.g., "mistral-24b-quantized"). Used by guidellm and lm-eval. Usually matches inference_service_name.
+      default: ""
     
     # Evaluation parameters
     - name: eval_tasks
@@ -108,7 +114,7 @@ spec:
         - name: namespace
           value: $(params.namespace)
         - name: model_name
-          value: $(params.model_name)
+          value: $(params.vllm_model_name)  # Use explicit vLLM model name (Option C)
         - name: tasks
           value: $(params.eval_tasks)
         - name: limit
@@ -131,7 +137,7 @@ spec:
         - name: namespace
           value: $(params.namespace)
         - name: model_name
-          value: $(params.model_name)
+          value: $(params.vllm_model_name)  # Use explicit vLLM model name (Option C)
         - name: tokenizer_name
           value: $(params.tokenizer_name)
         - name: request_count

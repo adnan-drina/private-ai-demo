@@ -10,8 +10,8 @@ metadata:
     app.kubernetes.io/name: mistral-24b-quantized
     app.openshift.io/runtime: python
     opendatahub.io/dashboard: "true"
-    modelregistry.opendatahub.io/registered-model-id: "4"
-    modelregistry.opendatahub.io/model-version-id: "9"
+    modelregistry.opendatahub.io/registered-model-id: "4"  # Mistral-Small-24B-Instruct
+    modelregistry.opendatahub.io/model-version-id: "5"    # quantized-w4a16-2501 (matches deployed image)
     modelregistry.opendatahub.io/name: private-ai-model-registry
     modelregistry.opendatahub.io/inference-service-id: "11"
   annotations:

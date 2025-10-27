@@ -38,11 +38,11 @@ spec:
     - name: quay_tag
       value: "mistral-24b-quantized-w4a16-2501"
     
-    # Model Registry
+    # Model Registry (MUST match across all versions!)
     - name: model_name
-      value: "Mistral-24B-Instruct"
+      value: "Mistral-Small-24B-Instruct"  # Canonical model name (matches HuggingFace)
     - name: version_name
-      value: "24b-w4a16-1gpu"
+      value: "quantized-w4a16-1gpu"        # Version naming: {variant}-{quant}-{gpu}
     - name: version_description
       value: "Mistral 24B quantized (W4A16) - 1x NVIDIA GPU required, optimized for efficiency"
     - name: base_model

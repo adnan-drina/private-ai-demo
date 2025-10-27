@@ -38,11 +38,11 @@ spec:
     - name: quay_tag
       value: "mistral-24b-full-fp-2501"
     
-    # Model Registry
+    # Model Registry (MUST match across all versions!)
     - name: model_name
-      value: "Mistral-24B-Instruct"
+      value: "Mistral-Small-24B-Instruct"  # Canonical model name (matches HuggingFace)
     - name: version_name
-      value: "24b-fp16-4gpu"
+      value: "full-fp16-4gpu"              # Version naming: {variant}-{quant}-{gpu}
     - name: version_description
       value: "Mistral 24B full precision (FP16) - 4x NVIDIA GPU required for optimal performance"
     - name: base_model

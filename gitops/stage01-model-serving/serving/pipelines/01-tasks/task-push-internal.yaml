@@ -14,13 +14,14 @@ metadata:
     tekton.dev/displayName: "Push to OpenShift Internal Registry"
 spec:
   description: >-
-    Pushes a built ModelCar image to OpenShift internal registry.
-    This is Task 3a of 4 in the ModelCar pipeline (runs in parallel with push-to-quay).
+    Verifies ModelCar image exists in OpenShift internal registry.
+    Image was already pushed during build task to avoid SA token expiration on long builds.
+    This task runs in parallel with push-to-quay to provide consistent timing metrics.
     
   params:
     - name: IMAGE
       type: string
-      description: Image reference to push (e.g., image-registry.openshift-image-registry.svc:5000/namespace/name:tag)
+      description: Image reference to verify (e.g., image-registry.openshift-image-registry.svc:5000/namespace/name:tag)
     
     - name: TLSVERIFY
       type: string
@@ -29,34 +30,29 @@ spec:
 
   workspaces:
     - name: source
-      description: Workspace containing buildah storage
+      description: Workspace (not used, kept for pipeline compatibility)
     - name: registry-auth
       description: Docker registry authentication secret
       optional: true
 
   results:
     - name: IMAGE_DIGEST
-      description: Digest of the pushed image
+      description: Digest of the image in registry
     
     - name: PUSH_TIME
-      description: Time taken to push in seconds
+      description: Time taken to verify (kept for compatibility)
 
   steps:
-    - name: push-image
-      image: registry.redhat.io/rhel9/buildah:latest
-      workingDir: $(workspaces.source.path)
+    - name: verify-image
+      image: quay.io/skopeo/stable:latest
+      workingDir: /tmp
       computeResources:
         requests:
-          memory: "4Gi"
-          cpu: "1"
+          memory: "512Mi"
+          cpu: "250m"
         limits:
-          memory: "8Gi"
-          cpu: "2"
-      env:
-        - name: BUILDAH_STORAGE_ROOT
-          value: $(workspaces.source.path)/.buildah-storage
-        - name: STORAGE_DRIVER
-          value: vfs
+          memory: "1Gi"
+          cpu: "500m"
       script: |
         #!/bin/bash
         set -e
@@ -64,49 +60,46 @@ spec:
         START_TIME=$(date +%s)
         
         echo "════════════════════════════════════════════════════════════"
-        echo "📤 Pushing Image to OpenShift Internal Registry"
+        echo "✅ Verifying Image in OpenShift Internal Registry"
         echo "════════════════════════════════════════════════════════════"
         echo "Image: $(params.IMAGE)"
+        echo ""
+        echo "Note: Image was already pushed during build task to avoid"
+        echo "      ServiceAccount token expiration on long builds."
         echo "════════════════════════════════════════════════════════════"
         
-        # Authenticate using ServiceAccount token (Red Hat recommended pattern)
-        if [ -f "/var/run/secrets/kubernetes.io/serviceaccount/token" ]; then
-          echo "🔐 Using ServiceAccount token for authentication"
-          TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
-          
-          buildah --root ${BUILDAH_STORAGE_ROOT} --storage-driver=vfs push \
-            --creds="serviceaccount:${TOKEN}" \
-            --tls-verify=$(params.TLSVERIFY) \
-            --digestfile /tmp/image-digest \
-            $(params.IMAGE) \
-            docker://$(params.IMAGE)
-        else
-          echo "⚠️  No ServiceAccount token found - attempting push without explicit auth"
-          buildah --root ${BUILDAH_STORAGE_ROOT} --storage-driver=vfs push \
-            --tls-verify=$(params.TLSVERIFY) \
-            --digestfile /tmp/image-digest \
-            $(params.IMAGE) \
-            docker://$(params.IMAGE)
+        # Get ServiceAccount token
+        TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+        
+        # Verify image exists and get digest using skopeo
+        echo "🔍 Inspecting image..."
+        INSPECT_OUTPUT=$(skopeo inspect \
+          --creds="serviceaccount:${TOKEN}" \
+          --tls-verify=$(params.TLSVERIFY) \
+          docker://$(params.IMAGE))
+        
+        # Extract digest without jq (grep and sed) - handle spaces after colon
+        DIGEST=$(echo "$INSPECT_OUTPUT" | grep -o '"Digest":[[:space:]]*"sha256:[^"]*"' | head -1 | sed 's/"Digest":[[:space:]]*"//;s/"//')
+        
+        if [ -z "$DIGEST" ]; then
+          echo "❌ ERROR: Could not get image digest"
+          echo "Inspect output: $INSPECT_OUTPUT"
+          exit 1
         fi
         
         END_TIME=$(date +%s)
-        PUSH_TIME=$((END_TIME - START_TIME))
+        VERIFY_TIME=$((END_TIME - START_TIME))
         
         echo ""
         echo "════════════════════════════════════════════════════════════"
-        echo "✅ Push to Internal Registry Complete!"
+        echo "✅ Image Verified in Internal Registry!"
         echo "════════════════════════════════════════════════════════════"
         echo "Image:  $(params.IMAGE)"
-        echo "Digest: $(cat /tmp/image-digest)"
-        echo "Time:   ${PUSH_TIME}s"
+        echo "Digest: $DIGEST"
+        echo "Time:   ${VERIFY_TIME}s"
         echo "════════════════════════════════════════════════════════════"
         
         # Save results
-        cat /tmp/image-digest | tee $(results.IMAGE_DIGEST.path)
-        echo -n "$PUSH_TIME" > $(results.PUSH_TIME.path)
-      
-      securityContext:
-        capabilities:
-          add:
-            - SETFCAP
+        echo -n "$DIGEST" | tee $(results.IMAGE_DIGEST.path)
+        echo -n "$VERIFY_TIME" > $(results.PUSH_TIME.path)
 

@@ -31,8 +31,6 @@ spec:
     
     Timeout: 4h total (download 30min + build 3h + push 30min)
 
-  timeout: 4h0m0s
-
   params:
     # Model source parameters
     - name: hf_repo

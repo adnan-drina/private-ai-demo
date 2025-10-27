@@ -24,11 +24,15 @@ spec:
     - name: namespace
       value: "private-ai-demo"
     
-    # Model Registry metadata
+    # vLLM Model Name (Option C: Explicit, no autodiscovery)
+    - name: vllm_model_name
+      value: "mistral-24b-quantized"  # vLLM model name (what the API knows)
+    
+    # Model Registry metadata (MUST match Pipeline A registration!)
     - name: model_name
-      value: "mistral-24b-quantized"  # Must match vLLM's registered model name
+      value: "Mistral-Small-24B-Instruct"  # Canonical model name (matches Pipeline A)
     - name: version_name
-      value: "quantized-w4a16-2501"
+      value: "quantized-w4a16-1gpu"         # Version name (matches Pipeline A)
     
     # Evaluation config (fast for demo)
     - name: eval_tasks

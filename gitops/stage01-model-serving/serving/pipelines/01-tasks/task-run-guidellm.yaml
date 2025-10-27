@@ -160,6 +160,19 @@ spec:
         echo "════════════════════════════════════════════════════════════"
         echo ""
         
+        # Create results directory first (in workspace)
+        echo "📁 Creating results directory..."
+        mkdir -p /workspace/results/benchmarks || { echo "⚠️  Using /tmp/benchmarks as fallback"; mkdir -p /tmp/benchmarks; }
+        
+        # Determine which directory to use
+        if [ -w /workspace/results/benchmarks ]; then
+          RESULTS_DIR="/workspace/results/benchmarks"
+          echo "✅ Using workspace: ${RESULTS_DIR}"
+        else
+          RESULTS_DIR="/tmp/benchmarks"
+          echo "⚠️  Using temp dir: ${RESULTS_DIR}"
+        fi
+        
         # Install complete SSL bypass (4-layer pattern for httpx)
         # Use $HOME/.local for user-writable location
         echo "🔧 Installing SSL bypass for self-signed certificates..."
@@ -208,9 +221,6 @@ spec:
         echo "✅ Complete SSL bypass installed (ssl + urllib3 + requests + httpx)"
         echo ""
         
-        # Create results directory in /tmp (writable)
-        mkdir -p /tmp/benchmarks
-        
         # Build processor argument if tokenizer_name is provided
         PROCESSOR_ARG=""
         if [ -n "$(params.tokenizer_name)" ]; then
@@ -233,8 +243,8 @@ spec:
             --rate-type constant \
             --rate ${RATE} \
             --max-seconds $(params.max_seconds) \
-            --output-path "/tmp/benchmarks/rate_${RATE}.json" \
-            2>&1 | tee "/tmp/benchmarks/rate_${RATE}.log"
+            --output-path "${RESULTS_DIR}/rate_${RATE}.json" \
+            2>&1 | tee "${RESULTS_DIR}/rate_${RATE}.log"
           
           echo "✅ Completed: Rate ${RATE} req/s"
           echo ""
@@ -251,7 +261,7 @@ spec:
         
         SUMMARY=""
         for RATE in $RATES; do
-          RESULT_FILE="/tmp/benchmarks/rate_${RATE}.json"
+          RESULT_FILE="${RESULTS_DIR}/rate_${RATE}.json"
           if [ -f "$RESULT_FILE" ]; then
             # Extract key metrics (adjust jq query based on actual GuideLLM output)
             THROUGHPUT=$(jq -r '.throughput // "N/A"' "$RESULT_FILE" 2>/dev/null || echo "N/A")
@@ -265,20 +275,13 @@ spec:
         echo "────────────────────────────────────────────────────────────"
         echo ""
         
-        # Copy results to workspace for downstream tasks
-        echo "📦 Copying results to workspace..."
-        if mkdir -p /workspace/results/benchmarks 2>/dev/null; then
-          cp -r /tmp/benchmarks/* /workspace/results/benchmarks/ 2>/dev/null || true
-          echo "✅ Results copied to /workspace/results/benchmarks/"
-        else
-          echo "⚠️  Warning: Could not create /workspace/results/benchmarks (permission denied)"
-          echo "   Results remain in /tmp/benchmarks/"
-        fi
+        # Results are already in the correct location ($RESULTS_DIR)
+        echo "📦 Results location: ${RESULTS_DIR}"
         
-        # Save summary
+        # Save summary and paths
         echo -n "$SUMMARY" > $(results.SUMMARY.path)
         echo -n "succeeded" > $(results.BENCHMARK_STATUS.path)
-        echo -n "/tmp/benchmarks/" > $(results.RESULTS_FILE.path)
+        echo -n "${RESULTS_DIR}/" > $(results.RESULTS_FILE.path)
         
         echo "════════════════════════════════════════════════════════════"
       
