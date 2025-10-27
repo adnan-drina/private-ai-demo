@@ -50,9 +50,11 @@ spec:
         requests:
           memory: "1Gi"
           cpu: "500m"
+          ephemeral-storage: "100Gi"  # Required for large model pushes (48GB+ images)
         limits:
           memory: "2Gi"
           cpu: "1"
+          ephemeral-storage: "150Gi"
       env:
         - name: BUILDAH_STORAGE_ROOT
           value: $(workspaces.source.path)/.buildah-storage

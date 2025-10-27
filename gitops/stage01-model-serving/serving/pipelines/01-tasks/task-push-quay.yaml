@@ -65,9 +65,11 @@ spec:
         requests:
           memory: "2Gi"
           cpu: "500m"
+          ephemeral-storage: "100Gi"  # Required for large model pushes (48GB+ images)
         limits:
           memory: "4Gi"
           cpu: "1"
+          ephemeral-storage: "150Gi"
       script: |
         #!/bin/bash
         set -e
