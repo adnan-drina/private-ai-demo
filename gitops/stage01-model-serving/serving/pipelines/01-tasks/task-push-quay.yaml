@@ -60,55 +60,56 @@ spec:
   steps:
     - name: push-to-quay
       image: quay.io/skopeo/stable:latest
-      workingDir: /tmp
+      workingDir: $(workspaces.source.path)
       computeResources:
         requests:
           memory: "2Gi"
           cpu: "500m"
-          ephemeral-storage: "100Gi"  # Required for large model pushes (48GB+ images)
         limits:
           memory: "4Gi"
           cpu: "1"
-          ephemeral-storage: "150Gi"
+      env:
+        - name: TMPDIR
+          value: $(workspaces.source.path)/.tmp-quay
+        - name: HOME
+          value: $(workspaces.source.path)/.home
       script: |
         #!/bin/bash
         set -e
         
         START_TIME=$(date +%s)
         
+        # Create temp directories in PVC (not on node ephemeral storage!)
+        mkdir -p ${TMPDIR}
+        mkdir -p ${HOME}
+        
         QUAY_IMAGE="quay.io/$(params.QUAY_ORG)/$(params.QUAY_REPO):$(params.QUAY_TAG)"
         
         echo "════════════════════════════════════════════════════════════"
         echo "📤 Pushing Image to Quay.io"
         echo "════════════════════════════════════════════════════════════"
-        echo "Source: $(params.SOURCE_IMAGE)"
+        echo "Source: oci-archive:$(workspaces.source.path)/oci/image.tar"
         echo "Dest:   $QUAY_IMAGE"
+        echo "Temp Dir: ${TMPDIR} (on PVC)"
         echo "════════════════════════════════════════════════════════════"
         
-        # Get ServiceAccount token for internal registry authentication
-        TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
-        
-        # Copy image from internal registry to Quay using skopeo
-        echo "🚀 Copying image to Quay..."
+        # Copy from OCI archive (on PVC) to Quay - NO ephemeral storage needed!
+        echo "🚀 Copying from OCI archive to Quay..."
         if [ -f "/workspace/quay-auth/.dockerconfigjson" ]; then
           echo "🔐 Using Quay auth secret"
           
           skopeo copy \
-            --src-creds="serviceaccount:${TOKEN}" \
-            --src-tls-verify=false \
             --dest-authfile /workspace/quay-auth/.dockerconfigjson \
             --dest-tls-verify=$(params.TLSVERIFY) \
             --format v2s2 \
-            docker://$(params.SOURCE_IMAGE) \
+            oci-archive:$(workspaces.source.path)/oci/image.tar \
             docker://$QUAY_IMAGE
         else
           echo "⚠️  No Quay auth secret - push may fail"
           skopeo copy \
-            --src-creds="serviceaccount:${TOKEN}" \
-            --src-tls-verify=false \
             --dest-tls-verify=$(params.TLSVERIFY) \
             --format v2s2 \
-            docker://$(params.SOURCE_IMAGE) \
+            oci-archive:$(workspaces.source.path)/oci/image.tar \
             docker://$QUAY_IMAGE
         fi
         

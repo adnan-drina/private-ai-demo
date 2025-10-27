@@ -44,50 +44,54 @@ spec:
 
   steps:
     - name: push-image
-      image: quay.io/buildah/stable:latest
+      image: quay.io/skopeo/stable:latest
       workingDir: $(workspaces.source.path)
       computeResources:
         requests:
           memory: "1Gi"
           cpu: "500m"
-          ephemeral-storage: "100Gi"  # Required for large model pushes (48GB+ images)
         limits:
           memory: "2Gi"
           cpu: "1"
-          ephemeral-storage: "150Gi"
       env:
-        - name: BUILDAH_STORAGE_ROOT
-          value: $(workspaces.source.path)/.buildah-storage
-        - name: STORAGE_DRIVER
-          value: vfs
+        - name: TMPDIR
+          value: $(workspaces.source.path)/.tmp
+        - name: HOME
+          value: $(workspaces.source.path)/.home
       script: |
         #!/bin/bash
         set -e
         
         START_TIME=$(date +%s)
         
+        # Create temp directories in PVC (not on node ephemeral storage!)
+        mkdir -p ${TMPDIR}
+        mkdir -p ${HOME}
+        
         echo "════════════════════════════════════════════════════════════"
         echo "📤 Pushing Image to OpenShift Internal Registry"
         echo "════════════════════════════════════════════════════════════"
-        echo "Image: $(params.IMAGE)"
-        echo "Storage: ${BUILDAH_STORAGE_ROOT}"
+        echo "Source: oci-archive:$(workspaces.source.path)/oci/image.tar"
+        echo "Dest:   $(params.IMAGE)"
+        echo "Temp Dir: ${TMPDIR} (on PVC)"
         echo ""
         
         # Get ServiceAccount token (fresh token for this pod)
         TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
         
-        # Push image from buildah storage to registry
-        echo "🚀 Pushing image from buildah storage..."
-        buildah --root ${BUILDAH_STORAGE_ROOT} --storage-driver=${STORAGE_DRIVER} push \
-          --creds="serviceaccount:${TOKEN}" \
-          --tls-verify=$(params.TLSVERIFY) \
-          $(params.IMAGE) \
+        # Push from OCI archive (on PVC) to registry - NO ephemeral storage needed!
+        echo "🚀 Copying from OCI archive to registry..."
+        skopeo copy \
+          --dest-creds="serviceaccount:${TOKEN}" \
+          --dest-tls-verify=$(params.TLSVERIFY) \
+          oci-archive:$(workspaces.source.path)/oci/image.tar \
           docker://$(params.IMAGE)
         
-        # Get image digest
-        DIGEST=$(buildah --root ${BUILDAH_STORAGE_ROOT} --storage-driver=${STORAGE_DRIVER} images \
-          --format '{{.Digest}}' \
-          --filter reference=$(params.IMAGE))
+        # Get image digest from registry
+        DIGEST=$(skopeo inspect \
+          --creds="serviceaccount:${TOKEN}" \
+          --tls-verify=$(params.TLSVERIFY) \
+          docker://$(params.IMAGE) | grep -o '"Digest":[[:space:]]*"sha256:[^"]*"' | sed 's/"Digest":[[:space:]]*"//;s/"//')
         
         if [ -z "$DIGEST" ]; then
           echo "❌ ERROR: Could not get image digest"

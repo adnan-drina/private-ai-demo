@@ -167,6 +167,16 @@ spec:
         echo "Time:   ${BUILD_TIME}s ($(($BUILD_TIME / 60))m $(($BUILD_TIME % 60))s)"
         echo "════════════════════════════════════════════════════════════"
         
+        # Export to OCI archive on PVC for efficient push
+        echo ""
+        echo "📦 Exporting to OCI archive (for push tasks)..."
+        mkdir -p $(workspaces.source.path)/oci
+        buildah --root ${BUILDAH_STORAGE_ROOT} --storage-driver=vfs push \
+          $(params.IMAGE) \
+          oci-archive:$(workspaces.source.path)/oci/image.tar
+        
+        echo "✅ OCI archive created: $(workspaces.source.path)/oci/image.tar"
+        
         # Save results
         cat /tmp/image-digest | tee $(results.IMAGE_DIGEST.path)
         echo -n "$(params.IMAGE)" | tee $(results.IMAGE_URL.path)
