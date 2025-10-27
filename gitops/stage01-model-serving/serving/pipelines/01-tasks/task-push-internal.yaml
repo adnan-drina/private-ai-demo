@@ -14,9 +14,9 @@ metadata:
     tekton.dev/displayName: "Push to OpenShift Internal Registry"
 spec:
   description: >-
-    Verifies ModelCar image exists in OpenShift internal registry.
-    Image was already pushed during build task to avoid SA token expiration on long builds.
-    This task runs in parallel with push-to-quay to provide consistent timing metrics.
+    Pushes ModelCar image from buildah storage to OpenShift internal registry.
+    Uses buildah push to transfer image from build task's local storage to registry.
+    ServiceAccount token is fresh in this task pod (separate from build task).
     
   params:
     - name: IMAGE
@@ -43,16 +43,21 @@ spec:
       description: Time taken to verify (kept for compatibility)
 
   steps:
-    - name: verify-image
-      image: quay.io/skopeo/stable:latest
-      workingDir: /tmp
+    - name: push-image
+      image: quay.io/buildah/stable:latest
+      workingDir: $(workspaces.source.path)
       computeResources:
         requests:
-          memory: "512Mi"
-          cpu: "250m"
-        limits:
           memory: "1Gi"
           cpu: "500m"
+        limits:
+          memory: "2Gi"
+          cpu: "1"
+      env:
+        - name: BUILDAH_STORAGE_ROOT
+          value: $(workspaces.source.path)/.buildah-storage
+        - name: STORAGE_DRIVER
+          value: vfs
       script: |
         #!/bin/bash
         set -e
@@ -60,46 +65,51 @@ spec:
         START_TIME=$(date +%s)
         
         echo "════════════════════════════════════════════════════════════"
-        echo "✅ Verifying Image in OpenShift Internal Registry"
+        echo "📤 Pushing Image to OpenShift Internal Registry"
         echo "════════════════════════════════════════════════════════════"
         echo "Image: $(params.IMAGE)"
+        echo "Storage: ${BUILDAH_STORAGE_ROOT}"
         echo ""
-        echo "Note: Image was already pushed during build task to avoid"
-        echo "      ServiceAccount token expiration on long builds."
-        echo "════════════════════════════════════════════════════════════"
         
-        # Get ServiceAccount token
+        # Get ServiceAccount token (fresh token for this pod)
         TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
         
-        # Verify image exists and get digest using skopeo
-        echo "🔍 Inspecting image..."
-        INSPECT_OUTPUT=$(skopeo inspect \
+        # Push image from buildah storage to registry
+        echo "🚀 Pushing image from buildah storage..."
+        buildah --root ${BUILDAH_STORAGE_ROOT} --storage-driver=${STORAGE_DRIVER} push \
           --creds="serviceaccount:${TOKEN}" \
           --tls-verify=$(params.TLSVERIFY) \
-          docker://$(params.IMAGE))
+          $(params.IMAGE) \
+          docker://$(params.IMAGE)
         
-        # Extract digest without jq (grep and sed) - handle spaces after colon
-        DIGEST=$(echo "$INSPECT_OUTPUT" | grep -o '"Digest":[[:space:]]*"sha256:[^"]*"' | head -1 | sed 's/"Digest":[[:space:]]*"//;s/"//')
+        # Get image digest
+        DIGEST=$(buildah --root ${BUILDAH_STORAGE_ROOT} --storage-driver=${STORAGE_DRIVER} images \
+          --format '{{.Digest}}' \
+          --filter reference=$(params.IMAGE))
         
         if [ -z "$DIGEST" ]; then
           echo "❌ ERROR: Could not get image digest"
-          echo "Inspect output: $INSPECT_OUTPUT"
           exit 1
         fi
         
         END_TIME=$(date +%s)
-        VERIFY_TIME=$((END_TIME - START_TIME))
+        PUSH_TIME=$((END_TIME - START_TIME))
         
         echo ""
         echo "════════════════════════════════════════════════════════════"
-        echo "✅ Image Verified in Internal Registry!"
+        echo "✅ Push Complete!"
         echo "════════════════════════════════════════════════════════════"
         echo "Image:  $(params.IMAGE)"
         echo "Digest: $DIGEST"
-        echo "Time:   ${VERIFY_TIME}s"
+        echo "Time:   ${PUSH_TIME}s ($(($PUSH_TIME / 60))m $(($PUSH_TIME % 60))s)"
         echo "════════════════════════════════════════════════════════════"
         
         # Save results
         echo -n "$DIGEST" | tee $(results.IMAGE_DIGEST.path)
-        echo -n "$VERIFY_TIME" > $(results.PUSH_TIME.path)
+        echo -n "$PUSH_TIME" > $(results.PUSH_TIME.path)
+      
+      securityContext:
+        capabilities:
+          add:
+            - SETFCAP
 
