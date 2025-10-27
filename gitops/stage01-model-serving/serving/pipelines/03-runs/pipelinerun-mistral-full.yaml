@@ -14,10 +14,10 @@ metadata:
 spec:
   taskRunTemplate:
     serviceAccountName: model-pipeline-sa
-  podTemplate:
-    securityContext:
-      fsGroup: 1001  # All tasks share same GID for PVC access
-      runAsUser: 1001  # Consistent UID across all tasks
+    podTemplate:
+      securityContext:
+        fsGroup: 1000970000  # Shared group for cross-task PVC access (must be in namespace range)
+        fsGroupChangePolicy: "OnRootMismatch"  # Efficient: only chown when needed
   pipelineRef:
     name: modelcar-build-deploy-v2
   
