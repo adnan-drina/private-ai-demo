@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: private-ai-demo
+
+resources:
+  - serviceaccount.yaml
+  - model-registry-route-reader.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: private-ai-demo
+  app.kubernetes.io/component: pipeline-rbac
+

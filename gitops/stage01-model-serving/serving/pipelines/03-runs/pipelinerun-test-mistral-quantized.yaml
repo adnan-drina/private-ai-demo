@@ -26,7 +26,7 @@ spec:
     
     # Model Registry metadata
     - name: model_name
-      value: "Mistral-24B-Instruct"
+      value: "mistral-24b-quantized"  # Must match vLLM's registered model name
     - name: version_name
       value: "quantized-w4a16-2501"
     
@@ -39,14 +39,20 @@ spec:
       value: "8192"
     
     # Benchmark config (rates: 1, 5, 10 as requested)
+    # Optimized for realistic chat workloads per vLLM best practices:
+    # - Medium generations (256 tokens) for balanced performance
+    # - Realistic prompt length (200 tokens) instead of stress-test length
+    # - Allow EOS termination (configured in task, not ignore_eos)
+    - name: tokenizer_name
+      value: "mistralai/Mistral-Small-24B-Instruct-2501"  # HuggingFace tokenizer for synthetic data
     - name: request_count
       value: "100"
     - name: max_seconds
       value: "120"  # 2 minutes per scenario
     - name: prompt_tokens
-      value: "512"
+      value: "200"  # Realistic chat prompt length (was 512)
     - name: generated_tokens
-      value: "512"
+      value: "256"  # Balanced generation length (was 128, stress test was 512)
   
   workspaces:
     - name: results

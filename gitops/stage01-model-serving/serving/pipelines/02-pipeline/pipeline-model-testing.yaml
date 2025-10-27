@@ -77,6 +77,11 @@ spec:
       description: Maximum time to run each scenario (seconds)
       default: "120"
     
+    - name: tokenizer_name
+      type: string
+      description: HuggingFace tokenizer model ID for synthetic data generation
+      default: ""
+    
     - name: prompt_tokens
       type: string
       description: Number of tokens in prompt
@@ -114,7 +119,7 @@ spec:
         - name: results
           workspace: results
     
-    # Task 2: Run GuideLLM for performance benchmarking (parallel with eval)
+    # Task 2: Run GuideLLM for performance benchmarking
     - name: run-guidellm
       runAfter: ["run-lm-eval"]
       taskRef:
@@ -127,6 +132,8 @@ spec:
           value: $(params.namespace)
         - name: model_name
           value: $(params.model_name)
+        - name: tokenizer_name
+          value: $(params.tokenizer_name)
         - name: request_count
           value: $(params.request_count)
         - name: max_seconds

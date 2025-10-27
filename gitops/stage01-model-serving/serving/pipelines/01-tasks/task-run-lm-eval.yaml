@@ -37,7 +37,7 @@ spec:
     
     - name: model_name
       type: string
-      description: Model name for results identification
+      description: vLLM model name (must match the name registered in vLLM, e.g. 'mistral-24b-quantized')
     
     - name: tasks
       type: string

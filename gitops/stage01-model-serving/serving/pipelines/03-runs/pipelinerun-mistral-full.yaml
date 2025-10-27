@@ -42,9 +42,9 @@ spec:
     - name: model_name
       value: "Mistral-24B-Instruct"
     - name: version_name
-      value: "full-precision-2501"
+      value: "24b-fp16-4gpu"
     - name: version_description
-      value: "Mistral Small 24B Instruct full precision - requires 4 GPUs for optimal performance"
+      value: "Mistral 24B full precision (FP16) - 4x NVIDIA GPU required for optimal performance"
     - name: base_model
       value: "mistralai/Mistral-Small-24B-Instruct-2501"
     - name: quantization

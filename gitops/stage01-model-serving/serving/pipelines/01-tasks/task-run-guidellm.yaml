@@ -37,7 +37,12 @@ spec:
     
     - name: model_name
       type: string
-      description: Model name for results identification
+      description: vLLM model name (must match the name registered in vLLM, e.g. 'mistral-24b-quantized')
+    
+    - name: tokenizer_name
+      type: string
+      description: HuggingFace tokenizer model ID (e.g. 'mistralai/Mistral-Small-24B-Instruct-2501')
+      default: ""
     
     - name: request_count
       type: string
@@ -121,10 +126,23 @@ spec:
 
     - name: run-benchmarks
       image: ghcr.io/neuralmagic/guidellm:latest
-      workingDir: /workspace/results
+      workingDir: /tmp
       env:
         - name: HOME
           value: /tmp
+        - name: HF_HOME
+          value: /tmp/.cache/huggingface
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: huggingface-token
+              key: HF_TOKEN
+        - name: PYTHONHTTPSVERIFY
+          value: "0"
+        - name: REQUESTS_CA_BUNDLE
+          value: ""
+        - name: SSL_CERT_FILE
+          value: ""
       script: |
         #!/bin/bash
         set -e
@@ -142,8 +160,62 @@ spec:
         echo "════════════════════════════════════════════════════════════"
         echo ""
         
-        # Create results directory
-        mkdir -p /workspace/results/benchmarks
+        # Install complete SSL bypass (4-layer pattern for httpx)
+        # Use $HOME/.local for user-writable location
+        echo "🔧 Installing SSL bypass for self-signed certificates..."
+        mkdir -p $HOME/.local/lib/python3.13/site-packages
+        SITE_PACKAGES=$HOME/.local/lib/python3.13/site-packages
+        export PYTHONPATH=$SITE_PACKAGES:$PYTHONPATH
+        echo 'import ssl, warnings' > $SITE_PACKAGES/sitecustomize.py
+        echo 'warnings.filterwarnings("ignore")' >> $SITE_PACKAGES/sitecustomize.py
+        echo '' >> $SITE_PACKAGES/sitecustomize.py
+        echo '# 1. Kill SSL verification at the socket layer' >> $SITE_PACKAGES/sitecustomize.py
+        echo 'ssl._create_default_https_context = ssl._create_unverified_context' >> $SITE_PACKAGES/sitecustomize.py
+        echo 'def _insecure_ctx(*args, **kwargs):' >> $SITE_PACKAGES/sitecustomize.py
+        echo '    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)' >> $SITE_PACKAGES/sitecustomize.py
+        echo '    ctx.check_hostname = False' >> $SITE_PACKAGES/sitecustomize.py
+        echo '    ctx.verify_mode = ssl.CERT_NONE' >> $SITE_PACKAGES/sitecustomize.py
+        echo '    return ctx' >> $SITE_PACKAGES/sitecustomize.py
+        echo 'ssl.create_default_context = _insecure_ctx' >> $SITE_PACKAGES/sitecustomize.py
+        echo '' >> $SITE_PACKAGES/sitecustomize.py
+        echo '# 2. Silence urllib3 insecure warnings' >> $SITE_PACKAGES/sitecustomize.py
+        echo 'import urllib3' >> $SITE_PACKAGES/sitecustomize.py
+        echo 'urllib3.disable_warnings()' >> $SITE_PACKAGES/sitecustomize.py
+        echo '' >> $SITE_PACKAGES/sitecustomize.py
+        echo '# 3. Force requests to ALWAYS send verify=False' >> $SITE_PACKAGES/sitecustomize.py
+        echo 'import requests' >> $SITE_PACKAGES/sitecustomize.py
+        echo '_orig_request = requests.Session.request' >> $SITE_PACKAGES/sitecustomize.py
+        echo 'def _insecure_request(self, *args, **kwargs):' >> $SITE_PACKAGES/sitecustomize.py
+        echo '    kwargs["verify"] = False' >> $SITE_PACKAGES/sitecustomize.py
+        echo '    return _orig_request(self, *args, **kwargs)' >> $SITE_PACKAGES/sitecustomize.py
+        echo 'requests.Session.request = _insecure_request' >> $SITE_PACKAGES/sitecustomize.py
+        echo '' >> $SITE_PACKAGES/sitecustomize.py
+        echo '# 4. Force httpx to ALWAYS send verify=False (for GuideLLM)' >> $SITE_PACKAGES/sitecustomize.py
+        echo 'try:' >> $SITE_PACKAGES/sitecustomize.py
+        echo '    import httpx' >> $SITE_PACKAGES/sitecustomize.py
+        echo '    _orig_httpx_client = httpx.Client' >> $SITE_PACKAGES/sitecustomize.py
+        echo '    def _insecure_httpx_client(*args, **kwargs):' >> $SITE_PACKAGES/sitecustomize.py
+        echo '        kwargs["verify"] = False' >> $SITE_PACKAGES/sitecustomize.py
+        echo '        return _orig_httpx_client(*args, **kwargs)' >> $SITE_PACKAGES/sitecustomize.py
+        echo '    httpx.Client = _insecure_httpx_client' >> $SITE_PACKAGES/sitecustomize.py
+        echo '    _orig_httpx_async = httpx.AsyncClient' >> $SITE_PACKAGES/sitecustomize.py
+        echo '    def _insecure_httpx_async(*args, **kwargs):' >> $SITE_PACKAGES/sitecustomize.py
+        echo '        kwargs["verify"] = False' >> $SITE_PACKAGES/sitecustomize.py
+        echo '        return _orig_httpx_async(*args, **kwargs)' >> $SITE_PACKAGES/sitecustomize.py
+        echo '    httpx.AsyncClient = _insecure_httpx_async' >> $SITE_PACKAGES/sitecustomize.py
+        echo 'except ImportError:' >> $SITE_PACKAGES/sitecustomize.py
+        echo '    pass' >> $SITE_PACKAGES/sitecustomize.py
+        echo "✅ Complete SSL bypass installed (ssl + urllib3 + requests + httpx)"
+        echo ""
+        
+        # Create results directory in /tmp (writable)
+        mkdir -p /tmp/benchmarks
+        
+        # Build processor argument if tokenizer_name is provided
+        PROCESSOR_ARG=""
+        if [ -n "$(params.tokenizer_name)" ]; then
+          PROCESSOR_ARG="--processor $(params.tokenizer_name)"
+        fi
         
         # Test scenarios: rate 1, 5, 10 (as per user request)
         RATES="1 5 10"
@@ -153,17 +225,16 @@ spec:
           echo "📊 Scenario: Constant load at ${RATE} req/s"
           echo "────────────────────────────────────────────────────────────"
           
-          guidellm \
+          guidellm benchmark \
             --target "https://${MODEL_URL}/v1" \
             --model "$(params.model_name)" \
-            --data-type emulated \
-            --data "prompt_tokens=$(params.prompt_tokens),generated_tokens=$(params.generated_tokens)" \
-            --request-count $(params.request_count) \
-            --max-seconds $(params.max_seconds) \
-            --load-type constant \
+            ${PROCESSOR_ARG} \
+            --data "prompt_tokens=$(params.prompt_tokens),output_tokens=$(params.generated_tokens),samples=$(params.request_count)" \
+            --rate-type constant \
             --rate ${RATE} \
-            --output-path "/workspace/results/benchmarks/rate_${RATE}.json" \
-            2>&1 | tee "/workspace/results/benchmarks/rate_${RATE}.log"
+            --max-seconds $(params.max_seconds) \
+            --output-path "/tmp/benchmarks/rate_${RATE}.json" \
+            2>&1 | tee "/tmp/benchmarks/rate_${RATE}.log"
           
           echo "✅ Completed: Rate ${RATE} req/s"
           echo ""
@@ -180,7 +251,7 @@ spec:
         
         SUMMARY=""
         for RATE in $RATES; do
-          RESULT_FILE="/workspace/results/benchmarks/rate_${RATE}.json"
+          RESULT_FILE="/tmp/benchmarks/rate_${RATE}.json"
           if [ -f "$RESULT_FILE" ]; then
             # Extract key metrics (adjust jq query based on actual GuideLLM output)
             THROUGHPUT=$(jq -r '.throughput // "N/A"' "$RESULT_FILE" 2>/dev/null || echo "N/A")
@@ -194,10 +265,20 @@ spec:
         echo "────────────────────────────────────────────────────────────"
         echo ""
         
+        # Copy results to workspace for downstream tasks
+        echo "📦 Copying results to workspace..."
+        if mkdir -p /workspace/results/benchmarks 2>/dev/null; then
+          cp -r /tmp/benchmarks/* /workspace/results/benchmarks/ 2>/dev/null || true
+          echo "✅ Results copied to /workspace/results/benchmarks/"
+        else
+          echo "⚠️  Warning: Could not create /workspace/results/benchmarks (permission denied)"
+          echo "   Results remain in /tmp/benchmarks/"
+        fi
+        
         # Save summary
         echo -n "$SUMMARY" > $(results.SUMMARY.path)
         echo -n "succeeded" > $(results.BENCHMARK_STATUS.path)
-        echo -n "/workspace/results/benchmarks/" > $(results.RESULTS_FILE.path)
+        echo -n "/tmp/benchmarks/" > $(results.RESULTS_FILE.path)
         
         echo "════════════════════════════════════════════════════════════"
       

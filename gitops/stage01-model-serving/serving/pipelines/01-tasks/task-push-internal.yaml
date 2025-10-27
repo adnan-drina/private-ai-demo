@@ -69,19 +69,19 @@ spec:
         echo "Image: $(params.IMAGE)"
         echo "════════════════════════════════════════════════════════════"
         
-        # Authenticate using mounted registry secret
-        if [ -f "/workspace/registry-auth/.dockerconfigjson" ]; then
-          echo "🔐 Using registry auth secret"
-          export REGISTRY_AUTH_FILE=/workspace/registry-auth/.dockerconfigjson
+        # Authenticate using ServiceAccount token (Red Hat recommended pattern)
+        if [ -f "/var/run/secrets/kubernetes.io/serviceaccount/token" ]; then
+          echo "🔐 Using ServiceAccount token for authentication"
+          TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
           
           buildah --root ${BUILDAH_STORAGE_ROOT} --storage-driver=vfs push \
-            --authfile ${REGISTRY_AUTH_FILE} \
+            --creds="serviceaccount:${TOKEN}" \
             --tls-verify=$(params.TLSVERIFY) \
             --digestfile /tmp/image-digest \
             $(params.IMAGE) \
             docker://$(params.IMAGE)
         else
-          echo "⚠️  No auth secret - using default credentials"
+          echo "⚠️  No ServiceAccount token found - attempting push without explicit auth"
           buildah --root ${BUILDAH_STORAGE_ROOT} --storage-driver=vfs push \
             --tls-verify=$(params.TLSVERIFY) \
             --digestfile /tmp/image-digest \

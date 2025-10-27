@@ -56,8 +56,10 @@ spec:
         echo "🔍 Discovering Model Registry endpoint"
         echo "════════════════════════════════════════════════════════════"
         
-        # Get Model Registry route
-        MR_ROUTE=$(oc get route private-ai-model-registry -n rhoai-model-registries \
+        # Get Model Registry route (try both http and https route names)
+        MR_ROUTE=$(oc get route private-ai-model-registry-http -n rhoai-model-registries \
+          -o jsonpath='{.spec.host}' 2>/dev/null || \
+          oc get route private-ai-model-registry -n rhoai-model-registries \
           -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
         
         if [ -z "$MR_ROUTE" ]; then
@@ -65,7 +67,7 @@ spec:
           exit 1
         fi
         
-        MR_HOST="https://${MR_ROUTE}"
+        MR_HOST="http://${MR_ROUTE}"
         echo "✅ Model Registry: ${MR_HOST}"
         echo -n "${MR_HOST}" > /workspace/results/mr_host.txt
         

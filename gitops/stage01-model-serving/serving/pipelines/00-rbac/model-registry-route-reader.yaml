@@ -1,0 +1,38 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: model-registry-route-reader
+  namespace: rhoai-model-registries
+  labels:
+    app.kubernetes.io/name: model-registry-route-reader
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/part-of: private-ai-demo
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    description: "Allows reading Model Registry routes for pipeline tasks"
+rules:
+- apiGroups: ["route.openshift.io"]
+  resources: ["routes"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: model-pipeline-sa-route-reader
+  namespace: rhoai-model-registries
+  labels:
+    app.kubernetes.io/name: model-pipeline-sa-route-reader
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/part-of: private-ai-demo
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    description: "Binds model-pipeline-sa to model-registry-route-reader role"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: model-registry-route-reader
+subjects:
+- kind: ServiceAccount
+  name: model-pipeline-sa
+  namespace: private-ai-demo
+

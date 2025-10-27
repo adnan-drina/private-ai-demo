@@ -42,9 +42,9 @@ spec:
     - name: model_name
       value: "Mistral-24B-Instruct"
     - name: version_name
-      value: "quantized-w4a16-2501"
+      value: "24b-w4a16-1gpu"
     - name: version_description
-      value: "Mistral Small 24B Instruct quantized (w4a16) - optimized for single GPU inference"
+      value: "Mistral 24B quantized (W4A16) - 1x NVIDIA GPU required, optimized for efficiency"
     - name: base_model
       value: "mistralai/Mistral-Small-24B-Instruct-2501"
     - name: quantization
