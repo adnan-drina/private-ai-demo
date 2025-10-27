@@ -32,7 +32,7 @@ spec:
     - name: model_name
       value: "Mistral-Small-24B-Instruct"  # Canonical model name (matches Pipeline A)
     - name: version_name
-      value: "quantized-w4a16-1gpu"         # Version name (matches Pipeline A)
+      value: "quantized-w4a16-2501"         # Version name (matches actual registered version)
     
     # Evaluation config (fast for demo)
     - name: eval_tasks

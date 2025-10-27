@@ -89,17 +89,17 @@ spec:
         echo "HF Token:    ${HF_TOKEN:+<set>}"
         echo "════════════════════════════════════════════════════════════"
         
-        # Install HuggingFace Hub library
+        # Install HuggingFace Hub library (pin to 0.x for CLI compatibility)
         echo "📦 Installing dependencies..."
-        pip install --quiet --no-cache-dir huggingface-hub
+        pip install --quiet --no-cache-dir 'huggingface-hub<1.0'
         
-        # Add user bin to PATH for huggingface-cli
+        # Add PATH for huggingface-cli
         export PATH=$PATH:$HOME/.local/bin
         
         # Create target directory
         mkdir -p "$(params.target_path)"
         
-        # Download model using huggingface-cli with optimizations
+        # Download model using huggingface-cli (0.x version)
         huggingface-cli download \
           "$(params.hf_repo)" \
           --revision "$(params.hf_revision)" \

@@ -175,6 +175,10 @@ spec:
           $(params.IMAGE) \
           oci-archive:$(workspaces.source.path)/oci/image.tar
         
+        # Make OCI archive readable by push tasks (different pods/UIDs)
+        chmod 644 $(workspaces.source.path)/oci/image.tar
+        ls -lh $(workspaces.source.path)/oci/image.tar
+        
         echo "✅ OCI archive created: $(workspaces.source.path)/oci/image.tar"
         
         # Save results

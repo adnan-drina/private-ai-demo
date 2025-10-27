@@ -68,20 +68,11 @@ spec:
         limits:
           memory: "4Gi"
           cpu: "1"
-      env:
-        - name: TMPDIR
-          value: $(workspaces.source.path)/.tmp-quay
-        - name: HOME
-          value: $(workspaces.source.path)/.home
       script: |
         #!/bin/bash
         set -e
         
         START_TIME=$(date +%s)
-        
-        # Create temp directories in PVC (not on node ephemeral storage!)
-        mkdir -p ${TMPDIR}
-        mkdir -p ${HOME}
         
         QUAY_IMAGE="quay.io/$(params.QUAY_ORG)/$(params.QUAY_REPO):$(params.QUAY_TAG)"
         
@@ -90,7 +81,6 @@ spec:
         echo "════════════════════════════════════════════════════════════"
         echo "Source: oci-archive:$(workspaces.source.path)/oci/image.tar"
         echo "Dest:   $QUAY_IMAGE"
-        echo "Temp Dir: ${TMPDIR} (on PVC)"
         echo "════════════════════════════════════════════════════════════"
         
         # Copy from OCI archive (on PVC) to Quay - NO ephemeral storage needed!

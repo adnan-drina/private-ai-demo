@@ -53,27 +53,17 @@ spec:
         limits:
           memory: "2Gi"
           cpu: "1"
-      env:
-        - name: TMPDIR
-          value: $(workspaces.source.path)/.tmp
-        - name: HOME
-          value: $(workspaces.source.path)/.home
       script: |
         #!/bin/bash
         set -e
         
         START_TIME=$(date +%s)
         
-        # Create temp directories in PVC (not on node ephemeral storage!)
-        mkdir -p ${TMPDIR}
-        mkdir -p ${HOME}
-        
         echo "════════════════════════════════════════════════════════════"
         echo "📤 Pushing Image to OpenShift Internal Registry"
         echo "════════════════════════════════════════════════════════════"
         echo "Source: oci-archive:$(workspaces.source.path)/oci/image.tar"
         echo "Dest:   $(params.IMAGE)"
-        echo "Temp Dir: ${TMPDIR} (on PVC)"
         echo ""
         
         # Get ServiceAccount token (fresh token for this pod)
