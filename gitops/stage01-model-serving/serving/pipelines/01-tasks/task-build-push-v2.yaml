@@ -36,6 +36,15 @@ spec:
         capabilities:
           drop:
             - MKNOD
+      resources:
+        requests:
+          ephemeral-storage: "80Gi"
+          memory: "16Gi"
+          cpu: "4"
+        limits:
+          ephemeral-storage: "100Gi"
+          memory: "16Gi"
+          cpu: "8"
       script: |
         #!/bin/bash
         set -euo pipefail
@@ -48,6 +57,11 @@ spec:
         export HOME=$(workspaces.source.path)/.buildah-home
         export STORAGE_DRIVER=vfs
         install -d -m 2775 -o root -g 1000970000 "$HOME"
+        
+        # Force ALL temporary files to PVC (not node ephemeral)
+        export TMPDIR=$(workspaces.source.path)/.buildah-tmp
+        export BUILDAH_TMPDIR=$(workspaces.source.path)/.buildah-tmp
+        install -d -m 2775 -o root -g 1000970000 "$TMPDIR"
         
         echo "🎯 Build configuration:"
         echo "  Storage driver: vfs (PVC-backed)"
