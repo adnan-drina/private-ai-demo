@@ -69,6 +69,13 @@ spec:
   steps:
     - name: download-model
       image: registry.access.redhat.com/ubi9/python-311:latest
+      resources:
+        requests:
+          memory: "4Gi"
+          cpu: "1"
+        limits:
+          memory: "8Gi"
+          cpu: "2"
       env:
         - name: HF_TOKEN
           valueFrom:
@@ -180,6 +187,13 @@ spec:
 
     - name: build-image
       image: registry.redhat.io/rhel9/buildah:latest
+      resources:
+        requests:
+          memory: "4Gi"
+          cpu: "1"
+        limits:
+          memory: "8Gi"
+          cpu: "2"
       script: |
         #!/bin/bash
         set -e
@@ -295,6 +309,13 @@ spec:
 
     - name: push-to-quay
       image: registry.redhat.io/rhel9/buildah:latest
+      resources:
+        requests:
+          memory: "2Gi"
+          cpu: "500m"
+        limits:
+          memory: "4Gi"
+          cpu: "1"
       script: |
         #!/bin/bash
         set -e
@@ -373,6 +394,13 @@ spec:
 
     - name: write-metadata
       image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+      resources:
+        requests:
+          memory: "128Mi"
+          cpu: "100m"
+        limits:
+          memory: "512Mi"
+          cpu: "500m"
       script: |
         #!/bin/bash
         set -e
