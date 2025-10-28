@@ -19,6 +19,13 @@ spec:
         fsGroupChangePolicy: "OnRootMismatch"
         supplementalGroups:
           - 1000970000  # Ensures all tasks can read/write PVC
+      resources:
+        requests:
+          memory: "12Gi"  # Full model (48GB) needs more memory for downloads
+          cpu: "2"
+        limits:
+          memory: "24Gi"  # Generous limit for large model parallel downloads
+          cpu: "4"
   
   params:
     # Model source

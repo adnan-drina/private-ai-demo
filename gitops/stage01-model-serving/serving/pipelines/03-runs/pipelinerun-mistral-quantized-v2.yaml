@@ -19,6 +19,13 @@ spec:
         fsGroupChangePolicy: "OnRootMismatch"
         supplementalGroups:
           - 1000970000  # Ensures all tasks can read/write PVC
+      resources:
+        requests:
+          memory: "8Gi"   # HuggingFace parallel downloads + Buildah need memory
+          cpu: "2"
+        limits:
+          memory: "16Gi"  # Generous limit to prevent OOMKilled
+          cpu: "4"
   
   params:
     # Model source
