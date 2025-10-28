@@ -31,13 +31,11 @@ spec:
   steps:
     - name: build-and-push
       image: registry.redhat.io/rhel9/buildah:latest
-      resources:
-        requests:
-          memory: "16Gi"
-          cpu: "4"
-        limits:
-          memory: "16Gi"
-          cpu: "8"
+      securityContext:
+        privileged: true
+        capabilities:
+          drop:
+            - MKNOD
       script: |
         #!/bin/bash
         set -euo pipefail
@@ -46,32 +44,18 @@ spec:
         echo "🔨 Build & Push to Quay [$(date -u +%Y-%m-%dT%H:%M:%SZ)]"
         echo "════════════════════════════════════════════════════════════"
         
-        # Configure Buildah to use PVC (not node ephemeral)
+        # Configure Buildah to use PVC for storage (not node ephemeral)
         export HOME=$(workspaces.source.path)/.buildah-home
-        export BUILDAH_STORAGE_ROOT=$(workspaces.source.path)/.buildah-storage
-        install -d -m 2775 -g 1000970000 "$HOME" "$BUILDAH_STORAGE_ROOT"
+        export STORAGE_DRIVER=vfs
+        install -d -m 2775 -o root -g 1000970000 "$HOME"
         
-        # Force buildah to NOT use user namespaces at all
-        export BUILDAH_ISOLATION=chroot
-        export _CONTAINERS_USERNS_CONFIGURED=""
-        export _BUILDAH_STARTED_IN_USERNS=""
+        echo "🎯 Build configuration:"
+        echo "  Storage driver: vfs (PVC-backed)"
+        echo "  Storage root: $HOME"
+        echo "  Running as: $(id)"
+        echo ""
         
-        # Create storage.conf to disable user namespaces entirely
-        mkdir -p ${HOME}/.config/containers
-        cat > ${HOME}/.config/containers/storage.conf <<'STORAGEEOF'
-        [storage]
-        driver = "vfs"
-        runroot = "/var/run/containers/storage"
-        graphroot = "/var/lib/containers/storage"
-        
-        [storage.options]
-        ignore_chown_errors = "true"
-        
-        [storage.options.vfs]
-        ignore_chown_errors = "true"
-        STORAGEEOF
-        
-        # Create Containerfile (use variable expansion for model_path)
+        # Create Containerfile
         MODEL_PATH="$(params.model_path)"
         cat > $(workspaces.source.path)/Containerfile <<EOF
         FROM registry.access.redhat.com/ubi9/ubi-micro:9.5
@@ -80,47 +64,57 @@ spec:
         CMD ["/bin/sh"]
         EOF
         
-        IMAGE_TAG="quay.io/$(params.quay_org)/$(params.quay_repo):$(params.quay_tag)"
-        echo "🚀 Building: $IMAGE_TAG"
+        IMAGE_LOCAL="localhost/$(params.quay_repo):$(params.quay_tag)"
+        IMAGE_QUAY="quay.io/$(params.quay_org)/$(params.quay_repo):$(params.quay_tag)"
         
-        # Build with flags to disable user namespaces
-        buildah --root ${BUILDAH_STORAGE_ROOT} --storage-driver=vfs bud \
+        echo "🚀 Building: $IMAGE_QUAY"
+        
+        # Build image (privileged mode - no user namespace issues!)
+        buildah --storage-driver="${STORAGE_DRIVER}" bud \
           --format oci \
           --layers=false \
           --squash \
-          --isolation chroot \
-          --userns=host \
-          --tag "$IMAGE_TAG" \
+          --tag "${IMAGE_LOCAL}" \
           --file $(workspaces.source.path)/Containerfile \
           $(workspaces.source.path)
         
         echo "✅ Build complete"
+        echo ""
         echo "📤 Pushing to Quay..."
         
-        # Push directly to Quay (no OCI tar!)
-        buildah --root ${BUILDAH_STORAGE_ROOT} --storage-driver=vfs push \
+        # Push directly to Quay (privileged mode - clean and simple!)
+        buildah --storage-driver="${STORAGE_DRIVER}" push \
           --authfile /workspace/quay-auth/config.json \
-          "$IMAGE_TAG" "docker://$IMAGE_TAG"
-        
-        # Get digest
-        DIGEST=$(skopeo inspect --authfile /workspace/quay-auth/config.json \
-          "docker://$IMAGE_TAG" | jq -r '.Digest')
+          "${IMAGE_LOCAL}" \
+          "docker://${IMAGE_QUAY}"
         
         echo "✅ Push complete!"
-        echo "   Image:  $IMAGE_TAG"
-        echo "   Digest: $DIGEST"
+        echo ""
         
-        # Write metadata
+        # Get digest and verify
+        echo "🔍 Verifying pushed image..."
+        skopeo inspect --authfile /workspace/quay-auth/config.json \
+          "docker://${IMAGE_QUAY}" > $(workspaces.source.path)/.pipeline-metadata/quay-metadata.json
+        
+        DIGEST=$(jq -r '.Digest' $(workspaces.source.path)/.pipeline-metadata/quay-metadata.json)
+        
+        echo "   Image:  $IMAGE_QUAY"
+        echo "   Digest: $DIGEST"
+        echo ""
+        
+        # Write metadata for downstream tasks
         mkdir -p $(workspaces.source.path)/.pipeline-metadata
-        cat > $(workspaces.source.path)/.pipeline-metadata/quay-push.json <<EOF
+        cat > $(workspaces.source.path)/.pipeline-metadata/build-status.json <<EOF
         {
-          "image": "${IMAGE_TAG}",
+          "image_quay": "${IMAGE_QUAY}",
           "digest": "${DIGEST}",
-          "timestamp_utc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          "pushed_at_utc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
         }
         EOF
         
-        echo -n "$IMAGE_TAG" > $(results.IMAGE_URL.path)
+        # Save results
+        echo -n "$IMAGE_QUAY" > $(results.IMAGE_URL.path)
         echo -n "$DIGEST" > $(results.IMAGE_DIGEST.path)
         
+        echo "✅ Task complete: Model image built and pushed to Quay"
         echo "════════════════════════════════════════════════════════════"

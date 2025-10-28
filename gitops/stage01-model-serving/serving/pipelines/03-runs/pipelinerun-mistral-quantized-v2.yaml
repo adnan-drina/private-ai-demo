@@ -12,7 +12,7 @@ spec:
     name: modelcar-build-deploy-v3
   
   taskRunTemplate:
-    serviceAccountName: model-pipeline-sa
+    serviceAccountName: model-build-sa  # Uses privileged SCC for Buildah
     podTemplate:
       securityContext:
         fsGroup: 1000970000  # Namespace SCC-enforced range
@@ -20,6 +20,7 @@ spec:
         supplementalGroups:
           - 1000970000  # Ensures all tasks can read/write PVC
       # Note: Resources are controlled by namespace LimitRange (8Gi default)
+      # Note: model-build-sa must be bound to privileged SCC by cluster admin
   
   params:
     # Model source
