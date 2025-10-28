@@ -31,42 +31,46 @@ spec:
   steps:
     - name: build-and-push
       image: registry.redhat.io/rhel9/buildah:latest
-      securityContext:
-        privileged: true
-        capabilities:
-          drop:
-            - MKNOD
-      resources:
+      # Use computeResources (not resources) - this is what Tekton actually accepts
+      computeResources:
         requests:
-          ephemeral-storage: "80Gi"
+          memory: "8Gi"
+          cpu: "2"
+        limits:
           memory: "16Gi"
           cpu: "4"
-        limits:
-          ephemeral-storage: "100Gi"
-          memory: "16Gi"
-          cpu: "8"
+      # CRITICAL: Use PVC for ALL Buildah storage (matches original working task)
+      env:
+        - name: BUILDAH_STORAGE_ROOT
+          value: $(workspaces.source.path)/.buildah-storage
+        - name: STORAGE_DRIVER
+          value: vfs
+        - name: TMPDIR
+          value: $(workspaces.source.path)/.tmp
+        - name: HOME
+          value: $(workspaces.source.path)/.home
+      securityContext:
+        capabilities:
+          add:
+            - SETFCAP
       script: |
         #!/bin/bash
         set -euo pipefail
         
+        # Create all directories in workspace PVC (matches original working task)
+        echo "📁 Setting up PVC-backed directories..."
+        mkdir -p ${BUILDAH_STORAGE_ROOT}
+        mkdir -p ${TMPDIR}
+        mkdir -p ${HOME}
+        
         echo "════════════════════════════════════════════════════════════"
         echo "🔨 Build & Push to Quay [$(date -u +%Y-%m-%dT%H:%M:%SZ)]"
         echo "════════════════════════════════════════════════════════════"
-        
-        # Configure Buildah to use PVC for storage (not node ephemeral)
-        export HOME=$(workspaces.source.path)/.buildah-home
-        export STORAGE_DRIVER=vfs
-        install -d -m 2775 -o root -g 1000970000 "$HOME"
-        
-        # Force ALL temporary files to PVC (not node ephemeral)
-        export TMPDIR=$(workspaces.source.path)/.buildah-tmp
-        export BUILDAH_TMPDIR=$(workspaces.source.path)/.buildah-tmp
-        install -d -m 2775 -o root -g 1000970000 "$TMPDIR"
-        
-        echo "🎯 Build configuration:"
-        echo "  Storage driver: vfs (PVC-backed)"
-        echo "  Storage root: $HOME"
-        echo "  TMPDIR: $TMPDIR (PVC-backed)"
+        echo "🎯 Configuration (matching original working task):"
+        echo "  Storage Root: ${BUILDAH_STORAGE_ROOT} (PVC-backed)"
+        echo "  Temp Dir:     ${TMPDIR} (PVC-backed)"
+        echo "  Home Dir:     ${HOME} (PVC-backed)"
+        echo "  Storage Driver: ${STORAGE_DRIVER}"
         echo "  Running as: $(id)"
         echo ""
         
@@ -88,12 +92,18 @@ spec:
         IMAGE_QUAY="quay.io/$(params.quay_org)/$(params.quay_repo):$(params.quay_tag)"
         
         echo "🚀 Building: $IMAGE_QUAY"
+        echo ""
         
-        # Build image (privileged mode - no user namespace issues!)
-        buildah --storage-driver="${STORAGE_DRIVER}" bud \
+        # Build image using --root flag (CRITICAL: tells buildah where to store everything)
+        # Performance optimizations for large models (from original working task):
+        #   --layers=false   : Skip intermediate layer commits (HUGE speedup for 48GB models!)
+        #   --squash         : Single final layer (reduces image size)
+        #   --ulimit nofile  : Increase file handle limit for parallel operations
+        buildah --root ${BUILDAH_STORAGE_ROOT} --storage-driver=${STORAGE_DRIVER} bud \
           --format oci \
           --layers=false \
           --squash \
+          --ulimit nofile=4096:8192 \
           --tag "${IMAGE_LOCAL}" \
           --file $(workspaces.source.path)/Containerfile \
           $(workspaces.source.path)
@@ -107,20 +117,27 @@ spec:
         echo ""
         
         echo "📤 Pushing to Quay..."
+        echo ""
         
-        # Push directly to Quay (privileged mode - clean and simple!)
+        # Push directly to Quay using --root flag
         # Note: Secret mounts as .dockerconfigjson (standard k8s format)
-        buildah --storage-driver="${STORAGE_DRIVER}" push \
+        buildah --root ${BUILDAH_STORAGE_ROOT} --storage-driver=${STORAGE_DRIVER} push \
           --authfile /workspace/quay-auth/.dockerconfigjson \
+          --digestfile /tmp/image-digest \
           "${IMAGE_LOCAL}" \
           "docker://${IMAGE_QUAY}"
         
         echo "✅ Push complete!"
         echo ""
         
-        # Get digest from buildah (skopeo not available in buildah image)
+        # Get digest from digestfile (more reliable than inspect)
         echo "🔍 Getting image digest..."
-        DIGEST=$(buildah --storage-driver="${STORAGE_DRIVER}" inspect --format='{{.FromImageDigest}}' "${IMAGE_LOCAL}" 2>/dev/null || echo "sha256:unknown")
+        if [ -f /tmp/image-digest ]; then
+          DIGEST=$(cat /tmp/image-digest)
+        else
+          # Fallback to inspect if digestfile doesn't exist
+          DIGEST=$(buildah --root ${BUILDAH_STORAGE_ROOT} --storage-driver=${STORAGE_DRIVER} inspect --format='{{.FromImageDigest}}' "${IMAGE_LOCAL}" 2>/dev/null || echo "sha256:unknown")
+        fi
         
         echo "   Image:  $IMAGE_QUAY"
         echo "   Digest: $DIGEST"
