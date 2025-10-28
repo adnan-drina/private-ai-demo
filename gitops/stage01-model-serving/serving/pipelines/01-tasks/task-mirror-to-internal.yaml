@@ -159,7 +159,7 @@ spec:
         skopeo copy \
           --src-tls-verify=true \
           --dest-tls-verify=$(params.tlsverify) \
-          --src-authfile /workspace/quay-auth/config.json \
+          --src-authfile /workspace/quay-auth/.dockerconfigjson \
           --dest-authfile /tmp/auth/internal-auth.json \
           "docker://$SOURCE_IMAGE" \
           "docker://$DEST_IMAGE"

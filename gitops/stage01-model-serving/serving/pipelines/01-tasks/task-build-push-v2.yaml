@@ -83,8 +83,9 @@ spec:
         echo "📤 Pushing to Quay..."
         
         # Push directly to Quay (privileged mode - clean and simple!)
+        # Note: Secret mounts as .dockerconfigjson (standard k8s format)
         buildah --storage-driver="${STORAGE_DRIVER}" push \
-          --authfile /workspace/quay-auth/config.json \
+          --authfile /workspace/quay-auth/.dockerconfigjson \
           "${IMAGE_LOCAL}" \
           "docker://${IMAGE_QUAY}"
         
@@ -93,7 +94,7 @@ spec:
         
         # Get digest and verify
         echo "🔍 Verifying pushed image..."
-        skopeo inspect --authfile /workspace/quay-auth/config.json \
+        skopeo inspect --authfile /workspace/quay-auth/.dockerconfigjson \
           "docker://${IMAGE_QUAY}" > $(workspaces.source.path)/.pipeline-metadata/quay-metadata.json
         
         DIGEST=$(jq -r '.Digest' $(workspaces.source.path)/.pipeline-metadata/quay-metadata.json)
