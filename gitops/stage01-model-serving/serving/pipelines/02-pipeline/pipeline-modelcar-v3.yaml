@@ -76,6 +76,7 @@ spec:
 
     - name: build-and-push-to-quay
       runAfter: ["download-model"]
+      timeout: "2h"  # Extended timeout for large model builds (48GB → 80GB image)
       taskRef:
         name: build-and-push-v2
       params:
@@ -95,6 +96,7 @@ spec:
 
     - name: mirror-to-internal
       runAfter: ["build-and-push-to-quay"]
+      timeout: "30m"  # Registry-to-registry copy can take 20min for 80GB images
       taskRef:
         name: mirror-to-internal
       params:
