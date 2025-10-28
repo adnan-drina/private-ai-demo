@@ -144,7 +144,8 @@ spec:
         echo ""
         
         # Write metadata for downstream tasks (mirror-to-internal expects this filename)
-        mkdir -p $(workspaces.source.path)/.pipeline-metadata
+        # Use install to create directory with proper group permissions
+        install -d -m 2775 -g 1000970000 $(workspaces.source.path)/.pipeline-metadata
         cat > $(workspaces.source.path)/.pipeline-metadata/publish-metadata.json <<EOF
         {
           "image_quay": "${IMAGE_QUAY}",
@@ -152,6 +153,9 @@ spec:
           "pushed_at_utc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
         }
         EOF
+        # Make metadata file group-writable so mirror task can update it
+        chmod 664 $(workspaces.source.path)/.pipeline-metadata/publish-metadata.json
+        chgrp 1000970000 $(workspaces.source.path)/.pipeline-metadata/publish-metadata.json
         
         # Save results
         echo -n "$IMAGE_QUAY" > $(results.IMAGE_URL.path)
