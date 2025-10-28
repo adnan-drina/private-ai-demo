@@ -51,10 +51,11 @@ spec:
         export BUILDAH_STORAGE_ROOT=$(workspaces.source.path)/.buildah-storage
         install -d -m 2775 -g 1000970000 "$HOME" "$BUILDAH_STORAGE_ROOT"
         
-        # Create Containerfile
-        cat > $(workspaces.source.path)/Containerfile <<'EOF'
+        # Create Containerfile (use variable expansion for model_path)
+        MODEL_PATH="$(params.model_path)"
+        cat > $(workspaces.source.path)/Containerfile <<EOF
         FROM registry.access.redhat.com/ubi9/ubi-micro:9.5
-        COPY $(params.model_path) /models
+        COPY ${MODEL_PATH} /models
         USER 1001
         CMD ["/bin/sh"]
         EOF
@@ -62,9 +63,13 @@ spec:
         IMAGE_TAG="quay.io/$(params.quay_org)/$(params.quay_repo):$(params.quay_tag)"
         echo "🚀 Building: $IMAGE_TAG"
         
-        # Build
+        # Build with explicit no-user-namespace flags
         buildah --root ${BUILDAH_STORAGE_ROOT} --storage-driver=vfs bud \
-          --format oci --layers=false --squash --isolation chroot \
+          --format oci \
+          --layers=false \
+          --squash \
+          --isolation chroot \
+          --userns=host \
           --tag "$IMAGE_TAG" \
           --file $(workspaces.source.path)/Containerfile \
           $(workspaces.source.path)
