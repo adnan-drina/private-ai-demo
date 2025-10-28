@@ -83,11 +83,33 @@ spec:
         START_TIME=$(date +%s)
         
         echo "════════════════════════════════════════════════════════════"
-        echo "📥 Step 1/4: Downloading Model from HuggingFace"
+        echo "📥 [$(date -u +%Y-%m-%dT%H:%M:%SZ)] Step 1/4: Download Model"
         echo "════════════════════════════════════════════════════════════"
-        echo "Repository:  $(params.hf_repo)"
-        echo "Revision:    $(params.hf_revision)"
-        echo "Target:      $(workspaces.source.path)/$(params.target_path)"
+        
+        # Runtime context for debugging
+        echo "🔍 DEBUG: Runtime context"
+        echo "  Task: build-and-push-to-quay / download-model"
+        echo "  Time (UTC): $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        echo "  Node: $(cat /etc/hostname)"
+        echo "  UID/GID: $(id)"
+        echo "  PWD: $(pwd)"
+        echo "  Workspace mount:"
+        mount | grep /workspace | sed 's/^/    /' || true
+        echo ""
+        
+        # Pipeline parameters
+        echo "🎯 Pipeline Parameters:"
+        echo "  HF Repository: $(params.hf_repo)"
+        echo "  HF Revision:   $(params.hf_revision)"
+        echo "  Quay Org:      $(params.quay_org)"
+        echo "  Quay Repo:     $(params.quay_repo)"
+        echo "  Quay Tag:      $(params.quay_tag)"
+        echo "  Target Path:   $(workspaces.source.path)/$(params.target_path)"
+        echo ""
+        
+        # Resource pressure snapshot BEFORE download
+        echo "📊 Disk snapshot BEFORE download:"
+        df -h /workspace / | sed 's/^/  /'
         echo "════════════════════════════════════════════════════════════"
         
         # Install HuggingFace Hub library (pin to 0.x for CLI compatibility)
@@ -116,9 +138,44 @@ spec:
         MODEL_SIZE=$(du -sb "$(workspaces.source.path)/$(params.target_path)" | awk '{print $1}')
         
         echo ""
-        echo "✅ Download Complete!"
+        echo "✅ Download Complete! [$(date -u +%Y-%m-%dT%H:%M:%SZ)]"
         echo "   Model size: $(numfmt --to=iec-i --suffix=B $MODEL_SIZE)"
         echo "   Time: ${DOWNLOAD_TIME}s ($(($DOWNLOAD_TIME / 60))m $(($DOWNLOAD_TIME % 60))s)"
+        echo ""
+        
+        # Workspace state after download
+        echo "📂 Workspace snapshot AFTER download:"
+        ls -lh $(workspaces.source.path) | sed 's/^/  /' || true
+        echo ""
+        echo "📂 Model directory:"
+        ls -lh $(workspaces.source.path)/$(params.target_path) | head -15 | sed 's/^/  /' || true
+        echo "   ... (showing first 15 files)"
+        echo ""
+        du -sh $(workspaces.source.path)/$(params.target_path) | sed 's/^/  /'
+        echo ""
+        
+        # Resource pressure snapshot AFTER download
+        echo "📊 Disk snapshot AFTER download:"
+        df -h /workspace / | sed 's/^/  /'
+        echo ""
+        echo "📊 Top 5 largest dirs in workspace:"
+        du -sh $(workspaces.source.path)/* 2>/dev/null | sort -hr | head -5 | sed 's/^/  /' || true
+        echo ""
+        
+        # Write initial pipeline status
+        mkdir -p $(workspaces.source.path)/.pipeline-metadata
+        cat > $(workspaces.source.path)/.pipeline-metadata/pipeline-status.json <<EOF
+        {
+          "stage": "model_downloaded",
+          "timestamp_utc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+          "hf_repo": "$(params.hf_repo)",
+          "hf_revision": "$(params.hf_revision)",
+          "model_size_bytes": ${MODEL_SIZE},
+          "download_time_seconds": ${DOWNLOAD_TIME},
+          "node": "$(cat /etc/hostname)"
+        }
+        EOF
+        echo "📝 Pipeline status updated: model_downloaded"
         echo "════════════════════════════════════════════════════════════"
 
     - name: build-image
@@ -130,8 +187,22 @@ spec:
         START_TIME=$(date +%s)
         
         echo "════════════════════════════════════════════════════════════"
-        echo "🔨 Step 2/4: Building ModelCar Image with Buildah"
+        echo "🔨 [$(date -u +%Y-%m-%dT%H:%M:%SZ)] Step 2/4: Build Image"
         echo "════════════════════════════════════════════════════════════"
+        
+        # Runtime context
+        echo "🔍 DEBUG: Runtime context"
+        echo "  Task: build-and-push-to-quay / build-image"
+        echo "  Time (UTC): $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        echo "  Node: $(cat /etc/hostname)"
+        echo "  UID/GID: $(id)"
+        echo ""
+        
+        # Resource pressure snapshot BEFORE build
+        echo "📊 Disk snapshot BEFORE build:"
+        df -h /workspace / | sed 's/^/  /'
+        free -h | sed 's/^/  /' || true
+        echo ""
         
         # Configure Buildah to use PVC for ALL storage (not node ephemeral)
         export HOME=$(workspaces.source.path)/.buildah-home
@@ -141,10 +212,10 @@ spec:
         install -d -m 2775 -g 1000970000 "$HOME"
         install -d -m 2775 -g 1000970000 "$BUILDAH_STORAGE_ROOT"
         
-        echo "Storage configuration:"
+        echo "🎯 Storage configuration:"
         echo "  HOME:    $HOME"
         echo "  STORAGE: $BUILDAH_STORAGE_ROOT"
-        echo "  Driver:  vfs (PVC-backed, no ephemeral storage)"
+        echo "  Driver:  vfs (PVC-backed, prevents ephemeral storage blow-up)"
         echo ""
         
         # Create Containerfile
@@ -183,10 +254,40 @@ spec:
         BUILD_TIME=$((END_TIME - START_TIME))
         
         echo ""
-        echo "✅ Build Complete!"
+        echo "✅ Build Complete! [$(date -u +%Y-%m-%dT%H:%M:%SZ)]"
         echo "   Image: $IMAGE_TAG"
         echo "   ID:    $IMAGE_ID"
         echo "   Time:  ${BUILD_TIME}s ($(($BUILD_TIME / 60))m $(($BUILD_TIME % 60))s)"
+        echo ""
+        
+        # Build store usage
+        echo "🧱 Buildah storage usage:"
+        du -sh $(workspaces.source.path)/.buildah-home | sed 's/^/  /' || true
+        du -sh $(workspaces.source.path)/.buildah-storage | sed 's/^/  /' || true
+        echo ""
+        buildah --root ${BUILDAH_STORAGE_ROOT} --storage-driver=vfs images | sed 's/^/  /' || true
+        echo ""
+        
+        # Resource pressure snapshot AFTER build
+        echo "📊 Disk snapshot AFTER build:"
+        df -h /workspace / | sed 's/^/  /'
+        echo ""
+        echo "📊 Top 5 largest dirs:"
+        du -sh $(workspaces.source.path)/* 2>/dev/null | sort -hr | head -5 | sed 's/^/  /' || true
+        echo ""
+        
+        # Update pipeline status
+        cat > $(workspaces.source.path)/.pipeline-metadata/pipeline-status.json <<EOF
+        {
+          "stage": "image_built",
+          "timestamp_utc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+          "image_tag": "${IMAGE_TAG}",
+          "image_id": "${IMAGE_ID}",
+          "build_time_seconds": ${BUILD_TIME},
+          "node": "$(cat /etc/hostname)"
+        }
+        EOF
+        echo "📝 Pipeline status updated: image_built"
         echo "════════════════════════════════════════════════════════════"
         
         # Save image tag for next step
@@ -201,16 +302,25 @@ spec:
         START_TIME=$(date +%s)
         
         echo "════════════════════════════════════════════════════════════"
-        echo "📤 Step 3/4: Pushing Image to Quay.io"
+        echo "📤 [$(date -u +%Y-%m-%dT%H:%M:%SZ)] Step 3/4: Push to Quay"
         echo "════════════════════════════════════════════════════════════"
+        
+        # Runtime context
+        echo "🔍 DEBUG: Runtime context"
+        echo "  Task: build-and-push-to-quay / push-to-quay"
+        echo "  Time (UTC): $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        echo "  Node: $(cat /etc/hostname)"
+        echo ""
         
         # Re-configure Buildah storage (same as build step)
         export HOME=$(workspaces.source.path)/.buildah-home
         export BUILDAH_STORAGE_ROOT=$(workspaces.source.path)/.buildah-storage
         
         IMAGE_TAG=$(cat /tmp/image-tag)
-        echo "Image: $IMAGE_TAG"
-        echo "Auth:  /workspace/quay-auth/config.json"
+        echo "🎯 Push configuration:"
+        echo "  Image: $IMAGE_TAG"
+        echo "  Auth:  /workspace/quay-auth/config.json"
+        echo "  Destination: docker://$IMAGE_TAG"
         echo ""
         
         # Push directly to Quay (no intermediate OCI archive!)
@@ -219,9 +329,13 @@ spec:
           "$IMAGE_TAG" \
           "docker://$IMAGE_TAG"
         
-        # Get digest from Quay
+        # Get digest from Quay and verify
         echo ""
         echo "🔍 Verifying push and capturing digest..."
+        echo "📝 Pushed to Quay (skopeo inspect):"
+        skopeo inspect --authfile /workspace/quay-auth/config.json \
+          "docker://$IMAGE_TAG" | jq '{Name: .Name, Digest: .Digest, Created: .Created, Size: .Size}' | sed 's/^/  /'
+        
         DIGEST=$(skopeo inspect --authfile /workspace/quay-auth/config.json \
           "docker://$IMAGE_TAG" | jq -r '.Digest')
         
@@ -230,10 +344,27 @@ spec:
         PUSH_TIME=$((END_TIME - START_TIME))
         
         echo ""
-        echo "✅ Push Complete!"
+        echo "✅ Push Complete! [$(date -u +%Y-%m-%dT%H:%M:%SZ)]"
         echo "   URL:    $IMAGE_TAG"
         echo "   Digest: $DIGEST"
         echo "   Time:   ${PUSH_TIME}s ($(($PUSH_TIME / 60))m $(($PUSH_TIME % 60))s)"
+        echo ""
+        
+        # Update pipeline status with Quay push
+        cat > $(workspaces.source.path)/.pipeline-metadata/pipeline-status.json <<EOF
+        {
+          "stage": "quay_pushed",
+          "timestamp_utc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+          "quay_image": "${IMAGE_TAG}",
+          "quay_digest": "${DIGEST}",
+          "quay_org": "$(params.quay_org)",
+          "quay_repo": "$(params.quay_repo)",
+          "quay_tag": "$(params.quay_tag)",
+          "push_time_seconds": ${PUSH_TIME},
+          "node": "$(cat /etc/hostname)"
+        }
+        EOF
+        echo "📝 Pipeline status updated: quay_pushed"
         echo "════════════════════════════════════════════════════════════"
         
         # Save for results
@@ -247,7 +378,7 @@ spec:
         set -e
         
         echo "════════════════════════════════════════════════════════════"
-        echo "📝 Step 4/4: Writing Publish Metadata"
+        echo "📝 [$(date -u +%Y-%m-%dT%H:%M:%SZ)] Step 4/4: Write Metadata"
         echo "════════════════════════════════════════════════════════════"
         
         IMAGE_URL=$(cat /tmp/image-url)
@@ -273,8 +404,25 @@ spec:
         
         echo "✅ Metadata written to: $(workspaces.source.path)/.pipeline-metadata/publish-metadata.json"
         echo ""
-        cat $(workspaces.source.path)/.pipeline-metadata/publish-metadata.json
+        cat $(workspaces.source.path)/.pipeline-metadata/publish-metadata.json | sed 's/^/  /'
         echo ""
+        
+        # Final workspace snapshot
+        echo "📂 Final workspace state:"
+        ls -lh $(workspaces.source.path) | sed 's/^/  /' || true
+        echo ""
+        echo "📊 Final disk usage:"
+        df -h /workspace / | sed 's/^/  /'
+        echo ""
+        echo "📊 Final top 5 largest dirs:"
+        du -sh $(workspaces.source.path)/* 2>/dev/null | sort -hr | head -5 | sed 's/^/  /' || true
+        echo ""
+        
+        # Single-line machine-readable summary (for easy grepping)
+        echo "TASK1_SUMMARY {\"stage\":\"quay_pushed\",\"image\":\"${IMAGE_URL}\",\"digest\":\"${IMAGE_DIGEST}\",\"hf_repo\":\"$(params.hf_repo)\",\"time_utc\":\"${TIMESTAMP}\"}"
+        
+        echo "════════════════════════════════════════════════════════════"
+        echo "✅ Task 1 Complete: Model downloaded, image built and pushed to Quay"
         echo "════════════════════════════════════════════════════════════"
         
         # Write results
