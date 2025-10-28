@@ -45,7 +45,7 @@ spec:
     - name: model_name
       value: "Mistral-Small-24B-Instruct"
     - name: version_name
-      value: "quantized-w4a16-1gpu"
+      value: "quantized-w4a16"
     - name: version_description
       value: "Mistral Large Instruct 2407 - AWQ W4A16 quantized (8GB VRAM)"
     - name: base_model

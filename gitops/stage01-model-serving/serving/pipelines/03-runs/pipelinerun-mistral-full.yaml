@@ -46,7 +46,7 @@ spec:
     - name: model_name
       value: "Mistral-Small-24B-Instruct"  # Canonical model name (matches HuggingFace)
     - name: version_name
-      value: "full-fp16-4gpu"              # Version naming: {variant}-{quant}-{gpu}
+      value: "full-fp16"                   # Version naming: {variant}-{quantization}
     - name: version_description
       value: "Mistral 24B full precision (FP16) - 4x NVIDIA GPU required for optimal performance"
     - name: base_model
