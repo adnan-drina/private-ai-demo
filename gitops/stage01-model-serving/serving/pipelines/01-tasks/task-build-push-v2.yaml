@@ -51,6 +51,21 @@ spec:
         export BUILDAH_STORAGE_ROOT=$(workspaces.source.path)/.buildah-storage
         install -d -m 2775 -g 1000970000 "$HOME" "$BUILDAH_STORAGE_ROOT"
         
+        # Create storage.conf to disable user namespaces entirely
+        mkdir -p ${HOME}/.config/containers
+        cat > ${HOME}/.config/containers/storage.conf <<'STORAGEEOF'
+        [storage]
+        driver = "vfs"
+        runroot = "/var/run/containers/storage"
+        graphroot = "/var/lib/containers/storage"
+        
+        [storage.options]
+        ignore_chown_errors = "true"
+        
+        [storage.options.vfs]
+        ignore_chown_errors = "true"
+        STORAGEEOF
+        
         # Create Containerfile (use variable expansion for model_path)
         MODEL_PATH="$(params.model_path)"
         cat > $(workspaces.source.path)/Containerfile <<EOF
@@ -63,13 +78,17 @@ spec:
         IMAGE_TAG="quay.io/$(params.quay_org)/$(params.quay_repo):$(params.quay_tag)"
         echo "🚀 Building: $IMAGE_TAG"
         
-        # Build with explicit no-user-namespace flags
+        # Force buildah to use chroot isolation (no user namespaces)
+        export BUILDAH_ISOLATION=chroot
+        
+        # Build with explicit flags to disable user namespaces
         buildah --root ${BUILDAH_STORAGE_ROOT} --storage-driver=vfs bud \
           --format oci \
           --layers=false \
           --squash \
           --isolation chroot \
           --userns=host \
+          --no-pivot \
           --tag "$IMAGE_TAG" \
           --file $(workspaces.source.path)/Containerfile \
           $(workspaces.source.path)
