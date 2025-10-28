@@ -195,13 +195,14 @@ spec:
         # Update metadata with internal registry info
         echo "📝 Updating metadata with internal registry reference..."
         
+        MIRROR_TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
         # Read existing metadata, add internal registry info
         cat "$METADATA_FILE" | sed '$s/}$/,/' > /tmp/metadata-updated.json
         cat >> /tmp/metadata-updated.json << EOF
           "image_internal": "${DEST_IMAGE}",
           "internal_digest": "${INTERNAL_DIGEST}",
           "mirror_time_seconds": ${MIRROR_TIME},
-          "mirrored_at_utc": "$(date -u +"%Y-%m-%dT%H:%M:%SZ)"
+          "mirrored_at_utc": "${MIRROR_TIMESTAMP}"
         }
         EOF
         
