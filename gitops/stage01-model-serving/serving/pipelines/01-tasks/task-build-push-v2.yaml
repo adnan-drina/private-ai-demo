@@ -51,6 +51,11 @@ spec:
         export BUILDAH_STORAGE_ROOT=$(workspaces.source.path)/.buildah-storage
         install -d -m 2775 -g 1000970000 "$HOME" "$BUILDAH_STORAGE_ROOT"
         
+        # Force buildah to NOT use user namespaces at all
+        export BUILDAH_ISOLATION=chroot
+        export _CONTAINERS_USERNS_CONFIGURED=""
+        export _BUILDAH_STARTED_IN_USERNS=""
+        
         # Create storage.conf to disable user namespaces entirely
         mkdir -p ${HOME}/.config/containers
         cat > ${HOME}/.config/containers/storage.conf <<'STORAGEEOF'
@@ -77,9 +82,6 @@ spec:
         
         IMAGE_TAG="quay.io/$(params.quay_org)/$(params.quay_repo):$(params.quay_tag)"
         echo "🚀 Building: $IMAGE_TAG"
-        
-        # Force buildah to use chroot isolation (no user namespaces)
-        export BUILDAH_ISOLATION=chroot
         
         # Build with flags to disable user namespaces
         buildah --root ${BUILDAH_STORAGE_ROOT} --storage-driver=vfs bud \
