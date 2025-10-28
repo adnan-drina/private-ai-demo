@@ -23,7 +23,7 @@ spec:
   params:
     # Model source
     - name: hf_repo
-      value: "mistralai/Mistral-Large-Instruct-2407"
+      value: "RedHatAI/Mistral-Small-24B-Instruct-2501-quantized.w4a16"
     - name: hf_revision
       value: "main"
     
@@ -47,9 +47,9 @@ spec:
     - name: version_name
       value: "quantized-w4a16"
     - name: version_description
-      value: "Mistral Large Instruct 2407 - AWQ W4A16 quantized (8GB VRAM)"
+      value: "Mistral 24B quantized (W4A16) - 1x NVIDIA GPU required, optimized for efficiency"
     - name: base_model
-      value: "mistralai/Mistral-Large-Instruct-2407"
+      value: "mistralai/Mistral-Small-24B-Instruct-2501"
     - name: quantization
       value: "w4a16"
     - name: gpu_requirement

@@ -23,7 +23,7 @@ spec:
   params:
     # Model source
     - name: hf_repo
-      value: "mistralai/Mistral-Large-Instruct-2407"
+      value: "mistralai/Mistral-Small-24B-Instruct-2501"
     - name: hf_revision
       value: "main"
     
@@ -47,9 +47,9 @@ spec:
     - name: version_name
       value: "full-fp16"
     - name: version_description
-      value: "Mistral Large Instruct 2407 - Full Precision FP16 (48GB VRAM)"
+      value: "Mistral 24B full precision (FP16) - 4x NVIDIA GPU required for optimal performance"
     - name: base_model
-      value: "mistralai/Mistral-Large-Instruct-2407"
+      value: "mistralai/Mistral-Small-24B-Instruct-2501"
     - name: quantization
       value: "none"
     - name: gpu_requirement
