@@ -126,9 +126,9 @@ spec:
         echo "   Digest: $DIGEST"
         echo ""
         
-        # Write metadata for downstream tasks
+        # Write metadata for downstream tasks (mirror-to-internal expects this filename)
         mkdir -p $(workspaces.source.path)/.pipeline-metadata
-        cat > $(workspaces.source.path)/.pipeline-metadata/build-status.json <<EOF
+        cat > $(workspaces.source.path)/.pipeline-metadata/publish-metadata.json <<EOF
         {
           "image_quay": "${IMAGE_QUAY}",
           "digest": "${DIGEST}",
