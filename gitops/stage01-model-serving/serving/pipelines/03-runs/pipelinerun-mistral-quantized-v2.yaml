@@ -76,7 +76,7 @@ spec:
     # Quay.io authentication (robot account credentials)
     - name: quay-auth
       secret:
-        secretName: quay-auth-secret
+        secretName: quay-credentials
   
   timeouts:
     pipeline: "5h0m0s"  # Plenty of time for large model builds
