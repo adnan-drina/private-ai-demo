@@ -78,5 +78,6 @@ spec:
       secret:
         secretName: quay-auth-secret
   
-  timeout: "5h0m0s"  # Plenty of time for large model builds
+  timeouts:
+    pipeline: "5h0m0s"  # Plenty of time for large model builds
 

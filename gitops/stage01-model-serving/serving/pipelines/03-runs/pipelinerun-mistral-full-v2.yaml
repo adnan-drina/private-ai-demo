@@ -78,5 +78,6 @@ spec:
       secret:
         secretName: quay-auth-secret
   
-  timeout: "5h0m0s"  # Full precision model needs ~3.5-4h total
+  timeouts:
+    pipeline: "5h0m0s"  # Full precision model needs ~3.5-4h total
 
