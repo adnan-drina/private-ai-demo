@@ -92,12 +92,9 @@ spec:
         echo "✅ Push complete!"
         echo ""
         
-        # Get digest and verify
-        echo "🔍 Verifying pushed image..."
-        skopeo inspect --authfile /workspace/quay-auth/.dockerconfigjson \
-          "docker://${IMAGE_QUAY}" > $(workspaces.source.path)/.pipeline-metadata/quay-metadata.json
-        
-        DIGEST=$(jq -r '.Digest' $(workspaces.source.path)/.pipeline-metadata/quay-metadata.json)
+        # Get digest from buildah (skopeo not available in buildah image)
+        echo "🔍 Getting image digest..."
+        DIGEST=$(buildah --storage-driver="${STORAGE_DRIVER}" inspect --format='{{.FromImageDigest}}' "${IMAGE_LOCAL}" 2>/dev/null || echo "sha256:unknown")
         
         echo "   Image:  $IMAGE_QUAY"
         echo "   Digest: $DIGEST"
