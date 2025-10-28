@@ -2,7 +2,11 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
+  # Legacy pipeline (original design, kept for reference)
   - pipeline-model-deployment.yaml
+  
+  # v2 pipeline (production-ready: handles both quantized and full precision)
+  - pipeline-modelcar-v2.yaml
 
 commonLabels:
   argocd.argoproj.io/instance: stage01-model-serving

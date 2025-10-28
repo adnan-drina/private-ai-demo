@@ -1,0 +1,82 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: mistral-24b-full-
+  namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/name: modelcar-pipeline
+    pipeline: modelcar-build-deploy-v2
+    model: mistral-24b-full
+spec:
+  pipelineRef:
+    name: modelcar-build-deploy-v2
+  
+  taskRunTemplate:
+    serviceAccountName: model-pipeline-sa
+    podTemplate:
+      securityContext:
+        fsGroup: 1000970000  # Namespace SCC-enforced range
+        fsGroupChangePolicy: "OnRootMismatch"
+        supplementalGroups:
+          - 1000970000  # Ensures all tasks can read/write PVC
+  
+  params:
+    # Model source
+    - name: hf_repo
+      value: "mistralai/Mistral-Large-Instruct-2407"
+    - name: hf_revision
+      value: "main"
+    
+    # Image configuration
+    - name: image_stream_name
+      value: "mistral-24b-full"
+    - name: image_tag
+      value: "fp-2501"
+    
+    # Quay.io configuration
+    - name: quay_org
+      value: "adrianarp"
+    - name: quay_repo
+      value: "mistral-24b-full"
+    - name: quay_tag
+      value: "fp-2501"
+    
+    # Model Registry metadata
+    - name: model_name
+      value: "Mistral-24B-Instruct"
+    - name: version_name
+      value: "full-2501"
+    - name: version_description
+      value: "Mistral Large Instruct 2407 - Full Precision FP16 (48GB VRAM)"
+    - name: base_model
+      value: "mistralai/Mistral-Large-Instruct-2407"
+    - name: quantization
+      value: "none"
+    - name: gpu_requirement
+      value: "4"
+    
+    # Internal parameters
+    - name: internal_registry
+      value: "image-registry.openshift-image-registry.svc:5000"
+    - name: namespace
+      value: "private-ai-demo"
+  
+  workspaces:
+    # 500Gi PVC for model download, build context, and cross-task metadata
+    - name: shared-workspace
+      volumeClaimTemplate:
+        spec:
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 500Gi
+          storageClassName: gp3-csi
+    
+    # Quay.io authentication (robot account credentials)
+    - name: quay-auth
+      secret:
+        secretName: quay-auth-secret
+  
+  timeout: "5h0m0s"  # Full precision model needs ~3.5-4h total
+
