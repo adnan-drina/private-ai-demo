@@ -81,14 +81,13 @@ spec:
         # Force buildah to use chroot isolation (no user namespaces)
         export BUILDAH_ISOLATION=chroot
         
-        # Build with explicit flags to disable user namespaces
+        # Build with flags to disable user namespaces
         buildah --root ${BUILDAH_STORAGE_ROOT} --storage-driver=vfs bud \
           --format oci \
           --layers=false \
           --squash \
           --isolation chroot \
           --userns=host \
-          --no-pivot \
           --tag "$IMAGE_TAG" \
           --file $(workspaces.source.path)/Containerfile \
           $(workspaces.source.path)
