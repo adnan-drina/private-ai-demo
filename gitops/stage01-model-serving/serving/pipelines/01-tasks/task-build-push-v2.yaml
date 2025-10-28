@@ -28,18 +28,16 @@ spec:
     - name: IMAGE_URL
     - name: IMAGE_DIGEST
 
-  stepTemplate:
-    resources:
-      requests:
-        memory: "24Gi"
-        cpu: "2"
-      limits:
-        memory: "24Gi"
-        cpu: "4"
-
   steps:
     - name: build-and-push
       image: registry.redhat.io/rhel9/buildah:latest
+      resources:
+        requests:
+          memory: "16Gi"
+          cpu: "4"
+        limits:
+          memory: "16Gi"
+          cpu: "8"
       script: |
         #!/bin/bash
         set -euo pipefail

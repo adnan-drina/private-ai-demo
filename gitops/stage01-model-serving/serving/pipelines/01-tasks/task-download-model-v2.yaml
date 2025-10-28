@@ -35,18 +35,16 @@ spec:
     - name: source
       description: Shared workspace (500Gi PVC) for model storage
 
-  stepTemplate:
-    resources:
-      requests:
-        memory: "8Gi"
-        cpu: "2"
-      limits:
-        memory: "8Gi"
-        cpu: "4"
-
   steps:
     - name: download-model
       image: registry.access.redhat.com/ubi9/python-311:latest
+      resources:
+        requests:
+          memory: "8Gi"
+          cpu: "2"
+        limits:
+          memory: "8Gi"
+          cpu: "4"
       env:
         - name: HF_TOKEN
           valueFrom:
