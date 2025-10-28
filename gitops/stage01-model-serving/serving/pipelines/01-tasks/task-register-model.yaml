@@ -61,6 +61,15 @@ spec:
       description: Number of GPUs required
       default: "1"
 
+  stepTemplate:
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "250m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+
   steps:
     - name: register-via-sdk
       image: registry.access.redhat.com/ubi9/python-311:latest

@@ -66,6 +66,15 @@ spec:
     - name: METADATA_PATH
       description: Path to publish-metadata.json on PVC
 
+  stepTemplate:
+    resources:
+      requests:
+        memory: "8Gi"
+        cpu: "2"
+      limits:
+        memory: "16Gi"
+        cpu: "4"
+
   steps:
     - name: download-model
       image: registry.access.redhat.com/ubi9/python-311:latest

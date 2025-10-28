@@ -60,6 +60,15 @@ spec:
     - name: MIRROR_STATUS
       description: Mirror operation status
 
+  stepTemplate:
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "500m"
+      limits:
+        memory: "2Gi"
+        cpu: "1"
+
   steps:
     - name: mirror-image
       image: quay.io/skopeo/stable:latest

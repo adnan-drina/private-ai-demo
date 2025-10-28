@@ -9,7 +9,7 @@ metadata:
     model: mistral-24b-full
 spec:
   pipelineRef:
-    name: modelcar-build-deploy-v2
+    name: modelcar-build-deploy-v3
   
   taskRunTemplate:
     serviceAccountName: model-pipeline-sa
