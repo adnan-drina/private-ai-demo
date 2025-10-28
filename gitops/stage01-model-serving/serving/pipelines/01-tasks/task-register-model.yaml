@@ -71,6 +71,17 @@ spec:
         #!/usr/bin/env bash
         set -euo pipefail
         
+        echo "════════════════════════════════════════════════════════════"
+        echo "📝 [$(date -u +%Y-%m-%dT%H:%M:%SZ)] Register Model"
+        echo "════════════════════════════════════════════════════════════"
+        
+        # Runtime context
+        echo "🔍 DEBUG: Runtime context"
+        echo "  Task: register-model"
+        echo "  Time (UTC): $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        echo "  Node: $(cat /etc/hostname)"
+        echo ""
+        
         # Install Python SDK
         echo "📦 Installing model-registry Python SDK..."
         pip install --quiet model-registry==0.2.10
@@ -80,9 +91,10 @@ spec:
         import os
         import sys
         from model_registry import ModelRegistry
+        from datetime import datetime
 
         print("════════════════════════════════════════════════════════════")
-        print("📝 Registering Model in Model Registry (Python SDK)")
+        print(f"📝 [{datetime.utcnow().isoformat()}Z] Registering Model (Python SDK)")
         print("════════════════════════════════════════════════════════════")
 
         # Get parameters
@@ -96,13 +108,14 @@ spec:
         quantization = "$(params.quantization)"
         gpu_requirement = "$(params.gpu_requirement)"
 
-        print(f"Model Name:        {model_name}")
-        print(f"Version:           {version_name}")
-        print(f"Base Model:        {base_model}")
-        print(f"Quantization:      {quantization}")
-        print(f"GPU Requirement:   {gpu_requirement}")
-        print(f"Image URI:         {image_uri}")
-        print(f"Format:            {format_name} v{format_version}")
+        print("\n🎯 Registration parameters:")
+        print(f"  Model Name:        {model_name}")
+        print(f"  Version:           {version_name}")
+        print(f"  Base Model:        {base_model}")
+        print(f"  Quantization:      {quantization}")
+        print(f"  GPU Requirement:   {gpu_requirement}")
+        print(f"  Image URI:         {image_uri}")
+        print(f"  Format:            {format_name} v{format_version}")
         print("════════════════════════════════════════════════════════════")
 
         # Get Model Registry host
@@ -159,19 +172,40 @@ spec:
                 metadata=metadata
             )
             
-            print(f"✅ Model registered successfully!")
+            print(f"\n✅ Model registered successfully! [{datetime.utcnow().isoformat()}Z]")
             print(f"   Registered Model ID: {registered_model.id}")
             print(f"   Model Name: {registered_model.name}")
+            print(f"   Version: {version_name}")
+            
+            # Single-line machine-readable summary (for easy grepping)
+            print(f'\nTASK3_SUMMARY {{"stage":"registered","model":"{model_name}","version":"{version_name}","image":"{image_uri}","time_utc":"{datetime.utcnow().isoformat()}Z"}}')
             
             print("\n════════════════════════════════════════════════════════════")
-            print("✅ Registration complete!")
+            print("✅ Task 3 Complete: Model registered in Model Registry")
             print("════════════════════════════════════════════════════════════")
             
         except Exception as e:
-            print(f"\n❌ ERROR: Registration failed", file=sys.stderr)
+            print(f"\n❌ ERROR: Registration failed [{datetime.utcnow().isoformat()}Z]", file=sys.stderr)
             print(f"Error: {str(e)}", file=sys.stderr)
             import traceback
             traceback.print_exc(file=sys.stderr)
             sys.exit(1)
 
         EOFPYTHON
+        
+        # Final PIPELINE_SUMMARY (comprehensive success receipt)
+        echo ""
+        echo "════════════════════════════════════════════════════════════"
+        echo "PIPELINE_SUMMARY {\"pipeline\":\"modelcar-v2\",\"status\":\"success\",\"model\":\"$(params.model_name)\",\"version\":\"$(params.version_name)\",\"image\":\"$(params.image_uri)\",\"base_model\":\"$(params.base_model)\",\"quantization\":\"$(params.quantization)\",\"gpu_requirement\":\"$(params.gpu_requirement)\",\"time_utc\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}"
+        echo "════════════════════════════════════════════════════════════"
+        echo ""
+        echo "🎉 PIPELINE COMPLETE 🎉"
+        echo ""
+        echo "✅ All tasks succeeded:"
+        echo "   1. Model downloaded from HuggingFace"
+        echo "   2. ModelCar image built and pushed to Quay"
+        echo "   3. Image mirrored to OpenShift internal registry"
+        echo "   4. Model registered in Model Registry"
+        echo ""
+        echo "🚀 Model is now ready for deployment!"
+        echo "════════════════════════════════════════════════════════════"

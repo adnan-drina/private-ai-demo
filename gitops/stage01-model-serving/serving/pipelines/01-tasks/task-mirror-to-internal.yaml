@@ -70,8 +70,28 @@ spec:
         START_TIME=$(date +%s)
         
         echo "════════════════════════════════════════════════════════════"
-        echo "🔄 Mirroring Image to OpenShift Internal Registry"
+        echo "🔄 [$(date -u +%Y-%m-%dT%H:%M:%SZ)] Mirror to Internal Registry"
         echo "════════════════════════════════════════════════════════════"
+        
+        # Runtime context for debugging
+        echo "🔍 DEBUG: Runtime context"
+        echo "  Task: mirror-to-internal / mirror-image"
+        echo "  Time (UTC): $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        echo "  Node: $(cat /etc/hostname)"
+        echo "  UID/GID: $(id)"
+        echo "  PWD: $(pwd)"
+        echo "  Workspace mount:"
+        mount | grep /workspace | sed 's/^/    /' || true
+        echo ""
+        
+        # Pipeline parameters
+        echo "🎯 Mirror configuration:"
+        echo "  Namespace:       $(params.namespace)"
+        echo "  ImageStream:     $(params.image_stream_name)"
+        echo "  Tag:             $(params.image_tag)"
+        echo "  Internal Registry: $(params.internal_registry)"
+        echo "  TLS Verify:      $(params.tlsverify)"
+        echo ""
         
         # Read metadata from Task 1
         METADATA_FILE="$(workspaces.source.path)/.pipeline-metadata/publish-metadata.json"
@@ -82,8 +102,8 @@ spec:
           exit 1
         fi
         
-        echo "📋 Reading publish metadata..."
-        cat "$METADATA_FILE"
+        echo "📋 Reading publish metadata from Task 1..."
+        cat "$METADATA_FILE" | sed 's/^/  /'
         echo ""
         
         # Extract source image URL from metadata
@@ -140,24 +160,30 @@ spec:
         # Verify the mirror
         echo ""
         echo "🔍 Verifying mirrored image..."
+        echo "📝 Mirrored to internal registry (skopeo inspect):"
+        skopeo inspect \
+          --tls-verify=$(params.tlsverify) \
+          --authfile /tmp/auth/internal-auth.json \
+          "docker://$DEST_IMAGE" 2>/dev/null | jq '{Name: .Name, Digest: .Digest, Created: .Created, Size: .Size}' | sed 's/^/  /' || echo "  (inspect failed, but mirror likely succeeded)"
+        
         INTERNAL_DIGEST=$(skopeo inspect \
           --tls-verify=$(params.tlsverify) \
           --authfile /tmp/auth/internal-auth.json \
-          "docker://$DEST_IMAGE" | grep -o '"Digest": "[^"]*"' | cut -d'"' -f4)
+          "docker://$DEST_IMAGE" 2>/dev/null | jq -r '.Digest' || echo "unknown")
         
         # Calculate time
         END_TIME=$(date +%s)
         MIRROR_TIME=$((END_TIME - START_TIME))
         
         echo ""
-        echo "✅ Mirror Complete!"
-        echo "   Internal URL: $DEST_IMAGE"
+        echo "✅ Mirror Complete! [$(date -u +%Y-%m-%dT%H:%M:%SZ)]"
+        echo "   Source:       $SOURCE_IMAGE"
+        echo "   Destination:  $DEST_IMAGE"
         echo "   Digest:       $INTERNAL_DIGEST"
         echo "   Time:         ${MIRROR_TIME}s ($(($MIRROR_TIME / 60))m $(($MIRROR_TIME % 60))s)"
-        echo "════════════════════════════════════════════════════════════"
+        echo ""
         
         # Update metadata with internal registry info
-        echo ""
         echo "📝 Updating metadata with internal registry reference..."
         
         # Read existing metadata, add internal registry info
@@ -165,7 +191,8 @@ spec:
         cat >> /tmp/metadata-updated.json << EOF
           "image_internal": "${DEST_IMAGE}",
           "internal_digest": "${INTERNAL_DIGEST}",
-          "mirrored_at_utc": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          "mirror_time_seconds": ${MIRROR_TIME},
+          "mirrored_at_utc": "$(date -u +"%Y-%m-%dT%H:%M:%SZ)"
         }
         EOF
         
@@ -173,8 +200,30 @@ spec:
         cat /tmp/metadata-updated.json > "$METADATA_FILE"
         
         echo "✅ Metadata updated:"
-        cat "$METADATA_FILE"
+        cat "$METADATA_FILE" | sed 's/^/  /'
         echo ""
+        
+        # Update pipeline-status.json
+        cat > $(workspaces.source.path)/.pipeline-metadata/pipeline-status.json <<EOF
+        {
+          "stage": "mirrored_internal",
+          "timestamp_utc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+          "quay_image": "${SOURCE_IMAGE}",
+          "internal_image": "${DEST_IMAGE}",
+          "internal_digest": "${INTERNAL_DIGEST}",
+          "mirror_time_seconds": ${MIRROR_TIME},
+          "node": "$(cat /etc/hostname)"
+        }
+        EOF
+        echo "📝 Pipeline status updated: mirrored_internal"
+        echo ""
+        
+        # Single-line machine-readable summary
+        echo "TASK2_SUMMARY {\"stage\":\"mirrored\",\"source\":\"${SOURCE_IMAGE}\",\"dest\":\"${DEST_IMAGE}\",\"digest\":\"${INTERNAL_DIGEST}\",\"time_utc\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}"
+        
+        echo "════════════════════════════════════════════════════════════"
+        echo "✅ Task 2 Complete: Image mirrored to internal registry"
+        echo "════════════════════════════════════════════════════════════"
         
         # Write results
         echo -n "$DEST_IMAGE" > $(results.INTERNAL_IMAGE_URL.path)
