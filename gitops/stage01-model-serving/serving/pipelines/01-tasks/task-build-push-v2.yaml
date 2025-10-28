@@ -66,7 +66,13 @@ spec:
         echo "🎯 Build configuration:"
         echo "  Storage driver: vfs (PVC-backed)"
         echo "  Storage root: $HOME"
+        echo "  TMPDIR: $TMPDIR (PVC-backed)"
         echo "  Running as: $(id)"
+        echo ""
+        
+        # CRITICAL: Disk usage BEFORE build
+        echo "📊 Storage BEFORE build:"
+        df -h $(workspaces.source.path) /tmp /var/tmp 2>/dev/null || df -h $(workspaces.source.path)
         echo ""
         
         # Create Containerfile
@@ -94,6 +100,12 @@ spec:
         
         echo "✅ Build complete"
         echo ""
+        
+        # CRITICAL: Disk usage AFTER build
+        echo "📊 Storage AFTER build:"
+        df -h $(workspaces.source.path) /tmp /var/tmp 2>/dev/null || df -h $(workspaces.source.path)
+        echo ""
+        
         echo "📤 Pushing to Quay..."
         
         # Push directly to Quay (privileged mode - clean and simple!)
