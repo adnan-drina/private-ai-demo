@@ -164,19 +164,21 @@ spec:
           "docker://$SOURCE_IMAGE" \
           "docker://$DEST_IMAGE"
         
-        # Verify the mirror
+        # Verify the mirror (extract digest without jq)
         echo ""
         echo "🔍 Verifying mirrored image..."
-        echo "📝 Mirrored to internal registry (skopeo inspect):"
-        skopeo inspect \
+        INSPECT_OUTPUT=$(skopeo inspect \
           --tls-verify=$(params.tlsverify) \
           --authfile /tmp/auth/internal-auth.json \
-          "docker://$DEST_IMAGE" 2>/dev/null | jq '{Name: .Name, Digest: .Digest, Created: .Created, Size: .Size}' | sed 's/^/  /' || echo "  (inspect failed, but mirror likely succeeded)"
+          "docker://$DEST_IMAGE" 2>/dev/null || echo "")
         
-        INTERNAL_DIGEST=$(skopeo inspect \
-          --tls-verify=$(params.tlsverify) \
-          --authfile /tmp/auth/internal-auth.json \
-          "docker://$DEST_IMAGE" 2>/dev/null | jq -r '.Digest' || echo "unknown")
+        if [ -n "$INSPECT_OUTPUT" ]; then
+          INTERNAL_DIGEST=$(echo "$INSPECT_OUTPUT" | grep -o '"Digest"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"Digest"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+          echo "✅ Image verified successfully"
+        else
+          INTERNAL_DIGEST="unknown"
+          echo "⚠️  Could not verify (but mirror likely succeeded)"
+        fi
         
         # Calculate time
         END_TIME=$(date +%s)
