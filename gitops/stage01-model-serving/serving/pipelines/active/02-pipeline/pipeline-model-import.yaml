@@ -123,7 +123,7 @@ spec:
       runAfter:
         - build-runtime-image
       taskRef:
-        name: register-model-v2
+        name: register-model
       params:
         - name: model_name
           value: $(params.model_name)
