@@ -5,7 +5,7 @@ namespace: model-storage
 
 resources:
   - namespace.yaml
-  - secret.yaml
+  # secret.yaml created imperatively by deploy.sh (not in Git)
   - pvc.yaml
   - deployment.yaml
   - service.yaml
