@@ -24,7 +24,7 @@ spec:
       restartPolicy: OnFailure
       
       # Service account with MinIO access
-      serviceAccountName: minio-sa
+      serviceAccountName: default
       
       containers:
       - name: bootstrap
