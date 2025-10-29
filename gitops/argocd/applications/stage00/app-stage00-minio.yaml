@@ -32,12 +32,6 @@ spec:
         factor: 2
         maxDuration: 3m
   ignoreDifferences:
-  # Ignore MinIO Tenant status (managed by operator)
-  - group: minio.min.io
-    kind: Tenant
-    jsonPointers:
-    - /status
-    - /metadata/annotations/kubectl.kubernetes.io~1last-applied-configuration
   # Ignore Job status (bootstrap job)
   - group: batch
     kind: Job
@@ -45,15 +39,20 @@ spec:
     - /status
     - /spec/template/metadata/labels/batch.kubernetes.io~1controller-uid
     - /spec/template/metadata/labels/batch.kubernetes.io~1job-name
+  # Ignore Deployment status
+  - group: apps
+    kind: Deployment
+    jsonPointers:
+    - /status
   info:
   - name: Purpose
     value: "S3-compatible object storage for LLM model weights"
-  - name: Deployment Method
-    value: "GitOps (ArgoCD synced)"
+  - name: Deployment Pattern
+    value: "Simple Deployment + PVC (no operator required)"
   - name: Storage
     value: "500Gi gp3-csi PVC"
   - name: Bucket
     value: "llm-models (auto-created by bootstrap job)"
   - name: Access
-    value: "Internal only (ClusterIP service)"
+    value: "Internal only (ClusterIP - http://minio.model-storage.svc:9000)"
 

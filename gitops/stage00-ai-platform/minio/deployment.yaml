@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio
+  namespace: model-storage
+  labels:
+    app.kubernetes.io/name: minio
+    app.kubernetes.io/part-of: stage00-ai-platform
+    app.kubernetes.io/component: object-storage
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate  # Required for PVC attachment
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: minio
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: minio
+        app.kubernetes.io/component: object-storage
+    spec:
+      containers:
+      - name: minio
+        image: quay.io/minio/minio:RELEASE.2024-10-13T13-34-11Z
+        args:
+          - server
+          - /data
+          - --console-address
+          - :9001
+        env:
+          - name: MINIO_ROOT_USER
+            valueFrom:
+              secretKeyRef:
+                name: minio-credentials
+                key: accesskey
+          - name: MINIO_ROOT_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: minio-credentials
+                key: secretkey
+          - name: MINIO_BROWSER
+            value: "on"
+          - name: MINIO_PROMETHEUS_AUTH_TYPE
+            value: "public"
+        ports:
+          - containerPort: 9000
+            name: api
+            protocol: TCP
+          - containerPort: 9001
+            name: console
+            protocol: TCP
+        volumeMounts:
+          - name: data
+            mountPath: /data
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "2"
+          limits:
+            memory: "8Gi"
+            cpu: "4"
+        livenessProbe:
+          httpGet:
+            path: /minio/health/live
+            port: 9000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /minio/health/ready
+            port: 9000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: minio-data
+

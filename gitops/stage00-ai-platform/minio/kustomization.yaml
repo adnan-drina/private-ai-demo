@@ -5,7 +5,10 @@ namespace: model-storage
 
 resources:
   - namespace.yaml
-  - tenant.yaml
+  - secret.yaml
+  - pvc.yaml
+  - deployment.yaml
+  - service.yaml
   - job-bootstrap-buckets.yaml
 
 labels:
@@ -19,7 +22,7 @@ commonAnnotations:
   managed-by: argocd
 
 # Sync order:
-# Wave 0: Namespace
-# Wave 1: Tenant (creates MinIO instance + credentials secret)
-# Wave 2: Bootstrap Job (creates buckets, waits for Tenant to be ready)
+# Wave 0: Namespace + Secret
+# Wave 1: PVC + Deployment + Service (creates MinIO instance)
+# Wave 2: Bootstrap Job (creates buckets, waits for MinIO to be ready)
 

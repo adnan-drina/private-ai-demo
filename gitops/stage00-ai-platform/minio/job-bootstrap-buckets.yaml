@@ -43,14 +43,14 @@ spec:
           echo "═══════════════════════════════════════════════════════════"
           
           # Wait for MinIO to be ready
-          echo "⏳ Waiting for MinIO tenant to be ready..."
-          MINIO_ENDPOINT="https://model-storage-hl.model-storage.svc.cluster.local:9000"
+          echo "⏳ Waiting for MinIO to be ready..."
+          MINIO_ENDPOINT="http://minio.model-storage.svc:9000"
           MAX_RETRIES=30
           RETRY=0
           
           while [ $RETRY -lt $MAX_RETRIES ]; do
-            if mc alias set minio "$MINIO_ENDPOINT" "$MINIO_ACCESS_KEY" "$MINIO_SECRET_KEY" --insecure 2>/dev/null; then
-              echo "✅ MinIO tenant is ready!"
+            if mc alias set minio "$MINIO_ENDPOINT" "$MINIO_ACCESS_KEY" "$MINIO_SECRET_KEY" 2>/dev/null; then
+              echo "✅ MinIO is ready!"
               break
             fi
             RETRY=$((RETRY+1))
@@ -59,7 +59,7 @@ spec:
           done
           
           if [ $RETRY -eq $MAX_RETRIES ]; then
-            echo "❌ MinIO tenant not ready after $MAX_RETRIES attempts"
+            echo "❌ MinIO not ready after $MAX_RETRIES attempts"
             exit 1
           fi
           
@@ -104,13 +104,13 @@ spec:
           }
           POLICY_EOF
           
-          mc anonymous set-json /tmp/llm-models-policy.json minio/llm-models --insecure
+          mc anonymous set-json /tmp/llm-models-policy.json minio/llm-models
           echo "✅ Set policy for llm-models (authenticated read)"
           
           # Enable versioning (good practice for model management)
           echo ""
           echo "🔄 Enabling versioning..."
-          mc version enable minio/llm-models --insecure
+          mc version enable minio/llm-models
           echo "✅ Versioning enabled for llm-models"
           
           # List buckets and verify
@@ -118,11 +118,11 @@ spec:
           echo "═══════════════════════════════════════════════════════════"
           echo "✅ Bootstrap Complete - Bucket Summary:"
           echo "═══════════════════════════════════════════════════════════"
-          mc ls minio/ --insecure
+          mc ls minio/
           
           echo ""
           echo "Bucket details:"
-          mc stat minio/llm-models --insecure
+          mc stat minio/llm-models
           
           echo ""
           echo "🎉 MinIO is ready for model storage!"
