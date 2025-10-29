@@ -72,10 +72,8 @@ spec:
           value: $(params.hf_repo)
         - name: hf_revision
           value: $(params.hf_revision)
-        - name: model_name
-          value: $(params.model_name)
       workspaces:
-        - name: workspace
+        - name: source
           workspace: workspace
     
     # Task 2: Upload model weights to MinIO
