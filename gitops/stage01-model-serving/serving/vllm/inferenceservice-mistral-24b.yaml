@@ -38,6 +38,7 @@ spec:
       name: ""
       runtime: vllm-cuda-runtime  # Shared runtime for all vLLM models
       # ModelCar approach: model is baked into the container image
+      # Red Hat best practice: Pull from OpenShift internal registry (mirrored by pipeline)
       storageUri: "oci://image-registry.openshift-image-registry.svc:5000/private-ai-demo/mistral-24b-full:fp-2501"
       # Model-specific resources for 4-GPU full precision model
       resources:
@@ -45,10 +46,12 @@ spec:
           cpu: "16"
           memory: 80Gi
           nvidia.com/gpu: "4"
+          ephemeral-storage: "120Gi"  # Red Hat guidance: request disk for 87GB image pull
         limits:
           cpu: "32"
           memory: 80Gi
           nvidia.com/gpu: "4"
+          ephemeral-storage: "150Gi"
       # Model-specific vLLM args for Mistral Small 24B full precision (FP16)
       args:
         - --dtype=bfloat16                  # Use BF16 for better performance on L4 GPUs
