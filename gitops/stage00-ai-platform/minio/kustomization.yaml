@@ -9,6 +9,7 @@ resources:
   - pvc.yaml
   - deployment.yaml
   - service.yaml
+  - route-console.yaml
   - job-bootstrap-buckets.yaml
 
 labels:
