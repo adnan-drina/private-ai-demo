@@ -131,8 +131,7 @@ spec:
         RUN pip install --no-cache-dir \
             vllm==${VLLM_VERSION} \
             huggingface-hub \
-            boto3 \
-            && pip cache purge
+            boto3
         
         # Install MinIO client for model fetching
         RUN wget https://dl.min.io/client/mc/release/linux-amd64/mc \
