@@ -10,13 +10,16 @@ metadata:
     app.kubernetes.io/name: mistral-24b
     app.openshift.io/runtime: python
     opendatahub.io/dashboard: "true"
-    modelregistry.opendatahub.io/registered-model-id: "2"
-    modelregistry.opendatahub.io/model-version-id: "15"  # v1.1-full
+    modelregistry.opendatahub.io/registered-model-id: "4"  # Mistral-Small-24B-Instruct
+    modelregistry.opendatahub.io/model-version-id: "13"  # full-fp16
+    modelregistry.opendatahub.io/name: private-ai-model-registry
   annotations:
+    argocd.argoproj.io/sync-wave: "5"
     app.openshift.io/connects-to: '[{"apiVersion":"apps/v1","kind":"Deployment","name":"llama-stack"}]'
     openshift.io/display-name: "Mistral 24B Full"
     serving.kserve.io/deploymentMode: "Serverless"
-    description: "Mistral Small 24B Instruct full precision - 4 GPU deployment"
+    description: "Mistral Small 24B Instruct full precision - 4 GPU deployment (ModelCar OCI image)"
+    security.opendatahub.io/enable-auth: "true"
     serving.knative.openshift.io/enablePassthrough: "true"
     sidecar.istio.io/inject: "true"
     sidecar.istio.io/rewriteAppHTTPProbers: "true"
@@ -24,15 +27,18 @@ metadata:
     autoscaling.knative.dev/scale-to-zero-pod-retention-period: "60m"
 spec:
   predictor:
-    serviceAccountName: ai-workload-sa
+    automountServiceAccountToken: false
+    imagePullSecrets:
+      - name: internal-registry-private-ai
     minReplicas: 1
     maxReplicas: 1
     model:
-      runtime: vllm-cuda-runtime  # Shared runtime for all vLLM models
       modelFormat:
         name: vLLM
+      name: ""
+      runtime: vllm-cuda-runtime  # Shared runtime for all vLLM models
       # ModelCar approach: model is baked into the container image
-      storageUri: "oci://image-registry.openshift-image-registry.svc:5000/private-ai-demo/mistral-24b-full:fp16-2501"
+      storageUri: "oci://image-registry.openshift-image-registry.svc:5000/private-ai-demo/mistral-24b-full:fp-2501"
       # Model-specific resources for 4-GPU full precision model
       resources:
         requests:

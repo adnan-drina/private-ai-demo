@@ -18,6 +18,9 @@ spec:
     Each task runs in its own pod with appropriate memory allocation.
     Avoids OOMKilled by isolating memory-intensive operations.
 
+  timeouts:
+    pipeline: "10h"  # Total: download(2h) + build-push(4h) + mirror(1.5h) + register(2h) + margin
+
   params:
     - name: hf_repo
       type: string
@@ -61,6 +64,7 @@ spec:
 
   tasks:
     - name: download-model
+      timeout: "2h"  # 48GB model download with safety margin
       taskRef:
         name: download-model-v2
       params:
@@ -76,7 +80,7 @@ spec:
 
     - name: build-and-push-to-quay
       runAfter: ["download-model"]
-      timeout: "2h"  # Extended timeout for large model builds (48GB → 80GB image)
+      timeout: "4h"  # Build + push 80GB image to Quay with extra margin
       taskRef:
         name: build-and-push-v2
       params:
@@ -96,7 +100,7 @@ spec:
 
     - name: mirror-to-internal
       runAfter: ["build-and-push-to-quay"]
-      timeout: "30m"  # Registry-to-registry copy can take 20min for 80GB images
+      timeout: "3h"  # Registry-to-registry copy for 80GB image (measured: 1h34m+, 100% margin)
       taskRef:
         name: mirror-to-internal
       params:
@@ -118,6 +122,7 @@ spec:
 
     - name: register-model
       runAfter: ["mirror-to-internal"]
+      timeout: "2h"  # Model registry API operations with safety margin
       taskRef:
         name: register-model
       params:

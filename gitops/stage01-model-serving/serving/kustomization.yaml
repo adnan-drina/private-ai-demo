@@ -24,7 +24,6 @@ resources:
   # Wave 1: Infrastructure
   - network-policy              # NetworkPolicy for Model Registry access
   - imagestreams                # ImageStreams for ModelCar images
-  - workspaces                  # PVCs for pipeline workspace
   - model-registry              # Model Registry ConfigMap (used by pipelines)
   
   # Wave 2: MLOps Pipeline

@@ -108,6 +108,12 @@ spec:
         # Save URL for next step
         echo -n "${ISVC_URL}" > /workspace/results/model_url.txt
         
+        # Pre-create directory structure for results with proper permissions
+        # (this step runs as root, next step runs as non-root)
+        install -d -m 2775 /workspace/results/eval
+        install -d -m 2775 /workspace/results/benchmarks
+        echo "✅ Created results directory structure"
+        
         echo ""
         echo "════════════════════════════════════════════════════════════"
 
@@ -228,7 +234,12 @@ spec:
           echo "────────────────────────────────────────────────────────────"
           
           # Copy results to workspace for downstream tasks
-          mkdir -p /workspace/results
+          # Copy results.json to the exact path publish-results expects
+          # (directory was pre-created in previous step with proper permissions)
+          cp "$RESULTS_FILE" /workspace/results/eval/results.json
+          echo "✅ Copied results to /workspace/results/eval/results.json"
+          
+          # Also keep full results for reference
           cp -r /tmp/eval/* /workspace/results/ 2>/dev/null || true
           
           # Save task results

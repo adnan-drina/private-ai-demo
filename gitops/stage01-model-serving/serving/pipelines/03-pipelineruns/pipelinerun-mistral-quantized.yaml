@@ -19,7 +19,7 @@ spec:
         fsGroup: 1000970000  # Shared group for cross-task PVC access (must be in namespace range)
         fsGroupChangePolicy: "OnRootMismatch"  # Efficient: only chown when needed
   pipelineRef:
-    name: modelcar-build-deploy-v2
+    name: modelcar-build-deploy-v3
   
   params:
     # Model source

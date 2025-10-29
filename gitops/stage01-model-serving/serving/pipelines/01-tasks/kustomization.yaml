@@ -2,16 +2,17 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-  # Legacy tasks (kept for reference)
-  - task-buildah-build.yaml
-  - task-prepare-modelcar.yaml
-  - task-mirror-to-quay.yaml
-  - task-deploy-vllm.yaml
-  
-  # v2 tasks (production-ready, works for both quantized and full models)
-  - task-build-and-push-to-quay.yaml
+  # v3 tasks (production: multi-task pipeline with isolated memory per task)
+  - task-download-model-v2.yaml
+  - task-build-push-v2.yaml
   - task-mirror-to-internal.yaml
   - task-register-model.yaml
+  
+  # Testing & deployment tasks (separate pipeline)
+  - task-run-guidellm.yaml
+  - task-run-lm-eval.yaml
+  - task-publish-test-results.yaml
+  - task-deploy-vllm.yaml
 
 commonLabels:
   argocd.argoproj.io/instance: stage01-model-serving

@@ -4,10 +4,16 @@ kind: Kustomization
 namespace: private-ai-demo
 
 resources:
-  - serviceaccount.yaml
-  - model-registry-route-reader.yaml
+  # Pipeline ServiceAccount and RBAC
+  - serviceaccount-pipeline.yaml
+  - role-pipeline.yaml
+  - rolebinding-pipeline.yaml
+  
+  # Build ServiceAccount and RBAC (for privileged Buildah builds)
+  - serviceaccount-build.yaml
 
 commonLabels:
-  app.kubernetes.io/part-of: private-ai-demo
-  app.kubernetes.io/component: pipeline-rbac
+  argocd.argoproj.io/instance: stage01-model-serving
+  app.kubernetes.io/instance: stage01-pipelines
+  app.kubernetes.io/managed-by: argocd
 

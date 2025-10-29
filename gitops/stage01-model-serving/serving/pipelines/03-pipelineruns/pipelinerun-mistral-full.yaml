@@ -19,7 +19,7 @@ spec:
         fsGroup: 1000970000  # Shared group for cross-task PVC access (must be in namespace range)
         fsGroupChangePolicy: "OnRootMismatch"  # Efficient: only chown when needed
   pipelineRef:
-    name: modelcar-build-deploy-v2
+    name: modelcar-build-deploy-v3
   
   params:
     # Model source
@@ -74,5 +74,5 @@ spec:
         secretName: quay-credentials
   
   timeouts:
-    pipeline: "4h"      # Total pipeline timeout
+    pipeline: "12h"     # Total pipeline timeout (download 2h + build-push 4h + mirror 3h + register 2h + margin)
 
