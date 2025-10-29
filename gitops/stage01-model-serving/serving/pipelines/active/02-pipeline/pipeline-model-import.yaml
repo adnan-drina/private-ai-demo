@@ -72,6 +72,8 @@ spec:
           value: $(params.hf_repo)
         - name: hf_revision
           value: $(params.hf_revision)
+        - name: target_path
+          value: "models"
       workspaces:
         - name: source
           workspace: workspace
@@ -135,7 +137,4 @@ spec:
           value: $(params.gpu_count)
         - name: quantization
           value: "$(params.is_quantized)"
-      workspaces:
-        - name: workspace
-          workspace: workspace
 
