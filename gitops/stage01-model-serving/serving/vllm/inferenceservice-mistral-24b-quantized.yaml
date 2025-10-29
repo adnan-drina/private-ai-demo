@@ -47,6 +47,9 @@ spec:
           cpu: "10"
           memory: 20Gi
           nvidia.com/gpu: "1"
+    # Node placement for g6.4xlarge (1 GPU node) - matches nvidia-l4-1gpu hardware profile
+    nodeSelector:
+      node.kubernetes.io/instance-type: g6.4xlarge
     tolerations:
       - key: nvidia.com/gpu
         operator: Exists
