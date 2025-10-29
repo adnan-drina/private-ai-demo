@@ -137,6 +137,8 @@ spec:
             secretKeyRef:
               name: minio-credentials
               key: secretkey
+        - name: MC_CONFIG_DIR
+          value: "/tmp/.mc"  # Use writable temp directory for mc config
         
         resources:
           requests:
