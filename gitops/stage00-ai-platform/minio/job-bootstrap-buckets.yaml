@@ -9,8 +9,7 @@ metadata:
     app.kubernetes.io/instance: minio-bootstrap
   annotations:
     argocd.argoproj.io/sync-wave: "2"
-    argocd.argoproj.io/hook: PostSync
-    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    # Bootstrap job runs as regular resource (not hook) to persist for debugging
 spec:
   # Keep job history for debugging
   ttlSecondsAfterFinished: 3600
