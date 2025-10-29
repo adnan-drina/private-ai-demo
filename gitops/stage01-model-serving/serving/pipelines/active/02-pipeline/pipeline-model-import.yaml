@@ -1,0 +1,148 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: model-import-pipeline
+  namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/part-of: model-serving
+    pipeline.openshift.io/type: kubernetes
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  description: |
+    Unified model import pipeline for ALL model sizes (quantized and full).
+    
+    Architecture: MinIO-First
+    - Downloads model from HuggingFace
+    - Publishes weights to MinIO object storage
+    - Builds lightweight runtime image (~5-10GB)
+    - Registers model in Model Registry
+    
+    Works for:
+    - Quantized models (~8GB)
+    - Full precision models (~48GB)
+    - Any size model
+    
+    No branching logic - size differences handled via params only.
+    
+  params:
+    - name: model_name
+      type: string
+      description: "Model name (e.g., Mistral-Small-24B-Instruct)"
+    - name: version_name
+      type: string
+      description: "Version name (e.g., full-fp16-2501 or quantized-w4a16-2501)"
+    - name: hf_repo
+      type: string
+      description: "HuggingFace repository (e.g., mistralai/Mistral-Small-Instruct-2409)"
+    - name: hf_revision
+      type: string
+      default: "main"
+      description: "HuggingFace revision/branch"
+    - name: is_quantized
+      type: string
+      default: "false"
+      description: "Metadata flag: true for quantized, false for full (for tracking only)"
+    - name: quay_org
+      type: string
+      description: "Quay.io organization"
+    - name: base_model
+      type: string
+      default: "mistralai/Mistral-Small-Instruct-2409"
+      description: "Base model name for metadata"
+    - name: gpu_count
+      type: string
+      default: "1"
+      description: "Number of GPUs required for serving"
+    - name: registered_model_id
+      type: string
+      description: "Model Registry registered model ID"
+  
+  workspaces:
+    - name: workspace
+      description: "Shared PVC workspace for all tasks"
+  
+  tasks:
+    # Task 1: Download model from HuggingFace
+    - name: download-model
+      taskRef:
+        name: download-model-v2
+      params:
+        - name: hf_repo
+          value: $(params.hf_repo)
+        - name: hf_revision
+          value: $(params.hf_revision)
+        - name: model_name
+          value: $(params.model_name)
+      workspaces:
+        - name: workspace
+          workspace: workspace
+    
+    # Task 2: Upload model weights to MinIO
+    - name: upload-to-minio
+      runAfter:
+        - download-model
+      taskRef:
+        name: upload-to-minio
+      params:
+        - name: model_name
+          value: $(params.model_name)
+        - name: version_name
+          value: $(params.version_name)
+        - name: minio_endpoint
+          value: "http://minio.model-storage.svc:9000"
+        - name: minio_bucket
+          value: "llm-models"
+      workspaces:
+        - name: workspace
+          workspace: workspace
+    
+    # Task 3: Build lightweight runtime image
+    - name: build-runtime-image
+      runAfter:
+        - upload-to-minio
+      taskRef:
+        name: build-runtime-image
+      params:
+        - name: model_name
+          value: $(params.model_name)
+        - name: version_name
+          value: $(params.version_name)
+        - name: quay_org
+          value: $(params.quay_org)
+        - name: base_image
+          value: "registry.access.redhat.com/ubi9/python-311:latest"
+        - name: vllm_version
+          value: "0.6.0"
+      workspaces:
+        - name: workspace
+          workspace: workspace
+    
+    # Task 4: Register model in Model Registry
+    - name: register-model
+      runAfter:
+        - build-runtime-image
+      taskRef:
+        name: register-model-v2
+      params:
+        - name: model_name
+          value: $(params.model_name)
+        - name: version_name
+          value: $(params.version_name)
+        - name: registered_model_id
+          value: $(params.registered_model_id)
+        - name: base_model
+          value: $(params.base_model)
+        - name: gpu_count
+          value: $(params.gpu_count)
+        - name: pattern
+          value: "minio"
+      workspaces:
+        - name: workspace
+          workspace: workspace
+  
+  # Pipeline-level timeout (4 hours for large models)
+  timeouts:
+    pipeline: "4h"
+    tasks: "3h"
+
