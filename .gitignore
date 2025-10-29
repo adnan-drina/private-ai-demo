@@ -55,3 +55,6 @@ stage2-private-data-rag/notebooks/[0-9][0-9]-*.ipynb
 
 # Internal documentation (not for GitHub)
 docs/
+
+# Documentation (managed separately, not in GitOps)
+docs/
