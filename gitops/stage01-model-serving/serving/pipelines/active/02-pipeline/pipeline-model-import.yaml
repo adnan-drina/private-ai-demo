@@ -140,9 +140,4 @@ spec:
       workspaces:
         - name: workspace
           workspace: workspace
-  
-  # Pipeline-level timeout (4 hours for large models)
-  timeouts:
-    pipeline: "4h"
-    tasks: "3h"
 
