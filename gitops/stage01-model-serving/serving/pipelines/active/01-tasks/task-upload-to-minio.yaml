@@ -166,7 +166,6 @@ spec:
           "upload_timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
           "upload_duration_seconds": ${DURATION},
           "total_size": "${TOTAL_SIZE}",
-          "file_count": ${UPLOADED_COUNT},
           "pattern": "minio"
         }
         METADATA_EOF
