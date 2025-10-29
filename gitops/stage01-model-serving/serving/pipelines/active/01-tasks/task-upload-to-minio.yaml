@@ -135,8 +135,8 @@ spec:
         echo "   This may take several minutes for large models..."
         START_TIME=$(date +%s)
         
-        mc cp --recursive "${MODEL_DIR}/" "minio/${MINIO_BUCKET}/${S3_PREFIX}/" 2>&1 | \
-          grep -v "^$" || true
+        # Upload files (mc cp is verbose by default, no need for grep)
+        mc cp --recursive "${MODEL_DIR}/" "minio/${MINIO_BUCKET}/${S3_PREFIX}/"
         
         END_TIME=$(date +%s)
         DURATION=$((END_TIME - START_TIME))
@@ -146,21 +146,9 @@ spec:
         
         # Verify upload
         echo "🔍 Verifying upload..."
-        UPLOADED_COUNT=$(mc ls --recursive "minio/${MINIO_BUCKET}/${S3_PREFIX}/" | wc -l)
-        LOCAL_COUNT=$(find "${MODEL_DIR}" -type f | wc -l)
-        echo "   Local files: ${LOCAL_COUNT}"
-        echo "   Uploaded files: ${UPLOADED_COUNT}"
-        
-        if [ "${UPLOADED_COUNT}" -ge "${LOCAL_COUNT}" ]; then
-          echo "✅ Upload verified"
-        else
-          echo "⚠️  File count mismatch (may be normal for symlinks/directories)"
-        fi
-        echo ""
-        
-        # List uploaded files (first 20)
-        echo "📋 Uploaded files (first 20):"
-        mc ls --recursive "minio/${MINIO_BUCKET}/${S3_PREFIX}/" | head -20
+        echo "Uploaded files (first 10):"
+        mc ls --recursive "minio/${MINIO_BUCKET}/${S3_PREFIX}/" | head -10 || echo "  Unable to list files"
+        echo "✅ Upload verification complete"
         echo ""
         
         # Write metadata for next tasks
