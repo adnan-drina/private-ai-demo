@@ -48,14 +48,14 @@ spec:
           memory: 20Gi
           nvidia.com/gpu: "1"
       # Model-specific vLLM args for Mistral Small 24B quantized (W4A16)
+      # Quantization: compressed-tensors (auto-detected by vLLM)
       args:
-        - --tokenizer-mode=mistral          # Mistral-specific tokenizer
         - --gpu-memory-utilization=0.95     # High utilization for single GPU
         - --max-model-len=32768             # Mistral Small supports 32K context
         - --enable-chunked-prefill          # Performance optimization
         - --enable-prefix-caching           # Cache optimization for repeated prompts
         - --trust-remote-code               # Allow custom model code
-        - --dtype=auto                      # Auto-detect dtype (model is quantized)
+        - --dtype=auto                      # Auto-detect dtype from model config
     # Node placement for g6.4xlarge (1 GPU node) - matches nvidia-l4-1gpu hardware profile
     nodeSelector:
       node.kubernetes.io/instance-type: g6.4xlarge

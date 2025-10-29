@@ -51,8 +51,7 @@ spec:
           nvidia.com/gpu: "4"
       # Model-specific vLLM args for Mistral Small 24B full precision (FP16)
       args:
-        - --tokenizer-mode=mistral          # Mistral-specific tokenizer
-        - --dtype=bfloat16                  # Use BF16 for better performance
+        - --dtype=bfloat16                  # Use BF16 for better performance on L4 GPUs
         - --tensor-parallel-size=4          # Distribute across 4 GPUs
         - --gpu-memory-utilization=0.85     # Conservative for 4-GPU setup
         - --max-model-len=32768             # Mistral Small supports 32K context
