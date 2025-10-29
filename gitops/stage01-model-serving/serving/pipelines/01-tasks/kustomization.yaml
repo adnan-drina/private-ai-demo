@@ -8,6 +8,10 @@ resources:
   - task-mirror-to-internal.yaml
   - task-register-model.yaml
   
+  # Path B tasks (Runtime + MinIO for large models)
+  - task-upload-to-minio.yaml
+  - task-build-runtime.yaml
+  
   # Testing & deployment tasks (separate pipeline)
   - task-run-guidellm.yaml
   - task-run-lm-eval.yaml
