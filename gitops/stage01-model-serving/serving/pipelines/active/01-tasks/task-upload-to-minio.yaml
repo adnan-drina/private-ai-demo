@@ -95,13 +95,30 @@ spec:
         echo "📂 Target S3 path: s3://${MINIO_BUCKET}/${S3_PREFIX}/"
         echo ""
         
-        # Check if model directory exists on PVC
-        MODEL_DIR="/workspace/model"
-        if [ ! -d "${MODEL_DIR}" ]; then
-          echo "❌ ERROR: Model directory ${MODEL_DIR} not found"
-          echo "   Expected structure: /workspace/model/ (from download-model task)"
+        # Debug: Check workspace structure
+        echo "🔍 DEBUG: Workspace filesystem structure:"
+        echo "Root /workspace/:"
+        ls -la /workspace/ || true
+        echo ""
+        echo "Workspace subdirs:"
+        find /workspace/ -maxdepth 2 -type d || true
+        echo ""
+        
+        # Find model directory
+        # Download task uses workspace "source" and writes to target_path "models"
+        # Upload task uses workspace "workspace", so same PVC root is at /workspace/workspace/
+        if [ -d "/workspace/workspace/models" ]; then
+          MODEL_DIR="/workspace/workspace/models"
+        elif [ -d "/workspace/models" ]; then
+          MODEL_DIR="/workspace/models"
+        else
+          echo "❌ ERROR: Model directory not found in expected locations"
+          echo "   Tried: /workspace/workspace/models, /workspace/models"
           exit 1
         fi
+        
+        echo "✅ Found model directory: ${MODEL_DIR}"
+        echo ""
         
         # Display model contents
         echo "📊 Model directory contents:"
