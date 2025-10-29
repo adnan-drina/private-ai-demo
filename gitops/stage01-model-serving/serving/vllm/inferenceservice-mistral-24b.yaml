@@ -46,12 +46,12 @@ spec:
           cpu: "16"
           memory: 80Gi
           nvidia.com/gpu: "4"
-          ephemeral-storage: "120Gi"  # Red Hat guidance: request disk for 87GB image pull
+          ephemeral-storage: "90Gi"  # Reduced to fit node capacity (120GB node, 87GB image)
         limits:
           cpu: "32"
           memory: 80Gi
           nvidia.com/gpu: "4"
-          ephemeral-storage: "150Gi"
+          ephemeral-storage: "100Gi"
       # Model-specific vLLM args for Mistral Small 24B full precision (FP16)
       args:
         - --dtype=bfloat16                  # Use BF16 for better performance on L4 GPUs
