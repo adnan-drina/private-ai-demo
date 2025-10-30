@@ -17,6 +17,8 @@ resources:
   - pvc-mistral-24b-quantized.yaml
   # Shared ServingRuntime (ONE for all models)
   - servingruntime-vllm-cuda.yaml
+  # PostSync job to populate full model PVC from MinIO
+  - job-sync-mistral-24b-pvc.yaml
   # InferenceServices last (each specifies its own resources/nodeSelector)
   - inferenceservice-mistral-24b.yaml
   - inferenceservice-mistral-24b-quantized.yaml

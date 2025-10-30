@@ -35,27 +35,8 @@ spec:
         name: vLLM
       name: ""
       runtime: vllm-cuda-runtime  # Shared runtime for all vLLM models
-      # Path B: weights in MinIO (S3-compatible) populated by pipeline
-      storageUri: "s3://llm-models/Mistral-Small-24B-Instruct/full-fp16/"
-      env:
-        - name: AWS_ACCESS_KEY_ID
-          valueFrom:
-            secretKeyRef:
-              name: minio-credentials
-              key: accesskey
-        - name: AWS_SECRET_ACCESS_KEY
-          valueFrom:
-            secretKeyRef:
-              name: minio-credentials
-              key: secretkey
-        - name: S3_ENDPOINT
-          value: "http://minio.model-storage.svc:9000"
-        - name: S3_USE_HTTPS
-          value: "false"
-        - name: S3_VERIFY_SSL
-          value: "false"
-        - name: AWS_REGION
-          value: "us-east-1"
+      # Use PVC to avoid node ephemeral disk pressure; PVC populated via PostSync Job
+      storageUri: "pvc://mistral-24b-pvc/"
       # Model-specific resources for 4-GPU full precision model
       resources:
         requests:
