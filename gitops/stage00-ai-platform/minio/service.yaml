@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio
+  namespace: model-storage
+  labels:
+    app.kubernetes.io/name: minio
+    app.kubernetes.io/part-of: stage00-ai-platform
+    app.kubernetes.io/component: object-storage
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9000"
+    prometheus.io/path: "/minio/v2/metrics/cluster"
+spec:
+  type: ClusterIP
+  ports:
+    - port: 9000
+      targetPort: 9000
+      protocol: TCP
+      name: api
+    - port: 9001
+      targetPort: 9001
+      protocol: TCP
+      name: console
+  selector:
+    app.kubernetes.io/name: minio
+

@@ -24,6 +24,7 @@ set -euo pipefail
 # Paths
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+ENV_FILE="$PROJECT_ROOT/.env"
 
 # Colors
 GREEN='\033[0;32m'
@@ -36,6 +37,51 @@ log_info() { echo -e "${BLUE}ℹ${NC} $1"; }
 log_success() { echo -e "${GREEN}✓${NC} $1"; }
 log_warning() { echo -e "${YELLOW}⚠${NC} $1"; }
 log_skip() { echo -e "${YELLOW}⊘${NC} $1"; }
+load_env_file() {
+    if [ -f "$ENV_FILE" ]; then
+        log_info "Loading secrets from .env"
+        set -a
+        # shellcheck disable=SC1090
+        source "$ENV_FILE"
+        set +a
+        if [ -z "${MINIO_ACCESS_KEY:-}" ] || [ -z "${MINIO_SECRET_KEY:-}" ]; then
+            log_warning "MINIO_ACCESS_KEY or MINIO_SECRET_KEY not set in .env; skipping MinIO secret creation"
+        fi
+    else
+        log_warning ".env not found; skipping MinIO secret creation"
+    fi
+}
+
+create_minio_secret_and_deploy() {
+    print_header "Step 0: MinIO Namespace, Secret, and Deployment (GitOps)"
+    local MINIO_DIR="$PROJECT_ROOT/gitops/stage00-ai-platform/minio"
+
+    if [ ! -d "$MINIO_DIR" ]; then
+        log_skip "MinIO GitOps directory not found: $MINIO_DIR"
+        return
+    fi
+
+    # Ensure namespace (apply to preserve labels/annotations from GitOps)
+    if [ -f "$MINIO_DIR/namespace.yaml" ]; then
+        oc apply -f "$MINIO_DIR/namespace.yaml"
+    fi
+
+    # Create credentials secret imperatively (not stored in Git)
+    if [ -n "${MINIO_ACCESS_KEY:-}" ] && [ -n "${MINIO_SECRET_KEY:-}" ]; then
+        oc create secret generic minio-credentials \
+          --from-literal=accesskey="$MINIO_ACCESS_KEY" \
+          --from-literal=secretkey="$MINIO_SECRET_KEY" \
+          -n model-storage \
+          --dry-run=client -o yaml | oc apply -f -
+        log_success "MinIO secret ensured in namespace model-storage"
+    else
+        log_warning "MinIO credentials not provided; ensure secret exists before deployment"
+    fi
+
+    # Apply MinIO GitOps bundle
+    oc apply -k "$MINIO_DIR"
+    log_success "MinIO GitOps manifests applied"
+}
 
 print_header() {
     echo ""
@@ -76,6 +122,9 @@ main() {
     log_info "Starting deployment following Red Hat OpenShift AI 2.25 documentation"
     log_info "Documentation: https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/2.25"
     echo ""
+
+    # Load env for secrets (MinIO)
+    load_env_file
     
     # ========================================================================
     # Step 1: Node Feature Discovery Operator
@@ -503,6 +552,11 @@ EOF
         log_warning "Model Registry namespace not created yet (DataScienceCluster may still be initializing)"
     fi
     
+    # ========================================================================
+    # Step 7: MinIO (Object Storage) via GitOps
+    # ========================================================================
+    create_minio_secret_and_deploy
+
     # ========================================================================
     # Deployment Summary
     # ========================================================================

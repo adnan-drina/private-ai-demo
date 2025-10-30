@@ -9,12 +9,16 @@ metadata:
 spec:
   instance: ""
   operand:
-    image: registry.redhat.io/openshift4/ose-node-feature-discovery:v4.19
+    # Let operator use its default image (with valid digest)
     imagePullPolicy: Always
   enableTaints: false
   prunerOnDelete: false
   topologyUpdater: false
   workerConfig:
+    tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
     configData: |
       core:
         sleepInterval: 60s
@@ -26,7 +30,8 @@ spec:
             - "12"
           deviceLabelFields:
             - "vendor"
-            - "device"
+            # Removed "device" to emit vendor-level labels (pci-10de.present)
+            # This is required for GPU Operator to recognize NVIDIA nodes
         usb:
           deviceClassWhitelist:
             - "0e"

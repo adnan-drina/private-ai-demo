@@ -17,6 +17,9 @@ resources:
   # DataScienceCluster (Wave 2)
   - datasciencecluster/datasciencecluster.yaml
   
+  # Object Storage (Wave 2)
+  - minio/
+  
   # GPU Infrastructure (Wave 3)
   - gpu-infrastructure/machineset-g6-4xlarge.yaml
   - gpu-infrastructure/machineset-g6-12xlarge.yaml

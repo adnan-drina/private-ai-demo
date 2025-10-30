@@ -1,0 +1,142 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: modelcar-build-deploy-v3
+  namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/name: modelcar-pipeline
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+spec:
+  description: |
+    Multi-task pipeline for ModelCar build and deploy (v3)
+    - Task 1: download-model-v2 (8Gi memory)
+    - Task 2: build-and-push-v2 (24Gi memory)
+    - Task 3: mirror-to-internal (2Gi memory)
+    - Task 4: register-model (512Mi memory)
+    
+    Each task runs in its own pod with appropriate memory allocation.
+    Avoids OOMKilled by isolating memory-intensive operations.
+
+  timeouts:
+    pipeline: "10h"  # Total: download(2h) + build-push(4h) + mirror(1.5h) + register(2h) + margin
+
+  params:
+    - name: hf_repo
+      type: string
+    - name: hf_revision
+      type: string
+      default: "main"
+    - name: quay_org
+      type: string
+    - name: quay_repo
+      type: string
+    - name: quay_tag
+      type: string
+    - name: image_stream_name
+      type: string
+    - name: image_tag
+      type: string
+    - name: model_name
+      type: string
+    - name: version_name
+      type: string
+    - name: version_description
+      type: string
+    - name: base_model
+      type: string
+    - name: quantization
+      type: string
+      default: "none"
+    - name: gpu_requirement
+      type: string
+      default: "1"
+    - name: namespace
+      type: string
+      default: "private-ai-demo"
+    - name: internal_registry
+      type: string
+      default: "image-registry.openshift-image-registry.svc:5000"
+
+  workspaces:
+    - name: shared-workspace
+    - name: quay-auth
+
+  tasks:
+    - name: download-model
+      timeout: "2h"  # 48GB model download with safety margin
+      taskRef:
+        name: download-model-v2
+      params:
+        - name: hf_repo
+          value: $(params.hf_repo)
+        - name: hf_revision
+          value: $(params.hf_revision)
+        - name: target_path
+          value: "models"
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+
+    - name: build-and-push-to-quay
+      runAfter: ["download-model"]
+      timeout: "4h"  # Build + push 80GB image to Quay with extra margin
+      taskRef:
+        name: build-and-push-v2
+      params:
+        - name: quay_org
+          value: $(params.quay_org)
+        - name: quay_repo
+          value: $(params.quay_repo)
+        - name: quay_tag
+          value: $(params.quay_tag)
+        - name: model_path
+          value: "models"
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+        - name: quay-auth
+          workspace: quay-auth
+
+    - name: mirror-to-internal
+      runAfter: ["build-and-push-to-quay"]
+      timeout: "3h"  # Registry-to-registry copy for 80GB image (measured: 1h34m+, 100% margin)
+      taskRef:
+        name: mirror-to-internal
+      params:
+        - name: namespace
+          value: $(params.namespace)
+        - name: image_stream_name
+          value: $(params.image_stream_name)
+        - name: image_tag
+          value: $(params.image_tag)
+        - name: internal_registry
+          value: $(params.internal_registry)
+        - name: tlsverify
+          value: "false"
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+        - name: quay-auth
+          workspace: quay-auth
+
+    - name: register-model
+      runAfter: ["mirror-to-internal"]
+      timeout: "2h"  # Model registry API operations with safety margin
+      taskRef:
+        name: register-model
+      params:
+        - name: model_name
+          value: $(params.model_name)
+        - name: version_name
+          value: $(params.version_name)
+        - name: image_uri
+          value: "$(tasks.mirror-to-internal.results.INTERNAL_IMAGE_URL)"
+        - name: description
+          value: $(params.version_description)
+        - name: base_model
+          value: $(params.base_model)
+        - name: quantization
+          value: $(params.quantization)
+        - name: gpu_requirement
+          value: $(params.gpu_requirement)

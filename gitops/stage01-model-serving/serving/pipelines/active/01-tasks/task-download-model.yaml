@@ -1,0 +1,141 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: download-model-v2
+  namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/name: modelcar-pipeline
+    app.kubernetes.io/component: task
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+    tekton.dev/pipelines.minVersion: "0.17.0"
+    tekton.dev/tags: "modelcar,download,huggingface"
+    tekton.dev/displayName: "Download Model from HuggingFace"
+spec:
+  description: >-
+    Downloads AI model from HuggingFace to shared PVC.
+    Optimized for large models (8GB-48GB) with proper memory allocation.
+
+  params:
+    - name: hf_repo
+      type: string
+      description: HuggingFace repository ID (e.g., "mistralai/Mistral-7B-Instruct-v0.3")
+    
+    - name: hf_revision
+      type: string
+      description: HuggingFace revision (branch, tag, or commit hash)
+      default: "main"
+    
+    - name: target_path
+      type: string
+      description: Path relative to workspace where model is downloaded
+      default: "models"
+
+  workspaces:
+    - name: source
+      description: Shared workspace (500Gi PVC) for model storage
+
+  steps:
+    - name: download-model
+      image: registry.access.redhat.com/ubi9/python-311:latest
+      computeResources:
+        requests:
+          memory: "8Gi"
+          cpu: "2"
+        limits:
+          memory: "8Gi"
+          cpu: "4"
+      env:
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: huggingface-token
+              key: token
+              optional: true
+        - name: HUGGING_FACE_HUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: huggingface-token
+              key: token
+              optional: true
+      script: |
+        #!/bin/bash
+        set -e
+        
+        START_TIME=$(date +%s)
+        
+        echo "════════════════════════════════════════════════════════════"
+        echo "📥 [$(date -u +%Y-%m-%dT%H:%M:%SZ)] Download Model from HuggingFace"
+        echo "════════════════════════════════════════════════════════════"
+        
+        # Runtime context
+        echo "🔍 Runtime context:"
+        echo "  Node: $(cat /etc/hostname)"
+        echo "  UID/GID: $(id)"
+        echo "  Memory limit: 8Gi"
+        echo ""
+        
+        # Parameters
+        echo "🎯 Download parameters:"
+        echo "  HF Repository: $(params.hf_repo)"
+        echo "  HF Revision:   $(params.hf_revision)"
+        echo "  Target Path:   $(workspaces.source.path)/$(params.target_path)"
+        echo ""
+        
+        # Disk snapshot BEFORE
+        echo "📊 Disk BEFORE download:"
+        df -h $(workspaces.source.path) | sed 's/^/  /'
+        echo ""
+        
+        # Install HuggingFace CLI
+        echo "📦 Installing huggingface-hub..."
+        export PATH=$PATH:$HOME/.local/bin
+        python -m pip install --quiet --no-cache-dir 'huggingface-hub<1.0'
+        
+        # Create target directory (avoid setting explicit group to comply with SCC)
+        mkdir -p "$(workspaces.source.path)/$(params.target_path)"
+        
+        # Download model
+        echo "📥 Downloading model..."
+        huggingface-cli download \
+          "$(params.hf_repo)" \
+          --revision "$(params.hf_revision)" \
+          --local-dir "$(workspaces.source.path)/$(params.target_path)" \
+          --local-dir-use-symlinks False \
+          --resume-download \
+          --max-workers 20 \
+          --include "*.safetensors" "*.bin" "*.json" "*.txt" "*.model" "*.py" "tokenizer*" "config*" "generation*" "special_tokens*"
+        
+        # Stats
+        END_TIME=$(date +%s)
+        DOWNLOAD_TIME=$((END_TIME - START_TIME))
+        MODEL_SIZE=$(du -sb "$(workspaces.source.path)/$(params.target_path)" | awk '{print $1}')
+        
+        echo ""
+        echo "✅ Download Complete! [$(date -u +%Y-%m-%dT%H:%M:%SZ)]"
+        echo "   Model size: $(numfmt --to=iec-i --suffix=B $MODEL_SIZE)"
+        echo "   Time: ${DOWNLOAD_TIME}s ($(($DOWNLOAD_TIME / 60))m $(($DOWNLOAD_TIME % 60))s)"
+        echo ""
+        
+        # Disk snapshot AFTER
+        echo "📊 Disk AFTER download:"
+        df -h $(workspaces.source.path) | sed 's/^/  /'
+        du -sh $(workspaces.source.path)/$(params.target_path) | sed 's/^/  /'
+        echo ""
+        
+        # Write metadata
+        mkdir -p $(workspaces.source.path)/.pipeline-metadata
+        cat > $(workspaces.source.path)/.pipeline-metadata/download-status.json <<EOF
+        {
+          "stage": "model_downloaded",
+          "timestamp_utc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+          "hf_repo": "$(params.hf_repo)",
+          "hf_revision": "$(params.hf_revision)",
+          "model_size_bytes": ${MODEL_SIZE},
+          "download_time_seconds": ${DOWNLOAD_TIME}
+        }
+        EOF
+        
+        echo "✅ Task complete: Model downloaded to PVC"
+        echo "════════════════════════════════════════════════════════════"
+

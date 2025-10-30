@@ -10,16 +10,16 @@ metadata:
     app.kubernetes.io/name: mistral-24b-quantized
     app.openshift.io/runtime: python
     opendatahub.io/dashboard: "true"
-    modelregistry.opendatahub.io/registered-model-id: "4"
-    modelregistry.opendatahub.io/model-version-id: "9"
     modelregistry.opendatahub.io/name: private-ai-model-registry
+    modelregistry.opendatahub.io/registered-model-name: "Mistral-Small-24B-Instruct"
+    modelregistry.opendatahub.io/model-version: "quant-w4a16"
     modelregistry.opendatahub.io/inference-service-id: "11"
   annotations:
     argocd.argoproj.io/sync-wave: "5"
     app.openshift.io/connects-to: '[{"apiVersion":"apps/v1","kind":"Deployment","name":"llama-stack"}]'
     openshift.io/display-name: "Mistral-24B-quantized"
     serving.kserve.io/deploymentMode: "Serverless"
-    description: "Mistral Small 24B Instruct W4A16 quantized - 1 GPU deployment (ModelCar OCI image)"
+    description: "Mistral Small 24B Instruct W4A16 quantized - 1 GPU (weights in S3)"
     serving.knative.openshift.io/enablePassthrough: "true"
     sidecar.istio.io/inject: "true"
     sidecar.istio.io/rewriteAppHTTPProbers: "true"
@@ -27,17 +27,34 @@ metadata:
 spec:
   predictor:
     automountServiceAccountToken: false
-    imagePullSecrets:
-      - name: internal-registry-private-ai
     minReplicas: 1
     maxReplicas: 1
+    env:
+      - name: AWS_ACCESS_KEY_ID
+        valueFrom:
+          secretKeyRef:
+            name: minio-credentials
+            key: accesskey
+      - name: AWS_SECRET_ACCESS_KEY
+        valueFrom:
+          secretKeyRef:
+            name: minio-credentials
+            key: secretkey
+      - name: S3_ENDPOINT
+        value: "http://minio.model-storage.svc:9000"
+      - name: S3_USE_HTTPS
+        value: "false"
+      - name: S3_VERIFY_SSL
+        value: "false"
+      - name: AWS_REGION
+        value: "us-east-1"
     model:
       modelFormat:
         name: vLLM
       name: ""
       runtime: vllm-cuda-runtime
-      # OCI image from ModelCar pipeline (stored in OpenShift internal registry)
-      storageUri: oci://image-registry.openshift-image-registry.svc:5000/private-ai-demo/mistral-24b-quantized:w4a16-2501
+      # Path B: weights in MinIO (S3-compatible) populated by pipeline
+      storageUri: s3://llm-models/Mistral-Small-24B-Instruct/quant-w4a16/
       resources:
         requests:
           cpu: "6"
@@ -47,6 +64,18 @@ spec:
           cpu: "10"
           memory: 20Gi
           nvidia.com/gpu: "1"
+      # Model-specific vLLM args for Mistral Small 24B quantized (W4A16)
+      # Quantization: compressed-tensors (auto-detected by vLLM)
+      args:
+        - --gpu-memory-utilization=0.95     # High utilization for single GPU
+        - --max-model-len=32768             # Mistral Small supports 32K context
+        - --enable-chunked-prefill          # Performance optimization
+        - --enable-prefix-caching           # Cache optimization for repeated prompts
+        - --trust-remote-code               # Allow custom model code
+        - --dtype=auto                      # Auto-detect dtype from model config
+    # Node placement for g6.4xlarge (1 GPU node) - matches nvidia-l4-1gpu hardware profile
+    nodeSelector:
+      node.kubernetes.io/instance-type: g6.4xlarge
     tolerations:
       - key: nvidia.com/gpu
         operator: Exists

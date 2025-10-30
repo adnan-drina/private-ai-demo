@@ -1,0 +1,71 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: mistral-24b-import-quantized-
+  namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/part-of: model-serving
+    model: mistral-24b
+    variant: quantized
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  pipelineRef:
+    name: model-import-pipeline
+  
+  params:
+    - name: model_name
+      value: "Mistral-Small-24B-Instruct"
+    - name: version_name
+      value: "quant-w4a16"
+    - name: runtime_tag
+      value: "mistral-24b-quantized-w4a16"
+    - name: hf_repo
+      value: "RedHatAI/Mistral-Small-24B-Instruct-2501-quantized.w4a16"
+    - name: hf_revision
+      value: "main"
+    - name: is_quantized
+      value: "true"
+    - name: quay_org
+      value: "adrina"
+    - name: quay_repo
+      value: "private-ai"
+    - name: base_model
+      value: "mistralai/Mistral-Small-Instruct-2409"
+    - name: gpu_count
+      value: "1"
+    - name: registered_model_id
+      value: "4"
+  
+  workspaces:
+    - name: workspace
+      volumeClaimTemplate:
+        metadata:
+          name: mistral-quantized-workspace
+        spec:
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 100Gi
+          storageClassName: gp3-csi
+    - name: quay-auth
+      secret:
+        secretName: adrina-privateai-pull-secret
+  
+  taskRunTemplate:
+    serviceAccountName: pipeline
+    podTemplate:
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+  
+  taskRunSpecs:
+    - pipelineTaskName: build-runtime-image
+      podTemplate:
+        tolerations: []
+  
+  timeouts:
+    pipeline: "4h"
+

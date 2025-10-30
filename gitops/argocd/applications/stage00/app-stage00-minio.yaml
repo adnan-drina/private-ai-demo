@@ -1,0 +1,58 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: stage00-minio
+  namespace: openshift-gitops
+  labels:
+    app.kubernetes.io/part-of: stage00-ai-platform
+    app.kubernetes.io/component: object-storage
+    demo-stage: stage00
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/adnan-drina/private-ai-demo.git
+    targetRevision: feature/pipeline-3-tasks
+    path: gitops/stage00-ai-platform/minio
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: model-storage
+  syncPolicy:
+    automated:
+      prune: false  # Don't auto-delete MinIO resources (data safety)
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  ignoreDifferences:
+  # Ignore Job status (bootstrap job)
+  - group: batch
+    kind: Job
+    jsonPointers:
+    - /status
+    - /spec/template/metadata/labels/batch.kubernetes.io~1controller-uid
+    - /spec/template/metadata/labels/batch.kubernetes.io~1job-name
+  # Ignore Deployment status
+  - group: apps
+    kind: Deployment
+    jsonPointers:
+    - /status
+  info:
+  - name: Purpose
+    value: "S3-compatible object storage for LLM model weights"
+  - name: Deployment Pattern
+    value: "Simple Deployment + PVC (no operator required)"
+  - name: Storage
+    value: "500Gi gp3-csi PVC"
+  - name: Bucket
+    value: "llm-models (auto-created by bootstrap job)"
+  - name: Access
+    value: "Internal only (ClusterIP - http://minio.model-storage.svc:9000)"
+

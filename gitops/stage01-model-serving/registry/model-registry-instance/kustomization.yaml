@@ -16,4 +16,5 @@ resources:
   - modelregistry.yaml
   - network-policy.yaml
   - rbac.yaml
+  - rbac-route-reader.yaml  # Route reading permissions for pipeline ServiceAccount
 
