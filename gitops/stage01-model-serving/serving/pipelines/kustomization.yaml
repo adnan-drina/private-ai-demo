@@ -13,7 +13,7 @@ resources:
   # Works for ALL model sizes (quantized and full)
   - active/01-tasks
   - active/02-pipeline
-  - active/03-pipelineruns
+  # PipelineRuns are created imperatively (generateName); not managed by GitOps
 
 # Legacy directories (NOT included in resources):
 # - 01-tasks/ - old mixed ModelCar/MinIO tasks (superseded by active/)
@@ -21,8 +21,9 @@ resources:
 # - 03-pipelineruns/ - old runs (superseded by active/)
 # - archived-modelcar/ - explicit ModelCar archive (kept for reference)
 
-commonLabels:
-  argocd.argoproj.io/instance: stage01-model-serving
-  app.kubernetes.io/part-of: private-ai-demo
-  app.kubernetes.io/managed-by: argocd
+labels:
+  - pairs:
+      argocd.argoproj.io/instance: stage01-model-serving
+      app.kubernetes.io/part-of: private-ai-demo
+      app.kubernetes.io/managed-by: argocd
 

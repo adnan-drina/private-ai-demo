@@ -10,15 +10,15 @@ metadata:
     app.kubernetes.io/name: mistral-24b
     app.openshift.io/runtime: python
     opendatahub.io/dashboard: "true"
-    modelregistry.opendatahub.io/registered-model-id: "4"  # Mistral-Small-24B-Instruct
-    modelregistry.opendatahub.io/model-version-id: "13"  # full-fp16
     modelregistry.opendatahub.io/name: private-ai-model-registry
+    modelregistry.opendatahub.io/registered-model-name: "Mistral-Small-24B-Instruct"
+    modelregistry.opendatahub.io/model-version: "full-fp16"
   annotations:
     argocd.argoproj.io/sync-wave: "5"
     app.openshift.io/connects-to: '[{"apiVersion":"apps/v1","kind":"Deployment","name":"llama-stack"}]'
     openshift.io/display-name: "Mistral 24B Full"
     serving.kserve.io/deploymentMode: "Serverless"
-    description: "Mistral Small 24B Instruct full precision - 4 GPU deployment (ModelCar OCI image)"
+    description: "Mistral Small 24B Instruct full precision - 4 GPU (weights in S3)"
     security.opendatahub.io/enable-auth: "true"
     serving.knative.openshift.io/enablePassthrough: "true"
     sidecar.istio.io/inject: "true"
@@ -28,8 +28,6 @@ metadata:
 spec:
   predictor:
     automountServiceAccountToken: false
-    imagePullSecrets:
-      - name: internal-registry-private-ai
     minReplicas: 1
     maxReplicas: 1
     model:
@@ -37,9 +35,27 @@ spec:
         name: vLLM
       name: ""
       runtime: vllm-cuda-runtime  # Shared runtime for all vLLM models
-      # ModelCar approach: model is baked into the container image
-      # Red Hat best practice: Pull from OpenShift internal registry (mirrored by pipeline)
-      storageUri: "oci://image-registry.openshift-image-registry.svc:5000/private-ai-demo/mistral-24b-full:fp-2501"
+      # Path B: weights in MinIO (S3-compatible) populated by pipeline
+      storageUri: "s3://llm-models/Mistral-Small-24B-Instruct/full-fp16/"
+      env:
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: minio-credentials
+              key: accesskey
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: minio-credentials
+              key: secretkey
+        - name: S3_ENDPOINT
+          value: "http://minio.model-storage.svc:9000"
+        - name: S3_USE_HTTPS
+          value: "false"
+        - name: S3_VERIFY_SSL
+          value: "false"
+        - name: AWS_REGION
+          value: "us-east-1"
       # Model-specific resources for 4-GPU full precision model
       resources:
         requests:

@@ -15,8 +15,8 @@ metadata:
 spec:
   description: >-
     This task registers a model in the OpenShift AI Model Registry using the
-    Python SDK. It creates or updates a RegisteredModel and creates a new
-    ModelVersion pointing to the ModelCar OCI image.
+    Python SDK. For the MinIO-first architecture, it records a lightweight
+    runtime image (OCI) and the model weights location (S3/MinIO) in metadata.
 
   params:
     - name: model_name
@@ -34,7 +34,7 @@ spec:
     - name: model_format_name
       type: string
       description: Model format name
-      default: "ModelCar"
+      default: "WeightsInS3"
     
     - name: model_format_version
       type: string
@@ -60,11 +60,20 @@ spec:
       type: string
       description: Number of GPUs required
       default: "1"
+    
+    - name: minio_bucket
+      type: string
+      description: Default MinIO bucket to construct S3 URI when metadata file is absent
+      default: "llm-models"
+
+  workspaces:
+    - name: workspace
+      description: Shared workspace for metadata exchange between tasks
 
   steps:
     - name: register-via-sdk
       image: registry.access.redhat.com/ubi9/python-311:latest
-      resources:
+      computeResources:
         requests:
           memory: "512Mi"
           cpu: "250m"
@@ -99,6 +108,7 @@ spec:
         import sys
         from model_registry import ModelRegistry
         from datetime import datetime
+        import json
 
         print("════════════════════════════════════════════════════════════")
         print(f"📝 [{datetime.utcnow().isoformat()}Z] Registering Model (Python SDK)")
@@ -110,7 +120,7 @@ spec:
         image_uri = "$(params.image_uri)"
         format_name = "$(params.model_format_name)"
         format_version = "$(params.model_format_version)"
-        description = "$(params.description)" or f"ModelCar image for {model_name}"
+        description = "$(params.description)" or f"Runtime + S3 weights for {model_name}"
         base_model = "$(params.base_model)"
         quantization = "$(params.quantization)"
         gpu_requirement = "$(params.gpu_requirement)"
@@ -121,9 +131,46 @@ spec:
         print(f"  Base Model:        {base_model}")
         print(f"  Quantization:      {quantization}")
         print(f"  GPU Requirement:   {gpu_requirement}")
-        print(f"  Image URI:         {image_uri}")
+        print(f"  Runtime Image:     {image_uri}")
         print(f"  Format:            {format_name} v{format_version}")
         print("════════════════════════════════════════════════════════════")
+
+        # Attempt to read MinIO metadata written by previous task
+        s3_uri = None
+        metadata_path_candidates = [
+            "$(workspaces.workspace.path)/metadata/minio-upload.json",
+            "/workspace/workspace/metadata/minio-upload.json",
+        ]
+        for p in metadata_path_candidates:
+            try:
+                with open(p, "r") as f:
+                    data = json.load(f)
+                    s3_uri = data.get("s3_uri")
+                    minio_endpoint = data.get("minio_endpoint")
+                    minio_bucket = data.get("minio_bucket")
+                    s3_prefix = data.get("s3_prefix")
+                    break
+            except Exception:
+                continue
+
+        runtime_image_digest = None
+        runtime_meta_candidates = [
+            "$(workspaces.workspace.path)/metadata/runtime-image.json",
+            "/workspace/workspace/metadata/runtime-image.json",
+        ]
+        for p in runtime_meta_candidates:
+            try:
+                with open(p, "r") as f:
+                    r = json.load(f)
+                    runtime_image_digest = r.get("runtime_image_digest")
+                    break
+            except Exception:
+                continue
+
+        # If no s3_uri discovered, compute it based on params and default bucket
+        if not s3_uri:
+            bucket = "$(params.minio_bucket)"
+            s3_uri = f"s3://{bucket}/{model_name}/{version_name}/"
 
         # Get Model Registry host
         registry_host = os.environ.get("MODEL_REGISTRY_HOST", "private-ai-model-registry.rhoai-model-registries.svc.cluster.local")
@@ -147,13 +194,26 @@ spec:
             
             # Build metadata dictionary
             metadata = {
-                "pipeline": "ModelCar",
-                "container_image": image_uri,
-                "format": "ModelCar",
+                "pipeline": "PathB-MinIO",
+                "runtime_image": image_uri,
+                "format": format_name,
                 "deployment_type": "vLLM",
                 "use_case": "inference",
             }
+            # Only include digest if present; some registry SDKs reject nulls
+            if runtime_image_digest:
+                metadata["runtime_image_digest"] = runtime_image_digest
             
+            if s3_uri:
+                metadata["artifact_uri"] = s3_uri
+                # Best-effort enrichments if we had them from file
+                if 'minio_endpoint' in locals():
+                    metadata["minio_endpoint"] = minio_endpoint
+                if 'minio_bucket' in locals():
+                    metadata["minio_bucket"] = minio_bucket
+                if 's3_prefix' in locals():
+                    metadata["s3_prefix"] = s3_prefix
+
             # Add optional metadata if provided
             if base_model:
                 metadata["base_model"] = base_model
@@ -169,23 +229,119 @@ spec:
             
             print(f"\n📋 Metadata: {metadata}")
             
-            registered_model = registry.register_model(
-                name=model_name,
-                uri=image_uri,
-                model_format_name=format_name,
-                model_format_version=format_version,
-                version=version_name,
-                description=description,
-                metadata=metadata
-            )
-            
-            print(f"\n✅ Model registered successfully! [{datetime.utcnow().isoformat()}Z]")
-            print(f"   Registered Model ID: {registered_model.id}")
-            print(f"   Model Name: {registered_model.name}")
-            print(f"   Version: {version_name}")
-            
-            # Single-line machine-readable summary (for easy grepping)
-            print(f'\nTASK3_SUMMARY {{"stage":"registered","model":"{model_name}","version":"{version_name}","image":"{image_uri}","time_utc":"{datetime.utcnow().isoformat()}Z"}}')
+            # Location URI policy (Path B): use S3 as primary location when available
+            location_uri = s3_uri or image_uri
+
+            try:
+                registered_model = registry.register_model(
+                    name=model_name,
+                    uri=location_uri,
+                    model_format_name=format_name,
+                    model_format_version=format_version,
+                    version=version_name,
+                    description=description,
+                    metadata=metadata
+                )
+
+                print(f"\n✅ Model registered successfully! [{datetime.utcnow().isoformat()}Z]")
+                # Some SDKs return dict-like, others objects; print best-effort fields
+                rm_id = getattr(registered_model, "id", None) or getattr(registered_model, "model_id", None) or "<unknown>"
+                rm_name = getattr(registered_model, "name", None) or model_name
+                print(f"   Registered Model ID: {rm_id}")
+                print(f"   Model Name: {rm_name}")
+                print(f"   Version: {version_name}")
+
+                # Single-line machine-readable summary (for easy grepping)
+                print(f'\nTASK3_SUMMARY {{"stage":"registered","model":"{model_name}","version":"{version_name}","runtime_image":"{image_uri}","runtime_image_digest":"{runtime_image_digest}","artifact_uri":"{s3_uri}","time_utc":"{datetime.utcnow().isoformat()}Z"}}')
+
+            except Exception as register_err:
+                err_msg = str(register_err)
+                if "already exists" in err_msg.lower():
+                    print(f"\nℹ️  Version already exists; attempting metadata update. [{datetime.utcnow().isoformat()}Z]")
+                    updated = False
+                    update_error = None
+                    # Try common update methods exposed by the SDK across versions
+                    try:
+                        # Most-capable: update core fields + metadata
+                        registry.update_model_version(
+                            name=model_name,
+                            version=version_name,
+                            uri=location_uri,
+                            description=description,
+                            metadata=metadata,
+                        )
+                        updated = True
+                    except Exception as up_err1:
+                        update_error = up_err1
+                        try:
+                            # Fallback: metadata-only update
+                            registry.update_model_version_metadata(
+                                name=model_name,
+                                version=version_name,
+                                metadata=metadata,
+                            )
+                            updated = True
+                        except Exception as up_err2:
+                            update_error = up_err2
+
+                    if updated:
+                        print(f"✅ Updated existing model version metadata. [{datetime.utcnow().isoformat()}Z]")
+                        print(f"   Model: {model_name}")
+                        print(f"   Version: {version_name}")
+                        print(
+                            f'\nTASK3_SUMMARY {{"stage":"updated","model":"{model_name}","version":"{version_name}","runtime_image":"{image_uri}","runtime_image_digest":"{runtime_image_digest}","artifact_uri":"{s3_uri}","time_utc":"{datetime.utcnow().isoformat()}Z"}}'
+                        )
+                    else:
+                        # Attempt delete-and-recreate with same version to set new Location
+                        try:
+                            print(f"⚠️  Update API unavailable. Attempting delete-and-recreate for version '{version_name}'.")
+                            # Try common delete method names
+                            deleted = False
+                            try:
+                                registry.delete_model_version(name=model_name, version=version_name)
+                                deleted = True
+                            except Exception:
+                                try:
+                                    registry.delete_version(name=model_name, version=version_name)
+                                    deleted = True
+                                except Exception:
+                                    pass
+
+                            if deleted:
+                                print("🧹 Deleted existing version. Re-registering with S3 Location...")
+                                registered_model = registry.register_model(
+                                    name=model_name,
+                                    uri=location_uri,
+                                    model_format_name=format_name,
+                                    model_format_version=format_version,
+                                    version=version_name,
+                                    description=description,
+                                    metadata=metadata
+                                )
+                                print("✅ Re-registered version with S3 Location.")
+                                print(
+                                    f'\nTASK3_SUMMARY {{"stage":"recreated","model":"{model_name}","version":"{version_name}","runtime_image":"{image_uri}","runtime_image_digest":"{runtime_image_digest}","artifact_uri":"{s3_uri}","time_utc":"{datetime.utcnow().isoformat()}Z"}}'
+                                )
+                            else:
+                                # Fall back to exists if neither update nor delete is supported
+                                print(
+                                    f"⚠️  Update/Delete APIs not available. Proceeding as already-registered.",
+                                    file=sys.stderr,
+                                )
+                                print(
+                                    f'\nTASK3_SUMMARY {{"stage":"exists","model":"{model_name}","version":"{version_name}","runtime_image":"{image_uri}","runtime_image_digest":"{runtime_image_digest}","artifact_uri":"{s3_uri}","time_utc":"{datetime.utcnow().isoformat()}Z"}}'
+                                )
+                        except Exception as recreate_err:
+                            # If delete/recreate itself fails, acknowledge existing entry
+                            print(
+                                f"⚠️  Delete/Recreate failed ({type(recreate_err).__name__}: {str(recreate_err)}). Proceeding as already-registered.",
+                                file=sys.stderr,
+                            )
+                            print(
+                                f'\nTASK3_SUMMARY {{"stage":"exists","model":"{model_name}","version":"{version_name}","runtime_image":"{image_uri}","runtime_image_digest":"{runtime_image_digest}","artifact_uri":"{s3_uri}","time_utc":"{datetime.utcnow().isoformat()}Z"}}'
+                            )
+                else:
+                    raise
             
             print("\n════════════════════════════════════════════════════════════")
             print("✅ Task 3 Complete: Model registered in Model Registry")
@@ -203,16 +359,16 @@ spec:
         # Final PIPELINE_SUMMARY (comprehensive success receipt)
         echo ""
         echo "════════════════════════════════════════════════════════════"
-        echo "PIPELINE_SUMMARY {\"pipeline\":\"modelcar-v2\",\"status\":\"success\",\"model\":\"$(params.model_name)\",\"version\":\"$(params.version_name)\",\"image\":\"$(params.image_uri)\",\"base_model\":\"$(params.base_model)\",\"quantization\":\"$(params.quantization)\",\"gpu_requirement\":\"$(params.gpu_requirement)\",\"time_utc\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}"
+        echo "PIPELINE_SUMMARY {\"pipeline\":\"model-import-minio\",\"status\":\"success\",\"model\":\"$(params.model_name)\",\"version\":\"$(params.version_name)\",\"runtime_image\":\"$(params.image_uri)\",\"base_model\":\"$(params.base_model)\",\"quantization\":\"$(params.quantization)\",\"gpu_requirement\":\"$(params.gpu_requirement)\",\"time_utc\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}"
         echo "════════════════════════════════════════════════════════════"
         echo ""
         echo "🎉 PIPELINE COMPLETE 🎉"
         echo ""
         echo "✅ All tasks succeeded:"
         echo "   1. Model downloaded from HuggingFace"
-        echo "   2. ModelCar image built and pushed to Quay"
-        echo "   3. Image mirrored to OpenShift internal registry"
-        echo "   4. Model registered in Model Registry"
+        echo "   2. Runtime image built and pushed to Quay"
+        echo "   3. Weights uploaded to MinIO and recorded in metadata"
+        echo "   4. Model registered in Model Registry (runtime + artifact URI)"
         echo ""
         echo "🚀 Model is now ready for deployment!"
         echo "════════════════════════════════════════════════════════════"

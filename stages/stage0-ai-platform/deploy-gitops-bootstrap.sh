@@ -299,6 +299,43 @@ EOF
     fi
     
     # ========================================================================
+    # Step 6: Apply App-of-Apps and Patch Source (Reproducible GitOps)
+    # ========================================================================
+    print_header "Step 6: App-of-Apps (Argo CD)"
+
+    # Resolve project root
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+    BOOTSTRAP_MANIFEST="$PROJECT_ROOT/gitops/argocd/bootstrap/app-of-apps.yaml"
+
+    if [ -f "$BOOTSTRAP_MANIFEST" ]; then
+        log_info "Applying: $BOOTSTRAP_MANIFEST"
+        oc apply -f "$BOOTSTRAP_MANIFEST"
+
+        # Patch repoURL and targetRevision from env or local git
+        REPO_URL_ENV="${REPO_URL:-}"
+        TARGET_REV_ENV="${TARGET_REVISION:-}"
+        if [ -z "$REPO_URL_ENV" ]; then
+            REPO_URL_ENV=$(git -C "$PROJECT_ROOT" config --get remote.origin.url 2>/dev/null || true)
+        fi
+        if [ -z "$TARGET_REV_ENV" ]; then
+            TARGET_REV_ENV=$(git -C "$PROJECT_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
+        fi
+
+        if [ -n "$REPO_URL_ENV" ]; then
+            log_info "Patching Argo Application source to repoURL=$REPO_URL_ENV, targetRevision=$TARGET_REV_ENV"
+            oc -n openshift-gitops patch application private-ai-demo-root \
+              --type merge \
+              -p '{"spec":{"source":{"repoURL":"'"$REPO_URL_ENV"'","targetRevision":"'"$TARGET_REV_ENV"'"}}}' || true
+            log_success "Argo Application source patched"
+        else
+            log_warning "Could not determine repoURL; set REPO_URL and TARGET_REVISION env vars to patch Argo Application"
+        fi
+    else
+        log_warning "App-of-Apps manifest not found: $BOOTSTRAP_MANIFEST"
+    fi
+
+    # ========================================================================
     # Deployment Summary
     # ========================================================================
     print_header "Bootstrap Complete!"
@@ -332,12 +369,16 @@ EOF
     echo ""
     echo "  1. Access Argo CD UI (see above)"
     echo ""
-    echo "  2. Deploy AI Platform via GitOps:"
-    echo "     cd ../gitops-new/argocd"
-    echo "     oc apply -f applications/stage00/app-stage00-ai-platform.yaml"
+    echo "  2. Deploy App-of-Apps (already applied if present):"
+    echo "     oc apply -f gitops/argocd/bootstrap/app-of-apps.yaml"
     echo ""
-    echo "  3. Or deploy the rest of Stage 0 imperatively:"
-    echo "     cd ../stage0-ai-platform-rhoai"
+    echo "  3. Ensure ArgoCD Application points to your repo/branch:"
+    echo "     export REPO_URL=\"<your git repo url>\""
+    echo "     export TARGET_REVISION=\"<your branch>\""
+    echo "     ./deploy-gitops-bootstrap.sh"
+    echo ""
+    echo "  4. Or deploy Stage 0 components imperatively:"
+    echo "     cd stages/stage0-ai-platform"
     echo "     ./deploy.sh"
     echo ""
     echo "  4. Monitor deployment in Argo CD UI"

@@ -38,7 +38,7 @@ spec:
   steps:
     - name: download-model
       image: registry.access.redhat.com/ubi9/python-311:latest
-      resources:
+      computeResources:
         requests:
           memory: "8Gi"
           cpu: "2"
@@ -47,6 +47,12 @@ spec:
           cpu: "4"
       env:
         - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: huggingface-token
+              key: token
+              optional: true
+        - name: HUGGING_FACE_HUB_TOKEN
           valueFrom:
             secretKeyRef:
               name: huggingface-token
@@ -83,11 +89,11 @@ spec:
         
         # Install HuggingFace CLI
         echo "📦 Installing huggingface-hub..."
-        pip install --quiet --no-cache-dir 'huggingface-hub<1.0'
         export PATH=$PATH:$HOME/.local/bin
+        python -m pip install --quiet --no-cache-dir 'huggingface-hub<1.0'
         
-        # Create target directory
-        install -d -m 2775 -g 1000970000 "$(workspaces.source.path)/$(params.target_path)"
+        # Create target directory (avoid setting explicit group to comply with SCC)
+        mkdir -p "$(workspaces.source.path)/$(params.target_path)"
         
         # Download model
         echo "📥 Downloading model..."

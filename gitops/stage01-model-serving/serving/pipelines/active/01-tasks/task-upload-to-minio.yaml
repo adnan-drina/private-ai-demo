@@ -101,19 +101,13 @@ spec:
         ls -la /workspace/ || true
         echo ""
         echo "Workspace subdirs:"
-        find /workspace/ -maxdepth 2 -type d || true
+        ls -la /workspace/workspace || true
         echo ""
         
-        # Find model directory
-        # Download task uses workspace "source" and writes to target_path "models"
-        # Upload task uses workspace "workspace", so same PVC root is at /workspace/workspace/
-        if [ -d "/workspace/workspace/models" ]; then
-          MODEL_DIR="/workspace/workspace/models"
-        elif [ -d "/workspace/models" ]; then
-          MODEL_DIR="/workspace/models"
-        else
-          echo "❌ ERROR: Model directory not found in expected locations"
-          echo "   Tried: /workspace/workspace/models, /workspace/models"
+        # Resolve model directory from the mounted workspace
+        MODEL_DIR="$(workspaces.workspace.path)/models"
+        if [ ! -d "${MODEL_DIR}" ]; then
+          echo "❌ ERROR: Model directory not found: ${MODEL_DIR}"
           exit 1
         fi
         
@@ -151,11 +145,52 @@ spec:
         echo "✅ Upload verification complete"
         echo ""
         
+        # Create manifest.json with provenance and checksums
+        echo "📝 Creating manifest.json..."
+        DOWNLOAD_META="$(workspaces.workspace.path)/.pipeline-metadata/download-status.json"
+        HF_REPO=""; HF_REVISION=""; MODEL_BYTES=""
+        if [ -f "${DOWNLOAD_META}" ]; then
+          HF_REPO=$(jq -r '.hf_repo // empty' "${DOWNLOAD_META}" 2>/dev/null || true)
+          HF_REVISION=$(jq -r '.hf_revision // empty' "${DOWNLOAD_META}" 2>/dev/null || true)
+          MODEL_BYTES=$(jq -r '.model_size_bytes // empty' "${DOWNLOAD_META}" 2>/dev/null || true)
+        fi
+        
+        # Compute file checksums (best effort)
+        CHECKSUMS_FILE=$(mktemp)
+        if command -v sha256sum >/dev/null 2>&1; then
+          find "${MODEL_DIR}" -type f -maxdepth 2 -print0 | xargs -0 sha256sum > "${CHECKSUMS_FILE}" || true
+        fi
+        
+        MANIFEST_PATH=$(workspaces.workspace.path)/metadata/manifest.json
+        mkdir -p "$(workspaces.workspace.path)/metadata"
+        cat > "${MANIFEST_PATH}" <<MANIFEST_EOF
+        {
+          "model_name": "${MODEL_NAME}",
+          "version_name": "${VERSION_NAME}",
+          "s3_uri": "s3://${MINIO_BUCKET}/${S3_PREFIX}/",
+          "minio_endpoint": "${MINIO_ENDPOINT}",
+          "hf_repo": "${HF_REPO}",
+          "hf_revision": "${HF_REVISION}",
+          "size_human": "${TOTAL_SIZE}",
+          "size_bytes": "${MODEL_BYTES}",
+          "created_utc": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+        }
+        MANIFEST_EOF
+        
+        # Upload manifest.json alongside model files
+        mc cp "${MANIFEST_PATH}" "minio/${MINIO_BUCKET}/${S3_PREFIX}/manifest.json"
+        echo "✅ Manifest uploaded to s3://${MINIO_BUCKET}/${S3_PREFIX}/manifest.json"
+        
+        # Persist checksums file for downstream inspection (not uploaded by default)
+        if [ -s "${CHECKSUMS_FILE}" ]; then
+          cp "${CHECKSUMS_FILE}" "$(workspaces.workspace.path)/metadata/checksums.sha256" || true
+        fi
+        
         # Write metadata for next tasks
         echo "📝 Writing metadata for downstream tasks..."
-        mkdir -p /workspace/metadata
+        mkdir -p $(workspaces.workspace.path)/metadata
         
-        cat > /workspace/metadata/minio-upload.json <<METADATA_EOF
+        cat > $(workspaces.workspace.path)/metadata/minio-upload.json <<METADATA_EOF
         {
           "model_name": "${MODEL_NAME}",
           "version_name": "${VERSION_NAME}",
@@ -170,7 +205,7 @@ spec:
         }
         METADATA_EOF
         
-        echo "✅ Metadata written to /workspace/metadata/minio-upload.json"
+        echo "✅ Metadata written to $(workspaces.workspace.path)/metadata/minio-upload.json"
         echo ""
         
         echo "═══════════════════════════════════════════════════════════"

@@ -32,6 +32,9 @@ spec:
     - name: version_name
       type: string
       description: "Version name (e.g., full-fp16-2501 or quantized-w4a16-2501)"
+    - name: runtime_tag
+      type: string
+      description: "Quay image tag for runtime image (e.g., mistral-24b-quantized-w4a16-2501)"
     - name: hf_repo
       type: string
       description: "HuggingFace repository (e.g., mistralai/Mistral-Small-Instruct-2409)"
@@ -46,6 +49,9 @@ spec:
     - name: quay_org
       type: string
       description: "Quay.io organization"
+    - name: quay_repo
+      type: string
+      description: "Quay.io repository (e.g., private-ai)"
     - name: base_model
       type: string
       default: "mistralai/Mistral-Small-Instruct-2409"
@@ -61,6 +67,8 @@ spec:
   workspaces:
     - name: workspace
       description: "Shared PVC workspace for all tasks"
+    - name: quay-auth
+      description: "Docker config workspace for registry auth"
   
   tasks:
     # Task 1: Download model from HuggingFace
@@ -103,13 +111,18 @@ spec:
         - upload-to-minio
       taskRef:
         name: build-runtime-image
+      timeout: "4h"
       params:
         - name: model_name
           value: $(params.model_name)
         - name: version_name
           value: $(params.version_name)
+        - name: runtime_tag
+          value: $(params.runtime_tag)
         - name: quay_org
           value: $(params.quay_org)
+        - name: quay_repo
+          value: $(params.quay_repo)
         - name: base_image
           value: "registry.access.redhat.com/ubi9/python-311:latest"
         - name: vllm_version
@@ -117,6 +130,8 @@ spec:
       workspaces:
         - name: workspace
           workspace: workspace
+        - name: quay-auth
+          workspace: quay-auth
     
     # Task 4: Register model in Model Registry
     - name: register-model
@@ -124,13 +139,16 @@ spec:
         - build-runtime-image
       taskRef:
         name: register-model
+      workspaces:
+        - name: workspace
+          workspace: workspace
       params:
         - name: model_name
           value: $(params.model_name)
         - name: version_name
           value: $(params.version_name)
         - name: image_uri
-          value: "oci://quay.io/$(params.quay_org)/mistral-24b-runtime:$(params.version_name)"
+          value: "oci://quay.io/$(params.quay_org)/$(params.quay_repo):$(params.runtime_tag)"
         - name: base_model
           value: $(params.base_model)
         - name: gpu_requirement

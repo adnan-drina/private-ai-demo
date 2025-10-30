@@ -21,9 +21,15 @@ spec:
     - name: version_name
       type: string
       description: "Version name"
+    - name: runtime_tag
+      type: string
+      description: "Quay image tag (includes date code), e.g., mistral-24b-quantized-w4a16-2501"
     - name: quay_org
       type: string
       description: "Quay.io organization"
+    - name: quay_repo
+      type: string
+      description: "Quay.io repository (e.g., private-ai)"
     - name: base_image
       type: string
       default: "registry.access.redhat.com/ubi9/python-311:latest"
@@ -36,40 +42,49 @@ spec:
   workspaces:
     - name: workspace
       description: "PVC workspace"
+    - name: quay-auth
+      description: "Workspace carrying dockerconfigjson for registry auth"
   
+  volumes:
+
   steps:
     - name: build-runtime
       image: registry.redhat.io/rhel9/buildah:latest
       imagePullPolicy: IfNotPresent
-      
       securityContext:
-        privileged: true  # Required for buildah
+        privileged: true
       
       env:
         - name: MODEL_NAME
           value: "$(params.model_name)"
         - name: VERSION_NAME
           value: "$(params.version_name)"
+        - name: RUNTIME_TAG
+          value: "$(params.runtime_tag)"
         - name: QUAY_ORG
           value: "$(params.quay_org)"
+        - name: QUAY_REPO
+          value: "$(params.quay_repo)"
         - name: BASE_IMAGE
           value: "$(params.base_image)"
         - name: VLLM_VERSION
           value: "$(params.vllm_version)"
-        - name: QUAY_USER
-          valueFrom:
-            secretKeyRef:
-              name: quay-credentials
-              key: username
-        - name: QUAY_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: quay-credentials
-              key: password
         - name: BUILDAH_STORAGE_ROOT
           value: "/workspace/buildah-storage"
         - name: BUILDAH_TMPDIR
           value: "/workspace/buildah-tmp"
+        - name: STORAGE_DRIVER
+          value: vfs
+        - name: REGISTRY_AUTH_FILE
+          value: "$(workspaces.quay-auth.path)/.dockerconfigjson"
+        - name: BUILDAH_ISOLATION
+          value: chroot
+        - name: XDG_RUNTIME_DIR
+          value: "/workspace/buildah-tmp"
+        - name: TMPDIR
+          value: "/workspace/buildah-tmp"
+
+      volumeMounts: []
       
       script: |
         #!/bin/bash
@@ -92,9 +107,8 @@ spec:
         echo ""
         
         # Define image names
-        IMAGE_NAME="mistral-24b-runtime"
-        IMAGE_TAG="${VERSION_NAME}"
-        QUAY_IMAGE="quay.io/${QUAY_ORG}/${IMAGE_NAME}:${IMAGE_TAG}"
+        IMAGE_TAG="${RUNTIME_TAG}"
+        QUAY_IMAGE="quay.io/${QUAY_ORG}/${QUAY_REPO}:${IMAGE_TAG}"
         
         echo "📦 Target image: ${QUAY_IMAGE}"
         echo ""
@@ -208,6 +222,7 @@ spec:
         # Build runtime image
         echo "🏗️  Building runtime image..."
         buildah --root "${BUILDAH_STORAGE_ROOT}" bud \
+          --isolation chroot \
           --format=oci \
           --build-arg BASE_IMAGE="${BASE_IMAGE}" \
           --build-arg VLLM_VERSION="${VLLM_VERSION}" \
@@ -222,17 +237,18 @@ spec:
         
         # Get image size
         IMAGE_SIZE=$(buildah --root "${BUILDAH_STORAGE_ROOT}" images --format "{{.Size}}" "${QUAY_IMAGE}")
+        # Try to get digest after push via skopeo (if available), else leave empty
+        RUNTIME_DIGEST=""
+        if command -v skopeo >/dev/null 2>&1; then
+          RUNTIME_DIGEST=$(skopeo --insecure-policy inspect --raw docker://"${QUAY_IMAGE}" 2>/dev/null | sha256sum | awk '{print "sha256:"$1}')
+        fi
         echo "📏 Runtime image size: ${IMAGE_SIZE}"
         echo ""
         
-        # Push to Quay
+        # Push to Quay using dockerconfigjson auth
         echo "⬆️  Pushing to Quay.io..."
-        buildah --root "${BUILDAH_STORAGE_ROOT}" login \
-          --username="${QUAY_USER}" \
-          --password="${QUAY_PASSWORD}" \
-          quay.io
-        
         buildah --root "${BUILDAH_STORAGE_ROOT}" push \
+          --authfile "${REGISTRY_AUTH_FILE}" \
           "${QUAY_IMAGE}"
         
         echo "✅ Pushed to Quay.io"
@@ -247,6 +263,7 @@ spec:
           "model_name": "${MODEL_NAME}",
           "version_name": "${VERSION_NAME}",
           "runtime_image": "${QUAY_IMAGE}",
+          "runtime_image_digest": "${RUNTIME_DIGEST}",
           "image_size": "${IMAGE_SIZE}",
           "pattern": "minio",
           "vllm_version": "${VLLM_VERSION}",
@@ -270,9 +287,9 @@ spec:
         requests:
           memory: "4Gi"
           cpu: "2"
-          ephemeral-storage: "20Gi"
+          ephemeral-storage: "40Gi"
         limits:
           memory: "8Gi"
           cpu: "4"
-          ephemeral-storage: "30Gi"
+          ephemeral-storage: "80Gi"
 

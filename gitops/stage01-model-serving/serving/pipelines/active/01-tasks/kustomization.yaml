@@ -7,9 +7,10 @@ resources:
   - task-build-runtime.yaml
   - task-register-model.yaml
 
-commonLabels:
-  argocd.argoproj.io/instance: stage01-model-serving
-  app.kubernetes.io/instance: stage01-pipelines
-  app.kubernetes.io/managed-by: argocd
-  pipeline-pattern: minio-first
+labels:
+  - pairs:
+      argocd.argoproj.io/instance: stage01-model-serving
+      app.kubernetes.io/instance: stage01-pipelines
+      app.kubernetes.io/managed-by: argocd
+      pipeline-pattern: minio-first
 

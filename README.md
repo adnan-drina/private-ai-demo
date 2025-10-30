@@ -10,7 +10,7 @@ This demo showcases Red Hat AI capabilities through five progressive stages, dem
 
 ### Demo Stages
 
-0. **Platform Setup** - OpenShift AI 2.24, GPU nodes, Model Registry
+0. **Platform Setup** - OpenShift AI 2.25, GPU nodes, Model Registry
 1. **Model Serving** - Efficient vLLM inference with benchmarking
 2. **Model Alignment** - RAG + Llama Stack orchestration
 3. **Model Monitoring** - TrustyAI evaluation + observability
@@ -82,7 +82,7 @@ private-ai-demo/
 - **GPU Capacity** - AWS g6.4xlarge (1 GPU) + g6.12xlarge (4 GPUs)
 
 ### Installed via Stage 0
-- OpenShift AI operator 2.24
+- OpenShift AI operator 2.25
 - GPU Operator
 - Model Registry
 
@@ -141,7 +141,7 @@ oc get applications -n openshift-gitops
 ### Stage 0: AI Platform - RHOAI
 **Setup foundational infrastructure**
 
-- OpenShift AI 2.24 operator
+- OpenShift AI 2.25 operator
 - DataScienceCluster with Model Registry
 - GPU Operator + GPU nodes (g6.4xlarge, g6.12xlarge)
 - Model Registry + MySQL backend
@@ -319,10 +319,10 @@ oc get route grafana-route -n grafana-system
 ## 📖 Documentation
 
 ### Red Hat Official Docs
-- [OpenShift AI 2.24](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/2.24)
-- [Serving Models](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/2.24/html/serving_models/)
-- [Monitoring Models](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/2.24/html/monitoring_data_science_models/)
-- [Model Registry](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/2.24/html/managing_model_registries/)
+- [OpenShift AI 2.25](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/2.25)
+- [Serving Models](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/2.25/html/serving_models/)
+- [Monitoring Models](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/2.25/html/monitoring_data_science_models/)
+- [Model Registry](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/2.25/html/managing_model_registries/)
 
 ### Open Source Projects
 - [vLLM](https://docs.vllm.ai/)

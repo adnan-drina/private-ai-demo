@@ -4,7 +4,7 @@ kind: Kustomization
 namespace: private-ai-demo
 
 # ArgoCD tracking labels (must match parent app)
-commonLabels:
+labels:
   argocd.argoproj.io/instance: stage01-model-serving
 
 # Annotations for GitOps management
