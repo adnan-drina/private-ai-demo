@@ -29,6 +29,25 @@ spec:
     automountServiceAccountToken: false
     minReplicas: 1
     maxReplicas: 1
+    env:
+      - name: AWS_ACCESS_KEY_ID
+        valueFrom:
+          secretKeyRef:
+            name: minio-credentials
+            key: accesskey
+      - name: AWS_SECRET_ACCESS_KEY
+        valueFrom:
+          secretKeyRef:
+            name: minio-credentials
+            key: secretkey
+      - name: S3_ENDPOINT
+        value: "http://minio.model-storage.svc:9000"
+      - name: S3_USE_HTTPS
+        value: "false"
+      - name: S3_VERIFY_SSL
+        value: "false"
+      - name: AWS_REGION
+        value: "us-east-1"
     model:
       modelFormat:
         name: vLLM
@@ -36,25 +55,6 @@ spec:
       runtime: vllm-cuda-runtime
       # Path B: weights in MinIO (S3-compatible) populated by pipeline
       storageUri: s3://llm-models/Mistral-Small-24B-Instruct/quant-w4a16/
-      env:
-        - name: AWS_ACCESS_KEY_ID
-          valueFrom:
-            secretKeyRef:
-              name: minio-credentials
-              key: accesskey
-        - name: AWS_SECRET_ACCESS_KEY
-          valueFrom:
-            secretKeyRef:
-              name: minio-credentials
-              key: secretkey
-        - name: S3_ENDPOINT
-          value: "http://minio.model-storage.svc:9000"
-        - name: S3_USE_HTTPS
-          value: "false"
-        - name: S3_VERIFY_SSL
-          value: "false"
-        - name: AWS_REGION
-          value: "us-east-1"
       resources:
         requests:
           cpu: "6"
