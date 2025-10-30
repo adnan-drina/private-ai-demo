@@ -31,6 +31,8 @@ spec:
       - name: mc
         image: quay.io/minio/mc:RELEASE.2024-10-08T09-37-26Z
         env:
+        - name: MC_CONFIG_DIR
+          value: "/tmp/.mc"
         - name: MINIO_ENDPOINT
           value: "http://minio.model-storage.svc:9000"
         - name: MINIO_ACCESS_KEY
