@@ -43,12 +43,12 @@ spec:
           cpu: "16"
           memory: 80Gi
           nvidia.com/gpu: "4"
-          ephemeral-storage: "90Gi"  # Reduced to fit node capacity (120GB node, 87GB image)
+          ephemeral-storage: "25Gi"  # PVC-backed: only vLLM runtime + cache (~25GB total)
         limits:
           cpu: "32"
           memory: 80Gi
           nvidia.com/gpu: "4"
-          ephemeral-storage: "100Gi"
+          ephemeral-storage: "30Gi"
       # Model-specific vLLM args for Mistral Small 24B full precision (FP16)
       args:
         - --dtype=bfloat16                  # Use BF16 for better performance on L4 GPUs
