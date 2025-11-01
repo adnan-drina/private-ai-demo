@@ -57,7 +57,7 @@ spec:
         - --tensor-parallel-size=4          # Distribute across 4 GPUs
         - --gpu-memory-utilization=0.85     # Conservative for 4-GPU setup
         - --max-model-len=32768             # Mistral Small supports 32K context
-        - --max-num-seqs=24                  # Cap sequences to reduce multi-GPU stalls
+        - --max-num-seqs=32                  # Increase sequences across 4 GPUs
         - --enable-chunked-prefill          # Performance optimization
         - --enable-prefix-caching           # Cache optimization for repeated prompts
         - --trust-remote-code               # Allow custom model code
