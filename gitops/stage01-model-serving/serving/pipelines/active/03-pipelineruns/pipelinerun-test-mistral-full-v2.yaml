@@ -30,7 +30,7 @@ spec:
       value: "arc_easy,hellaswag"
     - name: eval_limit
       value: "100"
-    - name: guidellm_target
+    - name: target_url
       value: "http://mistral-24b-predictor.private-ai-demo.svc.cluster.local/v1"
     - name: guidellm_max_requests
       value: "50"
