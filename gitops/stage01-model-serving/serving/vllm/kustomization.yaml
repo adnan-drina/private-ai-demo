@@ -25,3 +25,6 @@ resources:
   # VirtualServices for timeout configuration (applied after InferenceServices)
   - virtualservice-mistral-24b.yaml
   - virtualservice-mistral-24b-quantized.yaml
+  # DestinationRules for connection pool limits and rate control
+  - destinationrule-mistral-24b.yaml
+  - destinationrule-mistral-24b-quantized.yaml

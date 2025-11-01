@@ -1,0 +1,29 @@
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: mistral-24b-quantized-dr
+  namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/name: mistral-24b-quantized
+    app.kubernetes.io/component: destinationrule
+  annotations:
+    argocd.argoproj.io/sync-wave: "6"
+    description: "DestinationRule for mistral-24b-quantized with connection pool limits for capacity control"
+spec:
+  host: mistral-24b-quantized-predictor.private-ai-demo.svc.cluster.local
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 50  # Total TCP connections limit
+      http:
+        http1MaxPendingRequests: 20  # Pending HTTP/1.1 requests (aligned with vLLM queue depth)
+        http2MaxRequests: 20         # Concurrent HTTP/2 requests
+        maxRequestsPerConnection: 1  # Force connection rotation for long-running streams
+        idleTimeout: 300s            # Keep connections alive for streaming
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+
