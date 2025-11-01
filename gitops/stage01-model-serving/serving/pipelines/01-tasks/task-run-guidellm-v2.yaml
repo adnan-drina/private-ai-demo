@@ -140,7 +140,12 @@ spec:
           PROCESSOR_ARG="--processor $TOKENIZER"
         fi
         
+        # Track failures
+        FAILED_BENCHMARKS=0
+        TOTAL_BENCHMARKS=0
+        
         for RATE in 1 5 10; do
+          TOTAL_BENCHMARKS=$((TOTAL_BENCHMARKS + 1))
           echo "📊 Benchmark: ${RATE} req/s"
           OUTPUT_FILE="${RESULTS_DIR}/rate_${RATE}.json"
           # Use injected trusted CA bundle directly (no file writes)
@@ -206,18 +211,57 @@ spec:
           RC=$?
           set -e
           if [ $RC -ne 0 ]; then
-            echo "⚠️  Benchmark at rate ${RATE} failed (rc=$RC); writing placeholder JSON and continuing."
+            echo "⚠️  Benchmark at rate ${RATE} failed (rc=$RC); writing placeholder JSON."
             echo '{"error":"guidellm_failed","rate":'"${RATE}"'}' > "${OUTPUT_FILE}" || true
+            FAILED_BENCHMARKS=$((FAILED_BENCHMARKS + 1))
           fi
           
           echo "✅ Complete: ${RATE} req/s"
           echo ""
         done
         
-        echo "✅ All benchmarks complete"
+        echo ""
+        echo "════════════════════════════════════════════════════════════"
+        echo "📊 BENCHMARK SUMMARY"
+        echo "════════════════════════════════════════════════════════════"
+        echo "Total benchmarks:  ${TOTAL_BENCHMARKS}"
+        echo "Successful:        $((TOTAL_BENCHMARKS - FAILED_BENCHMARKS))"
+        echo "Failed:            ${FAILED_BENCHMARKS}"
+        echo ""
+        
+        # Validate output files
+        echo "🔍 Validating output files..."
+        INVALID_FILES=0
+        for RATE in 1 5 10; do
+          OUTPUT_FILE="${RESULTS_DIR}/rate_${RATE}.json"
+          if [ -f "$OUTPUT_FILE" ]; then
+            if grep -q '"error":"guidellm_failed"' "$OUTPUT_FILE"; then
+              echo "   ❌ rate_${RATE}.json: Placeholder (benchmark failed)"
+              INVALID_FILES=$((INVALID_FILES + 1))
+            elif ! python3 -m json.tool "$OUTPUT_FILE" > /dev/null 2>&1; then
+              echo "   ❌ rate_${RATE}.json: Invalid JSON"
+              INVALID_FILES=$((INVALID_FILES + 1))
+            else
+              echo "   ✅ rate_${RATE}.json: Valid"
+            fi
+          else
+            echo "   ❌ rate_${RATE}.json: Missing"
+            INVALID_FILES=$((INVALID_FILES + 1))
+          fi
+        done
+        echo ""
         
         echo "${RESULTS_DIR}" > $(results.RESULTS_DIR.path)
-        echo "succeeded" > $(results.BENCHMARK_STATUS.path)
+        
+        # Fail the task if ANY benchmarks failed
+        if [ $FAILED_BENCHMARKS -gt 0 ] || [ $INVALID_FILES -gt 0 ]; then
+          echo "❌ TASK FAILED: ${FAILED_BENCHMARKS} benchmark(s) failed, ${INVALID_FILES} invalid file(s)"
+          echo "failed" > $(results.BENCHMARK_STATUS.path)
+          exit 1
+        else
+          echo "✅ ALL BENCHMARKS SUCCEEDED"
+          echo "succeeded" > $(results.BENCHMARK_STATUS.path)
+        fi
         
         echo ""
         echo "✅ Clean HTTP communication via service mesh"
