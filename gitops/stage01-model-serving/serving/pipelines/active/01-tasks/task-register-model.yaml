@@ -192,9 +192,8 @@ spec:
             # Register model with SDK and rich metadata
             print(f"\n📝 Registering model: {model_name} version {version_name}...")
             
-            # Build metadata dictionary
+            # Build metadata dictionary (TOP 24: omit 'pipeline' property as internal detail)
             metadata = {
-                "pipeline": "PathB-MinIO",
                 "runtime_image": image_uri,
                 "format": format_name,
                 "deployment_type": "vLLM",
@@ -206,18 +205,18 @@ spec:
             
             if s3_uri:
                 metadata["artifact_uri"] = s3_uri
-                # Best-effort enrichments if we had them from file
+                # Best-effort enrichments if we had them from file (TOP 24: keep bucket+endpoint)
                 if 'minio_endpoint' in locals():
                     metadata["minio_endpoint"] = minio_endpoint
                 if 'minio_bucket' in locals():
                     metadata["minio_bucket"] = minio_bucket
-                if 's3_prefix' in locals():
-                    metadata["s3_prefix"] = s3_prefix
+                # Omit s3_prefix (TOP 24: derivable from artifact_uri)
 
             # Add optional metadata if provided
             if base_model:
                 metadata["base_model"] = base_model
-                metadata["source"] = "HuggingFace"
+                # Use full HuggingFace URL for source (TOP 24 property strategy)
+                metadata["source"] = f"https://huggingface.co/{base_model}"
             
             if quantization and quantization != "none":
                 metadata["quantization"] = quantization
