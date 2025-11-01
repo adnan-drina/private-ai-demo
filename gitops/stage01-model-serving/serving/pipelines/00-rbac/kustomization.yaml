@@ -12,8 +12,10 @@ resources:
   # Build ServiceAccount and RBAC (for privileged Buildah builds)
   - serviceaccount-build.yaml
 
-commonLabels:
-  argocd.argoproj.io/instance: stage01-model-serving
-  app.kubernetes.io/instance: stage01-pipelines
-  app.kubernetes.io/managed-by: argocd
+labels:
+  - includeSelectors: true
+    pairs:
+      argocd.argoproj.io/instance: stage01-model-serving
+      app.kubernetes.io/instance: stage01-pipelines
+      app.kubernetes.io/managed-by: argocd
 

@@ -5,10 +5,12 @@ kind: Kustomization
 namespace: private-ai-demo
 
 # Common labels applied to all resources
-commonLabels:
-  app.kubernetes.io/part-of: private-ai-demo
-  stage: "04"
-  managed-by: argocd
+labels:
+  - includeSelectors: true
+    pairs:
+      app.kubernetes.io/part-of: private-ai-demo
+      stage: "04"
+      managed-by: argocd
 
 # Resources in deployment order
 resources:

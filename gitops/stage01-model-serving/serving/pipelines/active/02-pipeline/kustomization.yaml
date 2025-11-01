@@ -5,7 +5,8 @@ resources:
   - pipeline-model-import.yaml
 
 labels:
-  - pairs:
+  - includeSelectors: true
+    pairs:
       argocd.argoproj.io/instance: stage01-model-serving
       app.kubernetes.io/instance: stage01-pipelines
       app.kubernetes.io/managed-by: argocd

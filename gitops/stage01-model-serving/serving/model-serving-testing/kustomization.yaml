@@ -18,8 +18,10 @@ resources:
   - notebook.yaml
 
 # Labels for all resources
-commonLabels:
-  argocd.argoproj.io/instance: stage01-model-serving
-  app.kubernetes.io/part-of: private-ai-demo
-  stage: "01"
-  managed-by: argocd
+labels:
+  - includeSelectors: true
+    pairs:
+      argocd.argoproj.io/instance: stage01-model-serving
+      app.kubernetes.io/part-of: private-ai-demo
+      stage: "01"
+      managed-by: argocd

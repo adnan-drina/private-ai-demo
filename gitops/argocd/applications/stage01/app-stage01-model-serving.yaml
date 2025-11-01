@@ -18,7 +18,7 @@ spec:
   
   source:
     repoURL: https://github.com/adnan-drina/private-ai-demo.git
-    targetRevision: gitops-refactoring-clean
+    targetRevision: stage1-complete
     path: gitops/stage01-model-serving
     
     kustomize:

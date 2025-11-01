@@ -12,7 +12,9 @@ resources:
   - nvidia-l4-1gpu-dashboard.yaml
   - nvidia-l4-4gpu-dashboard.yaml
 
-commonLabels:
-  app.kubernetes.io/managed-by: argocd
-  app.kubernetes.io/instance: stage01-hardware-profiles
+labels:
+  - includeSelectors: true
+    pairs:
+      app.kubernetes.io/managed-by: argocd
+      app.kubernetes.io/instance: stage01-hardware-profiles
 

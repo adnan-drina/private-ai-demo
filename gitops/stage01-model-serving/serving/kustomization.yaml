@@ -9,8 +9,10 @@ kind: Kustomization
 namespace: private-ai-demo
 
 # Minimal labels for ArgoCD resource tracking (avoid conflicts with app-level labels)
-commonLabels:
-  argocd.argoproj.io/instance: stage01-model-serving
+labels:
+  - includeSelectors: true
+    pairs:
+      argocd.argoproj.io/instance: stage01-model-serving
 
 # Annotations for additional metadata
 commonAnnotations:

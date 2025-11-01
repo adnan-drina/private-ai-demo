@@ -12,7 +12,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/adnan-drina/private-ai-demo.git
-    targetRevision: feature/stage-alignment
+    targetRevision: main
     path: gitops/stage00-ai-platform/gpu-infrastructure
   destination:
     server: https://kubernetes.default.svc
