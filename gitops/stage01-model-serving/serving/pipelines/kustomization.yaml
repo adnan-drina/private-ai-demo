@@ -3,7 +3,6 @@ kind: Kustomization
 
 # Unified MinIO-First Pipeline
 # Only active/ resources are deployed to the cluster
-# archived-modelcar/ kept for history/audit but NOT deployed
 
 resources:
   # RBAC (ServiceAccounts, Roles, RoleBindings)
@@ -15,11 +14,8 @@ resources:
   - active/02-pipeline
   # PipelineRuns are created imperatively (generateName); not managed by GitOps
 
-# Legacy directories (NOT included in resources):
-# - 01-tasks/ - old mixed ModelCar/MinIO tasks (superseded by active/)
-# - 02-pipeline/ - old ModelCar v3 pipeline (superseded by active/)
-# - 03-pipelineruns/ - old runs (superseded by active/)
-# - archived-modelcar/ - explicit ModelCar archive (kept for reference)
+# Note: Legacy pipeline versions and archives have been moved to docs/99-ARCHIVE/pipelines/
+# for historical reference and are NOT deployed
 
 labels:
   - includeSelectors: true
