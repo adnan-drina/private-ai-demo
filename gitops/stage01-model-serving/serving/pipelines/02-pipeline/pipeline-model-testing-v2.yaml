@@ -115,6 +115,11 @@ spec:
       description: Number of tokens to generate
       default: "512"
 
+    - name: rates
+      type: string
+      description: Space-separated list of request rates (rps) for GuideLLM
+      default: "1 5 10"
+
   workspaces:
     - name: results
       description: Shared workspace for storing test results
@@ -167,6 +172,8 @@ spec:
           value: $(params.prompt_tokens)
         - name: generated_tokens
           value: $(params.generated_tokens)
+        - name: rates
+          value: $(params.rates)
       workspaces:
         - name: results
           workspace: results
