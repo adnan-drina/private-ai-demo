@@ -43,6 +43,8 @@ spec:
       value: "512"      # Same input size for comparison
     - name: generated_tokens
       value: "512"      # Same output size for comparison
+    - name: rates
+      value: "1 5 10"
   timeouts:
     pipeline: "3h"
     tasks: "2h30m"

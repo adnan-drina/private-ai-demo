@@ -58,7 +58,7 @@ spec:
       # Model-specific vLLM args for Mistral Small 24B quantized (W4A16)
       # Quantization: compressed-tensors (auto-detected by vLLM)
       args:
-        - --gpu-memory-utilization=0.95     # High utilization for single GPU
+        - --gpu-memory-utilization=0.90     # Add headroom to reduce 500s
         - --max-model-len=32768             # Mistral Small supports 32K context
         - --max-num-seqs=16                  # Limit concurrent sequences per GPU
         - --enable-chunked-prefill          # Performance optimization
