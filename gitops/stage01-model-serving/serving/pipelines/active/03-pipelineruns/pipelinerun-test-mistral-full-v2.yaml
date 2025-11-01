@@ -1,0 +1,50 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: test-mistral-full-v2-
+  namespace: private-ai-demo
+  labels:
+    model: mistral-24b
+    pipeline: model-testing-v2
+    version: full-fp16
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+    description: Test full precision Mistral model with TOP 24 property schema and friendly names
+spec:
+  pipelineRef:
+    name: model-testing-v2
+  params:
+    - name: inference_service_name
+      value: mistral-24b
+    - name: namespace
+      value: private-ai-demo
+    - name: model_name
+      value: Mistral-Small-24B-Instruct
+    - name: version_name
+      value: full-fp16
+    - name: vllm_model_name
+      value: mistralai/Mistral-Small-Instruct-2409
+    - name: eval_tasks
+      value: "arc_easy,hellaswag"
+    - name: eval_limit
+      value: "100"
+    - name: guidellm_target
+      value: "http://mistral-24b-predictor.private-ai-demo.svc.cluster.local/v1"
+    - name: guidellm_model
+      value: mistralai/Mistral-Small-Instruct-2409
+    - name: guidellm_max_requests
+      value: "50"
+  timeouts:
+    pipeline: "3h"
+    tasks: "2h30m"
+  workspaces:
+    - name: results
+      volumeClaimTemplate:
+        spec:
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 10Gi
+          storageClassName: gp3-csi
+

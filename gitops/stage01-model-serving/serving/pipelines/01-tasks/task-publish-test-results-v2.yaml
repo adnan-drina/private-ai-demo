@@ -352,10 +352,19 @@ spec:
                     eval_data = json.load(f)
                 
                 if "results" in eval_data:
-                    # TOP 24: only publish primary metrics (acc, acc_norm) + arc_easy alias
+                    # TOP 24: only publish primary metrics with friendly names
                     allowed_metrics = {
                         'acc,none', 'acc_norm,none',  # Primary metrics
                         'alias'  # Task identifiers (only arc_easy, not hellaswag)
+                    }
+                    
+                    # Friendly names mapping for TOP 24 display
+                    friendly_names = {
+                        'eval_arc_easy_acc,none': 'ARC-Easy Accuracy (Reasoning)',
+                        'eval_arc_easy_acc_norm,none': 'ARC-Easy Normalized',
+                        'eval_hellaswag_acc,none': 'HellaSwag Accuracy (Common Sense)',
+                        'eval_hellaswag_acc_norm,none': 'HellaSwag Normalized',
+                        'eval_arc_easy_alias': 'Task Identifier (ARC-Easy)',
                     }
                     
                     for task_name, metrics in eval_data["results"].items():
@@ -372,7 +381,10 @@ spec:
                             if not any(allowed in metric_name for allowed in allowed_metrics):
                                 continue
                             
-                            key = f"eval_{task_name}_{metric_name}"
+                            # Build original key and get friendly name
+                            original_key = f"eval_{task_name}_{metric_name}"
+                            key = friendly_names.get(original_key, original_key)  # Use friendly name if available
+                            
                             if isinstance(metric_value, (int, float)):
                                 if "double_value" not in new_properties:
                                     new_properties["double_value"] = {}
