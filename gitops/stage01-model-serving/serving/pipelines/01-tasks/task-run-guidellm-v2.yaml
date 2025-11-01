@@ -185,6 +185,16 @@ spec:
         export PYTHONWARNINGS=ignore
         export PYTHONHTTPSVERIFY=0
 
+        # Define PROCESSOR_ARG for warmup
+        TOKENIZER="$(params.tokenizer_name)"
+        if [ -z "$TOKENIZER" ]; then
+          TOKENIZER="$(params.model_name)"
+        fi
+        PROCESSOR_ARG=""
+        if [ -n "$TOKENIZER" ]; then
+          PROCESSOR_ARG="--processor $TOKENIZER"
+        fi
+
         set +e
         guidellm benchmark \
           --target "${MODEL_URL}/v1" \
@@ -197,15 +207,6 @@ spec:
           --output-path "${RESULTS_DIR}/warmup.json" \
           >/dev/null 2>&1 || true
         set -e
-
-        TOKENIZER="$(params.tokenizer_name)"
-        if [ -z "$TOKENIZER" ]; then
-          TOKENIZER="$(params.model_name)"
-        fi
-        PROCESSOR_ARG=""
-        if [ -n "$TOKENIZER" ]; then
-          PROCESSOR_ARG="--processor $TOKENIZER"
-        fi
         
         # Track failures
         FAILED_BENCHMARKS=0
