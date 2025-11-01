@@ -32,9 +32,6 @@ spec:
     - name: namespace
       type: string
       default: "private-ai-demo"
-    - name: target_url
-      type: string
-      default: ""
     - name: model_name
       type: string
     - name: tokenizer_name
@@ -88,12 +85,6 @@ spec:
         
         echo "🔍 Discovering External HTTPS Knative Service URL"
         echo "════════════════════════════════════════════════════════════"
-        # Prefer provided internal target_url if present
-        if [ -n "$(params.target_url)" ]; then
-          echo "✅ Using provided target URL: $(params.target_url)"
-          echo -n "$(params.target_url)" > /workspace/results/inference_url.txt
-          exit 0
-        fi
         ISVC_NAME="$(params.inference_service_name)-predictor"
         ROUTE_URL=$(oc get ksvc "$ISVC_NAME" -n "$(params.namespace)" -o jsonpath='{.status.url}' 2>/dev/null || echo "")
         if [ -z "$ROUTE_URL" ]; then
@@ -277,7 +268,7 @@ spec:
             --target "${MODEL_URL}/v1" \
             --model "$(params.model_name)" \
             ${PROCESSOR_ARG} \
-            --data "prompt_tokens=${PT},output_tokens=${GT},samples=$(( ${RATE} * 300 ))" \
+            --data "prompt_tokens=${PT},output_tokens=${GT},samples=$(( ${RATE} * 150 ))" \
             --rate-type constant \
             --rate ${RATE} \
             --max-seconds 300 \

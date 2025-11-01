@@ -115,11 +115,6 @@ spec:
       description: Number of tokens to generate
       default: "512"
 
-    - name: target_url
-      type: string
-      description: Optional cluster-local URL for the model (e.g., http://<ksvc>.<ns>.svc.cluster.local/v1). If set, bypass route discovery.
-      default: ""
-
     - name: rates
       type: string
       description: Space-separated list of request rates (rps) for GuideLLM
@@ -177,8 +172,6 @@ spec:
           value: $(params.prompt_tokens)
         - name: generated_tokens
           value: $(params.generated_tokens)
-        - name: target_url
-          value: $(params.target_url)
         - name: rates
           value: $(params.rates)
       workspaces:

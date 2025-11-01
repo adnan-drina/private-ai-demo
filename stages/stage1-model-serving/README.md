@@ -92,22 +92,6 @@ Results are:
 2. Published to Model Registry as properties
 3. Visualized in the benchmark notebook
 
-## Operational Runbook: Rate Limits
-
-To ensure stable latency and avoid upstream disconnects during load testing and production-like traffic, enforce the following per-instance request rate limits when driving traffic through GuideLLM or other clients:
-
-- Quantized (1×L4, W4A16): 5 requests/second
-- Full precision (4×L4, BF16): 10 requests/second
-
-Guidance:
-
-- These limits map to the GuideLLM `rate` setting. In our Tekton task `run-guidellm-v2`, use the `rates` parameter to control the step load (e.g., `"1 5"` for quantized, `"1 5 10"` for full).
-- Keep the 20‑request warmup to prime prefix cache before measurement.
-- Keep fixed-duration runs with dynamic samples (`samples = rate × duration`) to generate steady load.
-- Monitor vLLM logs for `Running`/`Waiting` and KV cache usage. If `Waiting > 0` persists, reduce `rate` one step or shorten `output_tokens` for that run only.
-
-These limits were validated on AWS g6.4xlarge (quantized) and g6.12xlarge (full) with vLLM chunked prefill and prefix caching enabled.
-
 ## Key Metrics Comparison
 
 | Metric | Quantized (1 GPU) | Full (4 GPUs) |
