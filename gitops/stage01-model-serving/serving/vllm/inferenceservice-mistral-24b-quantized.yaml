@@ -34,7 +34,7 @@ metadata:
     serving.kserve.io/s3-secret-name: "s3-credentials-kserve"
 spec:
   predictor:
-    containerConcurrency: 6
+    containerConcurrency: 16  # Phase 1 optimization: match max_num_seqs (was 6)
     serviceAccountName: ai-workload-sa
     automountServiceAccountToken: false
     minReplicas: 1

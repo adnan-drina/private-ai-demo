@@ -34,6 +34,15 @@ spec:
       value: "http://mistral-24b-predictor.private-ai-demo.svc.cluster.local/v1"
     - name: guidellm_max_requests
       value: "50"
+    # Phase 1 Optimization: Model-specific GuideLLM parameters
+    - name: request_count
+      value: "200"      # Increased from 100 (4× GPUs = more capacity)
+    - name: max_seconds
+      value: "240"      # 4 minutes (was 120s, longer for larger sequences)
+    - name: prompt_tokens
+      value: "768"      # Increased from 512 (better utilize 4-GPU capacity)
+    - name: generated_tokens
+      value: "768"      # Increased for full model capacity
   timeouts:
     pipeline: "3h"
     tasks: "2h30m"

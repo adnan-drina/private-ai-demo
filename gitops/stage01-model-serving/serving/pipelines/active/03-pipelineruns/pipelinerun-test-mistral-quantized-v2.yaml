@@ -34,6 +34,15 @@ spec:
       value: "http://mistral-24b-quantized-predictor.private-ai-demo.svc.cluster.local/v1"
     - name: guidellm_max_requests
       value: "50"
+    # Phase 1 Optimization: Model-specific GuideLLM parameters
+    - name: request_count
+      value: "150"      # Increased from 100 for better statistical significance
+    - name: max_seconds
+      value: "180"      # 3 minutes (was 120s)
+    - name: prompt_tokens
+      value: "256"      # Reduced from 512 (more realistic for 1-GPU)
+    - name: generated_tokens
+      value: "384"      # Adjusted for quantized model capacity
   timeouts:
     pipeline: "3h"
     tasks: "2h30m"

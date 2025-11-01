@@ -28,7 +28,7 @@ metadata:
     autoscaling.knative.dev/scale-to-zero-pod-retention-period: "60m"
 spec:
   predictor:
-    containerConcurrency: 4
+    containerConcurrency: 32  # Phase 1 optimization: match max_num_seqs (was 4)
     automountServiceAccountToken: false
     minReplicas: 1
     maxReplicas: 1
