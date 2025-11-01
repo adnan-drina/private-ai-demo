@@ -17,8 +17,10 @@ resources:
   - task-run-lm-eval-v2.yaml
   - task-publish-test-results-v2.yaml
 
-commonLabels:
-  argocd.argoproj.io/instance: stage01-model-serving
-  app.kubernetes.io/instance: stage01-pipelines
-  app.kubernetes.io/managed-by: argocd
+labels:
+  - includeSelectors: true
+    pairs:
+      argocd.argoproj.io/instance: stage01-model-serving
+      app.kubernetes.io/instance: stage01-pipelines
+      app.kubernetes.io/managed-by: argocd
 

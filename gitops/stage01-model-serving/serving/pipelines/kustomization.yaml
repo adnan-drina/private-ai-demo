@@ -22,7 +22,8 @@ resources:
 # - archived-modelcar/ - explicit ModelCar archive (kept for reference)
 
 labels:
-  - pairs:
+  - includeSelectors: true
+    pairs:
       argocd.argoproj.io/instance: stage01-model-serving
       app.kubernetes.io/part-of: private-ai-demo
       app.kubernetes.io/managed-by: argocd

@@ -13,7 +13,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/adnan-drina/private-ai-demo.git
-    targetRevision: feature/pipeline-3-tasks
+    targetRevision: main
     path: gitops/stage00-ai-platform/minio
   destination:
     server: https://kubernetes.default.svc

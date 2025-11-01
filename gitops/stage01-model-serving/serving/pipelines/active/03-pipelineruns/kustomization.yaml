@@ -5,9 +5,11 @@ resources:
   - pipelinerun-mistral-quantized.yaml
   - pipelinerun-mistral-full.yaml
 
-commonLabels:
-  argocd.argoproj.io/instance: stage01-model-serving
-  app.kubernetes.io/instance: stage01-pipelines
-  app.kubernetes.io/managed-by: argocd
-  pipeline-pattern: minio-first
+labels:
+  - includeSelectors: true
+    pairs:
+      argocd.argoproj.io/instance: stage01-model-serving
+      app.kubernetes.io/instance: stage01-pipelines
+      app.kubernetes.io/managed-by: argocd
+      pipeline-pattern: minio-first
 

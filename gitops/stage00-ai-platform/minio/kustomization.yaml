@@ -17,7 +17,6 @@ labels:
       app.kubernetes.io/part-of: stage00-ai-platform
       app.kubernetes.io/component: object-storage
     includeSelectors: true
-    includeTemplates: true
 
 commonAnnotations:
   managed-by: argocd

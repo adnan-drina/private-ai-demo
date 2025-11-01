@@ -9,8 +9,10 @@ kind: Kustomization
 namespace: rhoai-model-registries
 
 # Minimal labels for ArgoCD resource tracking (avoid conflicts with app-level labels)
-commonLabels:
-  argocd.argoproj.io/instance: stage01-model-registry
+labels:
+  - includeSelectors: true
+    pairs:
+      argocd.argoproj.io/instance: stage01-model-registry
 
 # Annotations for additional metadata
 commonAnnotations:

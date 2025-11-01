@@ -18,7 +18,7 @@ spec:
   
   source:
     repoURL: https://github.com/adnan-drina/private-ai-demo.git
-    targetRevision: feature/gitops-phase2-refactoring
+    targetRevision: feature/stage2-implementation
     path: gitops/argocd/applications
     
     # Use directory recursion to find all applications
