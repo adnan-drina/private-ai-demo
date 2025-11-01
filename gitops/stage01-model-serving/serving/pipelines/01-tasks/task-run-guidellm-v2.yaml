@@ -94,6 +94,12 @@ spec:
     - name: run-benchmark
       image: registry.access.redhat.com/ubi9/python-311:1-77
       workingDir: /workspace/results
+      env:
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: huggingface-token
+              key: HF_TOKEN
       volumeMounts:
         - name: trusted-ca
           mountPath: /var/run/ca
