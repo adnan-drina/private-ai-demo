@@ -45,10 +45,10 @@ spec:
       default: "120"
     - name: prompt_tokens
       type: string
-      default: "512"
+      default: "256"  # Reduced from 512 to avoid streaming timeouts
     - name: generated_tokens
       type: string
-      default: "512"
+      default: "256"  # Reduced from 512 to avoid streaming timeouts
 
   workspaces:
     - name: results
@@ -193,10 +193,11 @@ spec:
           export PYTHONHTTPSVERIFY=0
 
           set +e
-          # Adjust tokens at higher rates to avoid server overload
+          # Adjust tokens at higher rates to avoid server overload and timeouts
           PT=$(params.prompt_tokens)
           GT=$(params.generated_tokens)
-          if [ "$RATE" -ge 10 ]; then PT=128; GT=128; elif [ "$RATE" -ge 5 ]; then PT=256; GT=256; fi
+          if [ "$RATE" -ge 10 ]; then PT=128; GT=128; elif [ "$RATE" -ge 5 ]; then PT=192; GT=192; fi
+          # Default (1 req/s): uses params defaults (256/256)
 
           guidellm benchmark \
             --target "${MODEL_URL}/v1" \

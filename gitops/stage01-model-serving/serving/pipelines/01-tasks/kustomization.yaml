@@ -12,11 +12,10 @@ resources:
   - task-upload-to-minio.yaml
   - task-build-runtime.yaml
   
-  # Testing & deployment tasks (separate pipeline)
-  - task-run-guidellm.yaml
-  - task-run-lm-eval.yaml
-  - task-publish-test-results.yaml
-  - task-deploy-vllm.yaml
+  # Testing tasks v2 (separate pipeline with internal HTTP/service mesh)
+  - task-run-guidellm-v2.yaml
+  - task-run-lm-eval-v2.yaml
+  - task-publish-test-results-v2.yaml
 
 commonLabels:
   argocd.argoproj.io/instance: stage01-model-serving

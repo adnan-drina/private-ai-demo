@@ -22,3 +22,6 @@ resources:
   # InferenceServices last (each specifies its own resources/nodeSelector)
   - inferenceservice-mistral-24b.yaml
   - inferenceservice-mistral-24b-quantized.yaml
+  # VirtualServices for timeout configuration (applied after InferenceServices)
+  - virtualservice-mistral-24b.yaml
+  - virtualservice-mistral-24b-quantized.yaml

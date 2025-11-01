@@ -1,0 +1,26 @@
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: mistral-24b-quantized-vs
+  namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/name: mistral-24b-quantized
+    app.kubernetes.io/component: virtualservice
+  annotations:
+    argocd.argoproj.io/sync-wave: "6"
+    description: "VirtualService for mistral-24b-quantized with extended timeout for long streaming requests"
+spec:
+  hosts:
+    - mistral-24b-quantized-predictor.private-ai-demo.svc.cluster.local
+  http:
+    - timeout: 120s  # 2 minutes for streaming generation (256-512 tokens)
+      route:
+        - destination:
+            host: mistral-24b-quantized-predictor.private-ai-demo.svc.cluster.local
+            port:
+              number: 80
+      retries:
+        attempts: 0  # Disable automatic retries (GuideLLM handles retries)
+        retryOn: ""
+
