@@ -33,7 +33,7 @@ spec:
     - name: guidellm_target
       value: "http://mistral-24b-predictor.private-ai-demo.svc.cluster.local/v1"
     - name: guidellm_model
-      value: mistralai/Mistral-Small-Instruct-2409
+      value: mistral-24b
     - name: guidellm_max_requests
       value: "50"
   timeouts:
