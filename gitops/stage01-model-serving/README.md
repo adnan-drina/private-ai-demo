@@ -57,22 +57,31 @@ Stage 01 provides the foundation for serving large language models with high per
 ## 🚀 Deployment
 
 ### Prerequisites
-- OpenShift AI 2.24 installed
+- OpenShift AI 2.25 installed
 - GPU nodes provisioned (g6.4xlarge and g6.12xlarge)
-- Model Registry deployed
-- HuggingFace token configured
+- Model Registry deployed (Stage 00)
+- `.env` in repository root with:
+  - `HF_TOKEN`
+  - `MINIO_ACCESS_KEY`
+  - `MINIO_SECRET_KEY`
+  - `QUAY_USERNAME`
+  - `QUAY_PASSWORD`
 
-### Manual Deployment
-```bash
-# From repository root
-oc apply -k gitops-new/stage01-model-serving
-```
+### GitOps-First Workflow
+1. Ensure Stage 00 ArgoCD applications are healthy (`stage00-*`).
+2. Review `gitops/stage01-model-serving/` manifests for desired changes.
+3. Run the helper script to create secrets and trigger syncs:
+   ```bash
+   ./stages/stage1-model-serving/deploy.sh
+   ```
+4. Monitor ArgoCD:
+   ```bash
+   oc get applications.argoproj.io -n openshift-gitops stage01-model-serving
+   ```
 
-### ArgoCD Deployment
-The Stage 01 Application is managed by ArgoCD:
-```bash
-oc apply -f gitops-new/argocd/applications/stage01/app-stage01-model-serving.yaml
-```
+> Secrets are never committed to Git. The helper script reads `.env`, creates
+> the required Kubernetes Secrets, and then asks ArgoCD to reconcile the
+> Git-managed resources.
 
 ---
 

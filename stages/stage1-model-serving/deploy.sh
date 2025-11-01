@@ -216,17 +216,12 @@ echo ""
 }
 
 create_namespace() {
-  log_section "Creating Namespace"
-  
+  log_section "Checking Namespace"
+
   if oc get namespace "$PROJECT_NAME" &> /dev/null; then
-    log_warning "Namespace already exists: $PROJECT_NAME"
+    log_success "Namespace managed by GitOps detected: $PROJECT_NAME"
   else
-    if [ "$DRY_RUN" = true ]; then
-      log_info "[DRY-RUN] Would create namespace: $PROJECT_NAME"
-    else
-      oc new-project "$PROJECT_NAME" || oc project "$PROJECT_NAME"
-      log_success "Namespace created/selected: $PROJECT_NAME"
-    fi
+    log_warning "Namespace $PROJECT_NAME not found. Run an ArgoCD sync for stage01-model-serving to create it."
   fi
 }
 
@@ -317,43 +312,34 @@ create_secrets() {
     fi
   fi
   
-  # Grant pipeline SA permissions to push to internal registry
-  log_info "Granting registry permissions to pipeline ServiceAccount..."
-  if [ "$DRY_RUN" = true ]; then
-    log_info "[DRY-RUN] Would grant system:image-builder and registry-editor roles to pipeline SA"
-  else
-    # These permissions are required for ModelCar pipeline to push images to OpenShift internal registry
-    oc policy add-role-to-user system:image-builder -z pipeline -n $PROJECT_NAME 2>/dev/null || true
-    oc policy add-role-to-user registry-editor -z pipeline -n $PROJECT_NAME 2>/dev/null || true
-    log_success "Registry permissions granted to pipeline SA"
-  fi
-  
   log_success "All secrets created successfully"
   log_warning "Remember: Secrets are NOT in Git (managed imperatively)"
 }
 
-deploy_gitops_manifests() {
-  log_section "Deploying GitOps Manifests"
-  
-  log_info "GitOps Path: $GITOPS_PATH"
-  log_info "Components:"
-  log_info "  • Namespace"
-  log_info "  • vLLM InferenceServices (2 models)"
-  log_info "  • Model download jobs + PVCs"
-  log_info "  • MinIO deployment"
-  log_info "  • GuideLLM benchmark jobs"
-  log_info "  • Jupyter workbench + notebooks"
-  
+trigger_argocd_sync() {
+  log_section "Triggering ArgoCD Sync"
+
   if [ "$DRY_RUN" = true ]; then
-    echo ""
-    log_info "[DRY-RUN] Would apply:"
-    oc kustomize "$GITOPS_PATH" | grep -E "^(apiVersion|kind|  name:)" | head -30
-    echo "..."
-  else
-    echo ""
-oc apply -k "$GITOPS_PATH"
-    log_success "GitOps manifests applied"
+    log_info "[DRY-RUN] Would trigger: argocd app sync stage01-model-serving"
+    return
   fi
+
+  if command -v argocd >/dev/null 2>&1; then
+    local sync_log
+    sync_log=$(mktemp "stage01-sync.XXXXXX")
+    if argocd app sync stage01-model-serving --prune >"$sync_log" 2>&1; then
+      rm -f "$sync_log"
+      log_success "ArgoCD sync triggered for stage01-model-serving"
+      return
+    fi
+    log_warning "argocd CLI sync failed. Check credentials or context."
+    tail -n 3 "$sync_log"
+    rm -f "$sync_log"
+  else
+    log_warning "argocd CLI not available."
+  fi
+
+  log_info "Run manually: argocd login <server>; argocd app sync stage01-model-serving --prune"
 }
 
 wait_for_models() {
@@ -445,8 +431,8 @@ create_namespace
 # Create secrets imperatively (not in GitOps)
 create_secrets
 
-# Deploy GitOps manifests
-deploy_gitops_manifests
+# Trigger ArgoCD sync to apply manifests
+trigger_argocd_sync
 
 # Wait for model downloads (optional)
 wait_for_models

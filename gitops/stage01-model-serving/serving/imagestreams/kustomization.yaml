@@ -5,8 +5,10 @@ resources:
   - imagestream-mistral-quantized.yaml
   - imagestream-mistral-full.yaml
 
-commonLabels:
-  argocd.argoproj.io/instance: stage01-model-serving
-  app.kubernetes.io/instance: stage01-imagestreams
-  app.kubernetes.io/managed-by: argocd
+labels:
+  - includeSelectors: true
+    pairs:
+      argocd.argoproj.io/instance: stage01-model-serving
+      app.kubernetes.io/instance: stage01-imagestreams
+      app.kubernetes.io/managed-by: argocd
 

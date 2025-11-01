@@ -10,7 +10,7 @@ spec:
   project: stage02-model-alignment # Use the dedicated AppProject
   source:
     repoURL: https://github.com/adnan-drina/private-ai-demo.git # Will be updated dynamically
-    targetRevision: feature/stage-alignment # Current branch
+    targetRevision: feature/stage2-implementation
     path: gitops/stage02-model-alignment # Path to Stage 02 manifests
   destination:
     server: https://kubernetes.default.svc

@@ -17,13 +17,12 @@ spec:
   # Source repositories allowed for this project
   sourceRepos:
     - 'https://github.com/adnan-drina/private-ai-demo.git'
-    - '*'  # Allow any repo (can be restricted in production)
   
   # Destinations where apps can be deployed
   destinations:
     - namespace: private-ai-demo
       server: https://kubernetes.default.svc
-    - namespace: model-registry
+    - namespace: rhoai-model-registries
       server: https://kubernetes.default.svc
   
   # Cluster-scoped resources allowed

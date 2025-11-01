@@ -6,8 +6,10 @@ kind: Kustomization
 namespace: rhoai-model-registries
 
 # ArgoCD tracking labels (must match parent app)
-commonLabels:
-  argocd.argoproj.io/instance: stage01-model-registry
+labels:
+  - includeSelectors: true
+    pairs:
+      argocd.argoproj.io/instance: stage01-model-registry
 
 # Annotations for GitOps management
 commonAnnotations:

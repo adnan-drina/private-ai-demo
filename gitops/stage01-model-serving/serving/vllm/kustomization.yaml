@@ -5,7 +5,9 @@ namespace: private-ai-demo
 
 # ArgoCD tracking labels (must match parent app)
 labels:
-  argocd.argoproj.io/instance: stage01-model-serving
+  - includeSelectors: true
+    pairs:
+      argocd.argoproj.io/instance: stage01-model-serving
 
 # Annotations for GitOps management
 commonAnnotations:

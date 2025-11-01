@@ -7,9 +7,11 @@ resources:
   - lmevaljob-quantized.yaml
   - lmevaljob-full.yaml
 
-commonLabels:
-  app.kubernetes.io/managed-by: kustomize
-  app.kubernetes.io/part-of: trustyai-evaluation
+labels:
+  - includeSelectors: true
+    pairs:
+      app.kubernetes.io/managed-by: kustomize
+      app.kubernetes.io/part-of: trustyai-evaluation
 
 namespace: private-ai-demo
 

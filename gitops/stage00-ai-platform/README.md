@@ -1,27 +1,34 @@
-# Stage 00: AI Platform - RHOAI
+# Stage 00: AI Platform
 
-## Status: TODO
+Stage 00 delivers the foundational OpenShift AI infrastructure (operators,
+GPU nodes, DataScienceCluster, MinIO). All Kubernetes resources live under
+`gitops/stage00-ai-platform` and are reconciled by ArgoCD applications.
 
-This stage is planned for future implementation and will include:
-- OpenShift AI operator subscription
-- DataScienceCluster CR with Model Registry enabled
-- GPU Operator configuration
-- GPU MachineSets (g6.4xlarge, g6.12xlarge)
-- GPU MachineConfigs
-- Model Registry + MySQL
+## Deployment Workflow
 
-## Current State
+1. Populate the repository `.env` with MinIO credentials:
+   ```bash
+   MINIO_ACCESS_KEY=...
+   MINIO_SECRET_KEY=...
+   ```
+2. Run the helper script to create secrets and request ArgoCD syncs:
+   ```bash
+   ./stages/stage0-ai-platform/deploy.sh
+   ```
+3. Monitor reconciliation status:
+   ```bash
+   oc get applications.argoproj.io -n openshift-gitops stage00-operators stage00-gpu-infrastructure stage00-datasciencecluster stage00-minio
+   ```
 
-For now, these components should be deployed manually or via the OpenShift console.
+The script **never** applies manifests directly; it only manages secrets and
+delegates all resource changes to ArgoCD.
 
-## Future Work
+## Structure
 
-GitOps manifests will be added here to automate:
-1. Operator installations
-2. GPU node provisioning
-3. Model Registry setup
+- `operators/` – Operator subscriptions and namespaces
+- `gpu-infrastructure/` – MachineSets and NVIDIA ClusterPolicy
+- `datasciencecluster/` – DataScienceCluster CR and service mesh dependencies
+- `minio/` – MinIO deployment (credentials supplied via `.env`)
 
----
-
-**Note:** Stage 0 prerequisites must be met before deploying Stages 1-4.
+> Stage 00 must be healthy before progressing to higher stages.
 

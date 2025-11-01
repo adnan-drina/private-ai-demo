@@ -42,7 +42,8 @@ resources:
   # - pipelinerun-eu-ai-act.yaml
 
 labels:
-  - pairs:
+  - includeSelectors: true
+    pairs:
       app.kubernetes.io/component: docling-pipeline
       app.kubernetes.io/part-of: llama-stack
 

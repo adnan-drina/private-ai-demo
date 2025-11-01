@@ -7,7 +7,7 @@ metadata:
 spec:
   description: Stage 04 - Model Integration with MCP + Agentic AI
   sourceRepos:
-    - '*' # Allow all repos, refine later for production
+    - 'https://github.com/adnan-drina/private-ai-demo.git'
   destinations:
     - namespace: private-ai-demo
       server: https://kubernetes.default.svc
