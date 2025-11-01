@@ -13,11 +13,11 @@ commonAnnotations:
 
 resources:
   - peerauthentication-allow-non-mesh-clients.yaml
+  - configmap-trusted-ca.yaml
   - namespace.yaml
   - limit-range.yaml
   - resource-quota.yaml
   - serviceaccount.yaml
   - role-model-registry-access.yaml
   - connection-internal-registry.yaml
-  - trusted-ca-configmap.yaml
 

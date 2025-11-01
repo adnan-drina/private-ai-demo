@@ -19,7 +19,7 @@ spec:
     - name: version_name
       value: "full-fp16"
     - name: runtime_tag
-      value: "mistral-24b-full-fp16"
+      value: "mistral-24b-full"
     - name: hf_repo
       value: "mistralai/Mistral-Small-Instruct-2409"
     - name: hf_revision

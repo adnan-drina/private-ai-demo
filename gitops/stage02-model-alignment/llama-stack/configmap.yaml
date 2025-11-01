@@ -30,7 +30,7 @@ data:
         - provider_id: mistral-24b-quantized
           provider_type: remote::vllm
           config:
-            url: "https://mistral-24b-quantized-private-ai-demo.apps.cluster-qtvt5.qtvt5.sandbox2082.opentlc.com/v1"
+            url: "http://mistral-24b-quantized-predictor.private-ai-demo.svc.cluster.local/v1"
             max_tokens: 4096
             api_token: fake
             tls_verify: false
@@ -39,22 +39,24 @@ data:
         - provider_id: mistral-24b-full
           provider_type: remote::vllm
           config:
-            url: "https://mistral-24b-private-ai-demo.apps.cluster-qtvt5.qtvt5.sandbox2082.opentlc.com/v1"
+            url: "http://mistral-24b-predictor.private-ai-demo.svc.cluster.local/v1"
             max_tokens: 4096
             api_token: fake
             tls_verify: false
         
-        # Sentence Transformers for embeddings (IBM Granite)
-        - provider_id: sentence-transformers
-          provider_type: inline::sentence-transformers
-          config: {}
+        # Embedding provider: Granite Embedding (OpenAI-compatible API)
+        - provider_id: granite-embedding
+          provider_type: remote::openai
+          config:
+            url: "http://granite-embedding.ai-infrastructure.svc.cluster.local/v1"
+            tls_verify: false
       
       vector_io:
         # Milvus in private-ai-demo (dedicated for this demo)
         - provider_id: milvus-shared
           provider_type: remote::milvus
           config:
-            uri: "http://milvus-standalone.private-ai-demo.svc.cluster.local:19530"
+            uri: "tcp://milvus-standalone.private-ai-demo.svc.cluster.local:19530"
             collection_name: "rag_documents"
       
       agents:
@@ -112,11 +114,11 @@ data:
             # Model configurations for evaluation
             models:
               - model_id: mistral-24b-quantized
-                endpoint: "https://mistral-24b-quantized-private-ai-demo.apps.cluster-qtvt5.qtvt5.sandbox2082.opentlc.com/v1/completions"
+                endpoint: "http://mistral-24b-quantized-predictor.private-ai-demo.svc.cluster.local/v1/completions"
                 tokenizer: "RedHatAI/Mistral-Small-24B-Instruct-2501-quantized.w4a16"
                 num_concurrent: 2
               - model_id: mistral-24b-full
-                endpoint: "https://mistral-24b-private-ai-demo.apps.cluster-qtvt5.qtvt5.sandbox2082.opentlc.com/v1/completions"
+                endpoint: "http://mistral-24b-predictor.private-ai-demo.svc.cluster.local/v1/completions"
                 tokenizer: "mistralai/Mistral-Small-24B-Instruct-2501"
                 num_concurrent: 4
             # Default evaluation settings
@@ -153,7 +155,7 @@ data:
           embedding_dimension: 768
         model_id: ibm-granite/granite-embedding-125m-english
         model_type: embedding
-        provider_id: sentence-transformers
+        provider_id: granite-embedding
         provider_model_id: ibm-granite/granite-embedding-125m-english
     
     tool_groups:

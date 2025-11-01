@@ -1,0 +1,10 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: trusted-ca
+  namespace: private-ai-demo
+  annotations:
+    config.openshift.io/inject-trusted-cabundle: "true"
+data: {}
+

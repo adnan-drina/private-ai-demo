@@ -20,8 +20,8 @@ data:
     [],\n   \"source\": [\n    \"import os\\n\",\n    \"import uuid\\n\",\n    \"from
     openai import OpenAI\\n\",\n    \"from llama_stack_client import LlamaStackClient,
     Agent, AgentEventLogger\\n\",\n    \"\\n\",\n    \"# Configuration\\n\",\n    \"MISTRAL_URL
-    = \\\"https://mistral-24b-quantized-private-ai-demo.apps.cluster-n8cnx.n8cnx.sandbox2830.opentlc.com/v1\\\"\\n\",\n
-    \   \"LLAMASTACK_URL = \\\"http://llama-stack-service.private-ai-demo.svc:8321\\\"\\n\",\n
+    = \\\"http://mistral-24b-quantized-predictor.private-ai-demo.svc.cluster.local/v1\\\"\\n\",\n
+    \   \"LLAMASTACK_URL = \\\"http://llamastack.private-ai-demo.svc:8321\\\"\\n\",\n
     \   \"MODEL_ID = \\\"mistral-24b-quantized\\\"\\n\",\n    \"\\n\",\n    \"# Initialize
     clients\\n\",\n    \"vllm_client = OpenAI(base_url=MISTRAL_URL, api_key=\\\"dummy\\\")\\n\",\n
     \   \"llama_client = LlamaStackClient(base_url=LLAMASTACK_URL)\\n\",\n    \"\\n\",\n

@@ -88,6 +88,7 @@ spec:
       params:
         - name: scenario
           value: $(params.scenario)
+        # Uses Task default llamastack-url which we standardized to Service 'llamastack'
       workspaces:
         - name: documents
           workspace: documents-pvc

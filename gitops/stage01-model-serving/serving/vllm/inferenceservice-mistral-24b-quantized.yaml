@@ -21,33 +21,24 @@ metadata:
     serving.kserve.io/deploymentMode: "Serverless"
     description: "Mistral Small 24B Instruct W4A16 quantized - 1 GPU (weights in S3)"
     serving.knative.openshift.io/enablePassthrough: "true"
+    autoscaling.knative.dev/min-scale: "1"
+    autoscaling.knative.dev/target: "6"
     sidecar.istio.io/inject: "true"
     sidecar.istio.io/rewriteAppHTTPProbers: "true"
     security.opendatahub.io/enable-auth: "true"
+    # S3 configuration (no protocol prefix - host:port only)
+    serving.kserve.io/s3-endpoint: "minio.model-storage.svc:9000"
+    serving.kserve.io/s3-usehttps: "0"
+    serving.kserve.io/s3-verifyssl: "0"
+    serving.kserve.io/s3-region: "us-east-1"
+    serving.kserve.io/s3-secret-name: "s3-credentials-kserve"
 spec:
   predictor:
+    containerConcurrency: 6
+    serviceAccountName: ai-workload-sa
     automountServiceAccountToken: false
     minReplicas: 1
     maxReplicas: 1
-    env:
-      - name: AWS_ACCESS_KEY_ID
-        valueFrom:
-          secretKeyRef:
-            name: minio-credentials
-            key: accesskey
-      - name: AWS_SECRET_ACCESS_KEY
-        valueFrom:
-          secretKeyRef:
-            name: minio-credentials
-            key: secretkey
-      - name: S3_ENDPOINT
-        value: "http://minio.model-storage.svc:9000"
-      - name: S3_USE_HTTPS
-        value: "false"
-      - name: S3_VERIFY_SSL
-        value: "false"
-      - name: AWS_REGION
-        value: "us-east-1"
     model:
       modelFormat:
         name: vLLM
@@ -69,6 +60,7 @@ spec:
       args:
         - --gpu-memory-utilization=0.95     # High utilization for single GPU
         - --max-model-len=32768             # Mistral Small supports 32K context
+        - --max-num-seqs=16                  # Limit concurrent sequences per GPU
         - --enable-chunked-prefill          # Performance optimization
         - --enable-prefix-caching           # Cache optimization for repeated prompts
         - --trust-remote-code               # Allow custom model code

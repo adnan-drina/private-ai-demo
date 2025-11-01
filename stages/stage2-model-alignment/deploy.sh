@@ -20,8 +20,9 @@ echo "  Stage 2: Model Alignment with RAG + Llama Stack"
 echo "════════════════════════════════════════════════════════════════"
 echo ""
 
-echo "📦 Deploying from: $GITOPS_PATH"
-oc apply -k "$GITOPS_PATH"
+GITOPS_PATH_CORRECT="${SCRIPT_DIR}/../../gitops/stage02-model-alignment"
+echo "📦 Deploying from: $GITOPS_PATH_CORRECT"
+oc apply -k "$GITOPS_PATH_CORRECT"
 
 echo ""
 echo "✅ Deployment complete!"

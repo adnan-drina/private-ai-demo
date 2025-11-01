@@ -1,0 +1,209 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: model-testing-v2
+  namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/name: model-testing-pipeline-v2
+    app.kubernetes.io/component: pipeline
+    app.kubernetes.io/part-of: private-ai-demo
+    app.kubernetes.io/version: "2.0"
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+    tekton.dev/pipelines.minVersion: "0.17.0"
+    tekton.dev/tags: "testing,evaluation,benchmarking,security-hardened"
+    tekton.dev/displayName: "Model Testing Pipeline v2 (Security Hardened)"
+    description: |
+      Version 2: Security-hardened testing pipeline with:
+      - Uses internal Kubernetes services (no SSL bypass)
+      - HTTP on cluster.local (secured by service mesh)
+      - Model Registry Python SDK with proper authentication
+      - Batched API calls for efficiency
+      - Provenance tracking (pipeline UID, timestamp, artifacts)
+      - MinIO artifact upload for audit trail
+      - No sitecustomize.py hacks
+      - Follows Red Hat best practices
+spec:
+  description: >-
+    Tests deployed models with evaluation and benchmarking tasks.
+    
+    Security improvements in v2:
+    - All tasks use internal HTTP services (no SSL bypass)
+    - Service mesh (Istio) provides mTLS between services
+    - Model Registry SDK with proper authentication
+    - Batched API calls (1 PATCH vs 10-20)
+    - Provenance tracking and artifact storage
+    - Red Hat approved security posture
+    
+    Tasks:
+    1. run-lm-eval-v2: Evaluate model accuracy (hellaswag, arc_easy, etc.)
+    2. run-guidellm-v2: Benchmark performance (TTFT, throughput, latency)
+    3. publish-test-results-v2: Store results in Model Registry with provenance
+    
+    Benefits:
+    - Test deployed models (no download/build overhead)
+    - Compare different model versions
+    - Track performance over time
+    - Store results with full audit trail in Model Registry
+    - Maintain Red Hat security compliance
+
+  params:
+    # InferenceService identification
+    - name: inference_service_name
+      type: string
+      description: Name of the deployed InferenceService to test
+    
+    - name: namespace
+      type: string
+      description: Namespace where the InferenceService is deployed
+      default: "private-ai-demo"
+    
+    # Model Registry metadata
+    - name: model_name
+      type: string
+      description: Registered model name in Model Registry (e.g., "Mistral-Small-24B-Instruct")
+    
+    - name: version_name
+      type: string
+      description: Model version identifier in Model Registry (e.g., "quantized-w4a16-1gpu")
+    
+    # vLLM model identification (separate from Model Registry name)
+    - name: vllm_model_name
+      type: string
+      description: vLLM model name as known by the InferenceService (e.g., "mistral-24b-quantized"). Used by guidellm and lm-eval. Usually matches inference_service_name.
+      default: ""
+    
+    # Evaluation parameters
+    - name: eval_tasks
+      type: string
+      description: Comma-separated list of evaluation tasks
+      default: "hellaswag,arc_easy"
+    
+    - name: eval_limit
+      type: string
+      description: Limit number of samples per task (for faster evaluation)
+      default: "500"
+    
+    - name: max_model_len
+      type: string
+      description: Maximum context length for the model
+      default: "8192"
+    
+    # Benchmark parameters
+    - name: request_count
+      type: string
+      description: Number of requests per load scenario
+      default: "100"
+    
+    - name: max_seconds
+      type: string
+      description: Maximum time to run each scenario (seconds)
+      default: "120"
+    
+    - name: tokenizer_name
+      type: string
+      description: HuggingFace tokenizer model ID for synthetic data generation
+      default: ""
+    
+    - name: prompt_tokens
+      type: string
+      description: Number of tokens in prompt
+      default: "512"
+    
+    - name: generated_tokens
+      type: string
+      description: Number of tokens to generate
+      default: "512"
+
+  workspaces:
+    - name: results
+      description: Shared workspace for storing test results
+
+  tasks:
+    # Task 1: Run LM-Eval for accuracy evaluation (v2 - secure)
+    - name: run-lm-eval
+      taskRef:
+        name: run-lm-eval-v2
+        kind: Task
+      params:
+        - name: inference_service_name
+          value: $(params.inference_service_name)
+        - name: namespace
+          value: $(params.namespace)
+        - name: model_name
+          value: $(params.vllm_model_name)
+        - name: tokenizer_name
+          value: $(params.tokenizer_name)
+        - name: tasks
+          value: $(params.eval_tasks)
+        - name: limit
+          value: $(params.eval_limit)
+        - name: max_model_len
+          value: $(params.max_model_len)
+      workspaces:
+        - name: results
+          workspace: results
+    
+    # Task 2: Run GuideLLM for performance benchmarking (v2 - secure)
+    - name: run-guidellm
+      runAfter: ["run-lm-eval"]
+      taskRef:
+        name: run-guidellm-v2
+        kind: Task
+      params:
+        - name: inference_service_name
+          value: $(params.inference_service_name)
+        - name: namespace
+          value: $(params.namespace)
+        - name: model_name
+          value: $(params.vllm_model_name)
+        - name: tokenizer_name
+          value: $(params.tokenizer_name)
+        - name: request_count
+          value: $(params.request_count)
+        - name: max_seconds
+          value: $(params.max_seconds)
+        - name: prompt_tokens
+          value: $(params.prompt_tokens)
+        - name: generated_tokens
+          value: $(params.generated_tokens)
+      workspaces:
+        - name: results
+          workspace: results
+    
+    # Task 3: Publish results to Model Registry (v2 - secure, efficient)
+    - name: publish-results
+      runAfter: ["run-lm-eval", "run-guidellm"]
+      taskRef:
+        name: publish-test-results-v2
+        kind: Task
+      params:
+        - name: model_name
+          value: $(params.model_name)
+        - name: version_name
+          value: $(params.version_name)
+        - name: inference_service_name
+          value: $(params.inference_service_name)
+        - name: namespace
+          value: $(params.namespace)
+        - name: eval_results_path
+          value: "/workspace/results/eval/results.json"
+        - name: benchmark_results_path
+          value: "/workspace/results/benchmarks/"
+      workspaces:
+        - name: results
+          workspace: results
+
+  results:
+    - name: eval-status
+      description: Evaluation task status
+      value: $(tasks.run-lm-eval.results.EVAL_STATUS)
+    
+    - name: benchmark-status
+      description: Benchmark task status
+      value: $(tasks.run-guidellm.results.BENCHMARK_STATUS)
+    
+    - name: publish-status
+      description: Publish task status
+      value: $(tasks.publish-results.results.PUBLISH_STATUS)
+

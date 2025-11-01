@@ -27,7 +27,7 @@ spec:
       value: "http://shared-docling-service.ai-infrastructure.svc:5001"
     
     - name: llamastack-service-url
-      value: "http://llama-stack-service.private-ai-demo.svc:8321"
+      value: "http://llamastack.private-ai-demo.svc:8321"
     
     - name: milvus-collection
       value: "rag_documents"

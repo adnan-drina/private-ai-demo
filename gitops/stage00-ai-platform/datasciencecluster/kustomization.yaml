@@ -9,4 +9,5 @@ resources:
 - namespace-istio-system.yaml
 - servicemeshcontrolplane.yaml
 - datasciencecluster.yaml
+- istio-knative-gateways.yaml
 

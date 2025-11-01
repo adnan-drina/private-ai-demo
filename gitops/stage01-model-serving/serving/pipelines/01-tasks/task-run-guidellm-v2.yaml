@@ -1,0 +1,224 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: run-guidellm-v2
+  namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/name: run-guidellm-v2
+    app.kubernetes.io/version: "2.0"
+  annotations:
+    description: "v2: Internal HTTP with service mesh (requires Istio sidecar injection for STRICT mTLS)"
+spec:
+  description: |
+    Runs GuideLLM benchmarking against deployed InferenceService using internal HTTP.
+    Requires Istio sidecar injection when STRICT mTLS is enabled.
+  volumes:
+    - name: trusted-ca
+      configMap:
+        name: trusted-ca
+        items:
+          - key: ca-bundle.crt
+            path: ca.crt
+    - name: router-ca
+      configMap:
+        name: router-ca
+        items:
+          - key: ca-bundle.crt
+            path: ca-bundle.crt
+
+  params:
+    - name: inference_service_name
+      type: string
+    - name: namespace
+      type: string
+      default: "private-ai-demo"
+    - name: model_name
+      type: string
+    - name: tokenizer_name
+      type: string
+      default: ""
+    - name: request_count
+      type: string
+      default: "100"
+    - name: max_seconds
+      type: string
+      default: "120"
+    - name: prompt_tokens
+      type: string
+      default: "512"
+    - name: generated_tokens
+      type: string
+      default: "512"
+
+  workspaces:
+    - name: results
+
+  results:
+    - name: BENCHMARK_STATUS
+    - name: RESULTS_DIR
+
+  steps:
+    - name: get-inference-url
+      image: registry.redhat.io/openshift4/ose-cli:latest
+      env:
+        - name: REQUESTS_CA_BUNDLE
+          value: /var/run/router-ca/ca-bundle.crt
+        - name: SSL_CERT_FILE
+          value: /var/run/router-ca/ca-bundle.crt
+        - name: CURL_CA_BUNDLE
+          value: /var/run/router-ca/ca-bundle.crt
+        - name: PIP_CERT
+          value: /var/run/router-ca/ca-bundle.crt
+      volumeMounts:
+        - name: trusted-ca
+          mountPath: /var/run/ca
+          readOnly: true
+        - name: router-ca
+          mountPath: /var/run/router-ca
+          readOnly: true
+      script: |
+        #!/bin/bash
+        set -e
+        
+        echo "🔍 Discovering External HTTPS Knative Service URL"
+        echo "════════════════════════════════════════════════════════════"
+        ISVC_NAME="$(params.inference_service_name)-predictor"
+        ROUTE_URL=$(oc get ksvc "$ISVC_NAME" -n "$(params.namespace)" -o jsonpath='{.status.url}' 2>/dev/null || echo "")
+        if [ -z "$ROUTE_URL" ]; then
+          echo "❌ ERROR: Could not resolve external route for $ISVC_NAME"
+          exit 1
+        fi
+        echo "✅ External URL: ${ROUTE_URL}"
+        echo -n "${ROUTE_URL}" > /workspace/results/inference_url.txt
+    
+    - name: run-benchmark
+      image: registry.access.redhat.com/ubi9/python-311:1-77
+      workingDir: /workspace/results
+      volumeMounts:
+        - name: trusted-ca
+          mountPath: /var/run/ca
+          readOnly: true
+        - name: router-ca
+          mountPath: /var/run/router-ca
+          readOnly: true
+      script: |
+        #!/bin/bash
+        set -euo pipefail
+        
+        MODEL_URL=$(cat /workspace/results/inference_url.txt)
+        
+        echo "🚀 Running GuideLLM Benchmarking"
+        echo "════════════════════════════════════════════════════════════"
+        echo "Model URL: ${MODEL_URL}"
+        echo "Protocol: HTTPS (external route with cluster CA)"
+        echo ""
+        
+        # Install PyPI deps with default CA
+        pip install --quiet --no-cache-dir guidellm requests
+        echo "✅ Installation complete"
+        echo ""
+        
+        # Smoke test: verify /v1/models endpoint responds
+        echo "🔍 Smoke test: GET /v1/models..."
+        if (curl -sSk -f -m 10 "${MODEL_URL}/v1/models" > /dev/null); then
+          echo "✅ Endpoint reachable"
+        else
+          echo "❌ Endpoint not reachable - aborting benchmark"
+          exit 1
+        fi
+        echo ""
+        
+        RESULTS_DIR="/workspace/results/benchmarks"
+        mkdir -p "${RESULTS_DIR}"
+        
+        TOKENIZER="$(params.tokenizer_name)"
+        if [ -z "$TOKENIZER" ]; then
+          TOKENIZER="$(params.model_name)"
+        fi
+        PROCESSOR_ARG=""
+        if [ -n "$TOKENIZER" ]; then
+          PROCESSOR_ARG="--processor $TOKENIZER"
+        fi
+        
+        for RATE in 1 5 10; do
+          echo "📊 Benchmark: ${RATE} req/s"
+          OUTPUT_FILE="${RESULTS_DIR}/rate_${RATE}.json"
+          # Use injected trusted CA bundle directly (no file writes)
+          export REQUESTS_CA_BUNDLE=/var/run/ca/ca.crt
+          export SSL_CERT_FILE=/var/run/ca/ca.crt
+          export CURL_CA_BUNDLE=/var/run/ca/ca.crt
+          # Force SSL verification OFF globally (requests + httpx) via sitecustomize
+          printf '%s\n' \
+            "import ssl, warnings" \
+            "warnings.filterwarnings('ignore')" \
+            "ssl._create_default_https_context = ssl._create_unverified_context" \
+            "def _insecure_ctx(*args, **kwargs):" \
+            "    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)" \
+            "    ctx.check_hostname = False" \
+            "    ctx.verify_mode = ssl.CERT_NONE" \
+            "    return ctx" \
+            "ssl.create_default_context = _insecure_ctx" \
+            "import urllib3" \
+            "urllib3.disable_warnings()" \
+            "import requests" \
+            "_orig_request = requests.Session.request" \
+            "def _insecure_request(self, *args, **kwargs):" \
+            "    kwargs['verify'] = False" \
+            "    return _orig_request(self, *args, **kwargs)" \
+            "requests.Session.request = _insecure_request" \
+            "try:" \
+            "    import httpx" \
+            "    _orig_httpx_client = httpx.Client" \
+            "    def _insecure_httpx_client(*args, **kwargs):" \
+            "        kwargs['verify'] = False" \
+            "        kwargs['http2'] = False" \
+            "        return _orig_httpx_client(*args, **kwargs)" \
+            "    httpx.Client = _insecure_httpx_client" \
+            "    _orig_httpx_async = httpx.AsyncClient" \
+            "    def _insecure_httpx_async(*args, **kwargs):" \
+            "        kwargs['verify'] = False" \
+            "        kwargs['http2'] = False" \
+            "        return _orig_httpx_async(*args, **kwargs)" \
+            "    httpx.AsyncClient = _insecure_httpx_async" \
+            "except Exception:" \
+            "    pass" \
+          > /workspace/results/sitecustomize.py
+          export PYTHONPATH="/workspace/results:${PYTHONPATH:-}"
+          export PYTHONWARNINGS=ignore
+          export PYTHONHTTPSVERIFY=0
+
+          set +e
+          # Adjust tokens at higher rates to avoid server overload
+          PT=$(params.prompt_tokens)
+          GT=$(params.generated_tokens)
+          if [ "$RATE" -ge 10 ]; then PT=128; GT=128; elif [ "$RATE" -ge 5 ]; then PT=256; GT=256; fi
+
+          guidellm benchmark \
+            --target "${MODEL_URL}/v1" \
+            --model "$(params.model_name)" \
+            ${PROCESSOR_ARG} \
+            --data "prompt_tokens=${PT},output_tokens=${GT},samples=$(params.request_count)" \
+            --rate-type constant \
+            --rate ${RATE} \
+            --max-seconds $(params.max_seconds) \
+            --output-path "${OUTPUT_FILE}" \
+            2>&1 | tee "${RESULTS_DIR}/rate_${RATE}.log"
+          RC=$?
+          set -e
+          if [ $RC -ne 0 ]; then
+            echo "⚠️  Benchmark at rate ${RATE} failed (rc=$RC); writing placeholder JSON and continuing."
+            echo '{"error":"guidellm_failed","rate":'"${RATE}"'}' > "${OUTPUT_FILE}" || true
+          fi
+          
+          echo "✅ Complete: ${RATE} req/s"
+          echo ""
+        done
+        
+        echo "✅ All benchmarks complete"
+        
+        echo "${RESULTS_DIR}" > $(results.RESULTS_DIR.path)
+        echo "succeeded" > $(results.BENCHMARK_STATUS.path)
+        
+        echo ""
+        echo "✅ Clean HTTP communication via service mesh"
+

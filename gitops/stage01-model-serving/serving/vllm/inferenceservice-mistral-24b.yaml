@@ -24,9 +24,11 @@ metadata:
     sidecar.istio.io/inject: "true"
     sidecar.istio.io/rewriteAppHTTPProbers: "true"
     autoscaling.knative.dev/min-scale: "1"
+    autoscaling.knative.dev/target: "4"
     autoscaling.knative.dev/scale-to-zero-pod-retention-period: "60m"
 spec:
   predictor:
+    containerConcurrency: 4
     automountServiceAccountToken: false
     minReplicas: 1
     maxReplicas: 1
@@ -55,6 +57,7 @@ spec:
         - --tensor-parallel-size=4          # Distribute across 4 GPUs
         - --gpu-memory-utilization=0.85     # Conservative for 4-GPU setup
         - --max-model-len=32768             # Mistral Small supports 32K context
+        - --max-num-seqs=32                  # Increase sequences across 4 GPUs
         - --enable-chunked-prefill          # Performance optimization
         - --enable-prefix-caching           # Cache optimization for repeated prompts
         - --trust-remote-code               # Allow custom model code

@@ -16,7 +16,7 @@ spec:
     - name: llamastack-url
       type: string
       description: "Llama Stack service URL"
-      default: "http://llama-stack-service.private-ai-demo.svc:8321"
+      default: "http://llamastack.private-ai-demo.svc:8321"
     
     - name: collection
       type: string

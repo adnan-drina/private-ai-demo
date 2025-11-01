@@ -24,6 +24,8 @@ spec:
       value: quant-w4a16
     - name: vllm_model_name
       value: mistralai/Mistral-Small-Instruct-2409
+    - name: tokenizer_name
+      value: mistralai/Mistral-Small-Instruct-2409
     - name: eval_tasks
       value: "arc_easy,hellaswag"
     - name: eval_limit

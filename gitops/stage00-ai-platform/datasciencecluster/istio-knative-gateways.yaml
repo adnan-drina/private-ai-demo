@@ -1,0 +1,69 @@
+---
+# Gateway used by Knative for external traffic
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: knative-ingress-gateway
+  namespace: knative-serving
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - "*"
+---
+# Cluster-local gateway for Knative services
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: knative-local-gateway
+  namespace: knative-serving
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - "*.svc.cluster.local"
+---
+# KServe local gateway referenced by KServe VirtualServices
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: kserve-local-gateway
+  namespace: istio-system
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - "*"
+---
+# Backing Service for the knative-local-gateway (points to the Istio ingress pods)
+apiVersion: v1
+kind: Service
+metadata:
+  name: knative-local-gateway
+  namespace: istio-system
+  labels:
+    app: knative-local-gateway
+spec:
+  type: ClusterIP
+  selector:
+    istio: ingressgateway
+  ports:
+  - name: http2
+    port: 80
+    targetPort: 8080
+
