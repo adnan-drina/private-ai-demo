@@ -2,7 +2,6 @@
 # Internal Documentation
 # ============================================
 # Internal working documentation not for public GitHub
-docs/
 _archive/
 
 # ============================================
@@ -89,3 +88,4 @@ stage2-private-data-rag/notebooks/[0-9][0-9]-*.ipynb
 **/.tmp-*.yaml
 **/.tmp-*.yml
 .env
+docs/
