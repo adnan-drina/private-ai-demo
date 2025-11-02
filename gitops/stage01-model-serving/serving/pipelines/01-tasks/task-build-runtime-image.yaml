@@ -52,14 +52,11 @@ spec:
       image: registry.redhat.io/rhel9/buildah:latest
       imagePullPolicy: IfNotPresent
       
-      # Run as non-root user (no privileged mode needed!)
+      # Run as privileged root (required for buildah in OCP)
+      # Requires privileged SCC (will be bound to pipeline SA)
       securityContext:
-        runAsUser: 1000
-        runAsGroup: 1000
-        fsGroup: 1000
-        capabilities:
-          add:
-            - SETFCAP  # Required for fuse-overlayfs
+        privileged: true
+        runAsUser: 0
       
       env:
         - name: MODEL_NAME
@@ -165,17 +162,10 @@ spec:
         ARG BASE_IMAGE
         FROM ${BASE_IMAGE}
         
-        # Install system dependencies
-        USER root
-        RUN dnf install -y \
-            git \
-            wget \
-            gcc \
-            gcc-c++ \
-            make \
-            && dnf clean all
+        # Note: UBI9 Python 3.11 image uses virtualenv by default
+        # All pip installs go to the active virtualenv automatically
         
-        # Install Python dependencies
+        # Install Python dependencies (no --user flag needed in virtualenv)
         ARG VLLM_VERSION
         RUN pip install --no-cache-dir \
             vllm==${VLLM_VERSION} \
@@ -184,19 +174,16 @@ spec:
             && pip cache purge
         
         # Install MinIO client for model fetching
-        RUN wget https://dl.min.io/client/mc/release/linux-amd64/mc \
-            -O /usr/local/bin/mc && \
+        USER root
+        RUN curl -fsSL https://dl.min.io/client/mc/release/linux-amd64/mc -o /usr/local/bin/mc && \
             chmod +x /usr/local/bin/mc
+        USER 1001
         
         # Create app directory
         WORKDIR /app
         
         # Model cache directory (will be mounted PVC or fetched from MinIO)
-        RUN mkdir -p /model-cache && \
-            chown -R 1001:0 /model-cache && \
-            chmod -R g+rwX /model-cache
-        
-        USER 1001
+        RUN mkdir -p /model-cache
         
         # Default command (overridden by InferenceService)
         CMD ["python", "-m", "vllm.entrypoints.openai.api_server", "--host", "0.0.0.0", "--port", "8080"]
@@ -209,11 +196,14 @@ spec:
         echo "✅ Containerfile created"
         echo ""
         
-        # Build runtime image (unprivileged!)
-        echo "🏗️  Building runtime image (unprivileged)..."
+        # Build runtime image (as root with --userns=host to avoid uid_map)
+        echo "🏗️  Building runtime image..."
+        
         buildah bud \
           --format=oci \
           --isolation=chroot \
+          --userns=host \
+          --storage-driver=vfs \
           --build-arg BASE_IMAGE="${BASE_IMAGE}" \
           --build-arg VLLM_VERSION="${VLLM_VERSION}" \
           --file="${CONTAINERFILE_PATH}" \
