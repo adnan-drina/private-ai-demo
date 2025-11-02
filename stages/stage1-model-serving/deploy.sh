@@ -279,6 +279,19 @@ create_secrets() {
     log_success "Secret created: quay-credentials"
   fi
   
+  # S3 credentials for KServe storage-initializer (MinIO backend)
+  log_info "Creating S3 credentials for KServe..."
+  if [ "$DRY_RUN" = true ]; then
+    log_info "[DRY-RUN] Would create secret: s3-credentials-kserve"
+  else
+    oc create secret generic s3-credentials-kserve \
+      --from-literal=AWS_ACCESS_KEY_ID="$MINIO_ACCESS_KEY" \
+      --from-literal=AWS_SECRET_ACCESS_KEY="$MINIO_SECRET_KEY" \
+      -n "$PROJECT_NAME" \
+      --dry-run=client -o yaml | oc apply -f -
+    log_success "Secret created: s3-credentials-kserve"
+  fi
+  
   # Internal Registry Connection for OpenShift AI Dashboard
   log_info "Creating internal registry connection..."
   if [ "$DRY_RUN" = true ]; then

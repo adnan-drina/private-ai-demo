@@ -26,9 +26,16 @@ metadata:
     autoscaling.knative.dev/min-scale: "1"
     autoscaling.knative.dev/target: "4"
     autoscaling.knative.dev/scale-to-zero-pod-retention-period: "60m"
+    # S3 configuration (no protocol prefix - host:port only)
+    serving.kserve.io/s3-endpoint: "minio.model-storage.svc:9000"
+    serving.kserve.io/s3-usehttps: "0"
+    serving.kserve.io/s3-verifyssl: "0"
+    serving.kserve.io/s3-region: "us-east-1"
+    serving.kserve.io/s3-secret-name: "s3-credentials-kserve"
 spec:
   predictor:
     containerConcurrency: 32  # Phase 1 optimization: match max_num_seqs (was 4)
+    serviceAccountName: ai-workload-sa
     automountServiceAccountToken: false
     minReplicas: 1
     maxReplicas: 1
@@ -37,20 +44,20 @@ spec:
         name: vLLM
       name: ""
       runtime: vllm-cuda-runtime  # Shared runtime for all vLLM models
-      # Use PVC to avoid node ephemeral disk pressure; PVC populated via PostSync Job
-      storageUri: "pvc://mistral-24b-pvc/"
+      # Path B: weights in MinIO (S3-compatible) populated by pipeline
+      storageUri: s3://llm-models/Mistral-Small-24B-Instruct/full-fp16/
       # Model-specific resources for 4-GPU full precision model
       resources:
         requests:
           cpu: "16"
           memory: 80Gi
           nvidia.com/gpu: "4"
-          ephemeral-storage: "25Gi"  # PVC-backed: only vLLM runtime + cache (~25GB total)
+          ephemeral-storage: "60Gi"  # S3-backed: 48GB model + vLLM runtime + cache
         limits:
           cpu: "32"
           memory: 80Gi
           nvidia.com/gpu: "4"
-          ephemeral-storage: "30Gi"
+          ephemeral-storage: "70Gi"
       # Model-specific vLLM args for Mistral Small 24B full precision (FP16)
       args:
         - --dtype=bfloat16                  # Use BF16 for better performance on L4 GPUs

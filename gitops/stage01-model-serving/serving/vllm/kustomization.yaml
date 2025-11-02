@@ -14,14 +14,9 @@ commonAnnotations:
   app.kubernetes.io/managed-by: argocd
 
 resources:
-  # PVCs first
-  - pvc-mistral-24b.yaml
-  - pvc-mistral-24b-quantized.yaml
   # Shared ServingRuntime (ONE for all models)
   - servingruntime-vllm-cuda.yaml
-  # PostSync job to populate full model PVC from MinIO
-  - job-sync-mistral-24b-pvc.yaml
-  # InferenceServices last (each specifies its own resources/nodeSelector)
+  # InferenceServices (S3-backed via storage-initializer, no PVCs needed)
   - inferenceservice-mistral-24b.yaml
   - inferenceservice-mistral-24b-quantized.yaml
   # VirtualServices for timeout configuration (applied after InferenceServices)
