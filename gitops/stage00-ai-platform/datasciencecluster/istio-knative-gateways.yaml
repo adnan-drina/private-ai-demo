@@ -49,21 +49,4 @@ spec:
       protocol: HTTP
     hosts:
     - "*"
----
-# Backing Service for the knative-local-gateway (points to the Istio ingress pods)
-apiVersion: v1
-kind: Service
-metadata:
-  name: knative-local-gateway
-  namespace: istio-system
-  labels:
-    app: knative-local-gateway
-spec:
-  type: ClusterIP
-  selector:
-    istio: ingressgateway
-  ports:
-  - name: http2
-    port: 80
-    targetPort: 8080
 
