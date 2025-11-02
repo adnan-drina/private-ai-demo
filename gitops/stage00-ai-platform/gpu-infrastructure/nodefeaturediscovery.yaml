@@ -15,10 +15,6 @@ spec:
   prunerOnDelete: false
   topologyUpdater: false
   workerConfig:
-    tolerations:
-      - key: nvidia.com/gpu
-        operator: Exists
-        effect: NoSchedule
     configData: |
       core:
         sleepInterval: 60s
