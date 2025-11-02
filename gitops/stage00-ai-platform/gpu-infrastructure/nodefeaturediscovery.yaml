@@ -2,7 +2,7 @@ apiVersion: nfd.openshift.io/v1
 kind: NodeFeatureDiscovery
 metadata:
   name: nfd-instance
-  namespace: openshift-nfd
+  namespace: openshift-machine-api
   labels:
     app.kubernetes.io/instance: stage00-gpu-infrastructure
     app.kubernetes.io/part-of: stage00-ai-platform
@@ -15,10 +15,6 @@ spec:
   prunerOnDelete: false
   topologyUpdater: false
   workerConfig:
-    tolerations:
-      - key: nvidia.com/gpu
-        operator: Exists
-        effect: NoSchedule
     configData: |
       core:
         sleepInterval: 60s
