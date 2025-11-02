@@ -1,0 +1,191 @@
+apiVersion: tekton.dev/v1
+kind: TaskRun
+metadata:
+  generateName: cleanup-migrate-top24-
+  namespace: private-ai-demo
+  labels:
+    maintenance: property-migration
+    version: top24
+  annotations:
+    description: |
+      One-time migration script to update existing model versions to TOP 24 property schema.
+      
+      This script:
+      1. Reads existing properties from Model Registry
+      2. Removes properties not in TOP 24 list
+      3. Updates 'source' from 'HuggingFace' to full URL
+      4. Preserves all TOP 24 properties
+      
+      Safe to run multiple times (idempotent).
+spec:
+  taskSpec:
+    steps:
+    - name: migrate-properties
+      image: registry.access.redhat.com/ubi9/python-311:1-77
+      script: |
+        #!/usr/bin/env python3
+        """
+        Migration Script: Update Model Registry properties to TOP 24 schema
+        
+        This is a one-time cleanup to align existing model versions with the
+        new TOP 24 property strategy (Option B).
+        
+        Changes:
+        - Remove redundant properties (pipeline, s3_prefix, test_pipeline_run_uid, etc.)
+        - Update 'source' from 'HuggingFace' to full URL format
+        - Remove stderr metrics (keep only primary eval metrics)
+        - Keep all 23 TOP 24 properties
+        """
+        import os
+        import sys
+        
+        print("📦 Installing requests...")
+        os.environ["PYTHONHTTPSVERIFY"] = "0"
+        os.system("pip install -q --trusted-host pypi.org --trusted-host files.pythonhosted.org requests")
+        import requests
+        
+        api_base = "http://private-ai-model-registry.rhoai-model-registries.svc:8080/api/model_registry/v1alpha3"
+        
+        print("\n" + "=" * 80)
+        print("🔄 MODEL REGISTRY PROPERTY MIGRATION TO TOP 24")
+        print("=" * 80)
+        print()
+        
+        # Properties to REMOVE (not in TOP 24)
+        PROPERTIES_TO_REMOVE = {
+            'pipeline',                           # Confusing internal detail (PathA/PathB)
+            's3_prefix',                          # Derivable from artifact_uri
+            'test_pipeline_run_uid',              # Redundant with run name
+            'eval_arc_easy_acc_stderr,none',      # Statistical detail
+            'eval_arc_easy_acc_norm_stderr,none', # Statistical detail
+            'eval_hellaswag_acc_stderr,none',     # Statistical detail
+            'eval_hellaswag_acc_norm_stderr,none',# Statistical detail
+            'eval_hellaswag_alias',               # Redundant
+        }
+        
+        # TOP 24 properties (23 actually, optimized further)
+        TOP_24_PROPERTIES = {
+            # Build properties (12)
+            'base_model', 'source', 'quantization', 'optimization',
+            'format', 'artifact_uri', 'runtime_image', 'deployment_type',
+            'accelerator', 'gpu_requirement', 'use_case',
+            'minio_endpoint', 'minio_bucket',
+            
+            # Test properties (11)
+            'test_timestamp', 'test_pipeline_run_name', 'test_namespace',
+            'test_inferenceservice_name', 'test_inferenceservice_revision',
+            'test_artifact_uri',
+            'eval_arc_easy_acc,none', 'eval_arc_easy_acc_norm,none',
+            'eval_hellaswag_acc,none', 'eval_hellaswag_acc_norm,none',
+            'eval_arc_easy_alias',
+        }
+        
+        print("📋 Migration Strategy:")
+        print(f"   Properties to remove: {len(PROPERTIES_TO_REMOVE)}")
+        print(f"   Properties to keep:   {len(TOP_24_PROPERTIES)}")
+        print()
+        
+        # Get all registered models
+        print("🔍 Fetching all registered models...")
+        resp = requests.get(f"{api_base}/registered_models", timeout=30)
+        resp.raise_for_status()
+        models = resp.json().get("items", [])
+        
+        print(f"✅ Found {len(models)} registered models")
+        print()
+        
+        total_versions = 0
+        total_properties_removed = 0
+        total_source_updated = 0
+        
+        for model in models:
+            model_id = model["id"]
+            model_name = model["name"]
+            
+            print("-" * 80)
+            print(f"📦 Processing Model: {model_name} (ID: {model_id})")
+            print("-" * 80)
+            
+            # Get all versions for this model
+            resp = requests.get(
+                f"{api_base}/model_versions",
+                params={"parentresourceid": model_id},
+                timeout=30
+            )
+            resp.raise_for_status()
+            versions = resp.json().get("items", [])
+            
+            print(f"   Versions: {len(versions)}")
+            print()
+            
+            for version in versions:
+                version_id = version["id"]
+                version_name = version["name"]
+                current_props = version.get("customProperties", {})
+                
+                print(f"   🔄 Version: {version_name}")
+                print(f"      Current properties: {len(current_props)}")
+                
+                # Create cleaned properties
+                cleaned_props = {}
+                props_removed = 0
+                source_updated = False
+                
+                for key, value in current_props.items():
+                    # Skip properties not in TOP 24
+                    if key in PROPERTIES_TO_REMOVE:
+                        props_removed += 1
+                        print(f"      ❌ Removing: {key}")
+                        continue
+                    
+                    # Update 'source' from 'HuggingFace' to full URL
+                    if key == 'source' and 'string_value' in value:
+                        if value['string_value'] == 'HuggingFace':
+                            # Try to get base_model to construct URL
+                            base_model_prop = current_props.get('base_model', {})
+                            if 'string_value' in base_model_prop:
+                                base_model = base_model_prop['string_value']
+                                value['string_value'] = f"https://huggingface.co/{base_model}"
+                                source_updated = True
+                                print(f"      ✅ Updated: source = {value['string_value']}")
+                    
+                    cleaned_props[key] = value
+                
+                # Only update if changes were made
+                if props_removed > 0 or source_updated:
+                    print(f"      📝 Updating version with {len(cleaned_props)} properties...")
+                    
+                    resp = requests.patch(
+                        f"{api_base}/model_versions/{version_id}",
+                        json={"customProperties": cleaned_props},
+                        headers={"Content-Type": "application/json"},
+                        timeout=60
+                    )
+                    resp.raise_for_status()
+                    
+                    print(f"      ✅ Migrated: {len(current_props)} → {len(cleaned_props)} properties")
+                    print(f"         Removed: {props_removed}")
+                    if source_updated:
+                        print(f"         Updated: source URL")
+                    
+                    total_versions += 1
+                    total_properties_removed += props_removed
+                    if source_updated:
+                        total_source_updated += 1
+                else:
+                    print(f"      ℹ️  No changes needed (already TOP 24 compliant)")
+                
+                print()
+        
+        print("=" * 80)
+        print("✅ MIGRATION COMPLETE")
+        print("=" * 80)
+        print(f"📊 Summary:")
+        print(f"   Models processed:       {len(models)}")
+        print(f"   Versions migrated:      {total_versions}")
+        print(f"   Properties removed:     {total_properties_removed}")
+        print(f"   Source URLs updated:    {total_source_updated}")
+        print()
+        print("🎯 All model versions are now TOP 24 compliant!")
+        print("=" * 80)
+

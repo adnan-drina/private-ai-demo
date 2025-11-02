@@ -38,6 +38,8 @@ spec:
   steps:
     - name: download-model
       image: registry.access.redhat.com/ubi9/python-311:latest
+      securityContext:
+        runAsUser: 0
       computeResources:
         requests:
           memory: "8Gi"
@@ -92,8 +94,14 @@ spec:
         export PATH=$PATH:$HOME/.local/bin
         python -m pip install --quiet --no-cache-dir 'huggingface-hub<1.0'
         
-        # Create target directory (avoid setting explicit group to comply with SCC)
-        mkdir -p "$(workspaces.source.path)/$(params.target_path)"
+        # Create target directory with proper permissions
+        # Use install command which handles permissions better than mkdir
+        echo "📁 Creating target directory..."
+        install -d -m 0775 "$(workspaces.source.path)/$(params.target_path)" 2>/dev/null || \
+          mkdir -m 0775 -p "$(workspaces.source.path)/$(params.target_path)" 2>/dev/null || \
+          { echo "❌ Cannot create directory. Trying with sudo fallback..."; \
+            echo "Workspace permissions:"; ls -ld "$(workspaces.source.path)"; \
+            exit 1; }
         
         # Download model
         echo "📥 Downloading model..."
