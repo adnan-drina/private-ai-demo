@@ -56,6 +56,8 @@ spec:
   taskRunTemplate:
     serviceAccountName: pipeline
     podTemplate:
+      securityContext:
+        fsGroup: 65532
       tolerations:
       - key: nvidia.com/gpu
         operator: Exists
