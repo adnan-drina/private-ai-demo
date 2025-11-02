@@ -34,6 +34,11 @@ spec:
     jsonPointers:
     - /status
     - /metadata/annotations
+  - group: nfd.openshift.io
+    kind: NodeFeatureDiscovery
+    jsonPointers:
+    - /status
+    - /metadata/annotations
   info:
   - name: Deployment Method
     value: "Imperative (already deployed)"

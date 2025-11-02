@@ -25,6 +25,19 @@ spec:
   - kind: Namespace
     jsonPointers:
     - /metadata/annotations
+  - group: networking.istio.io
+    kind: Gateway
+    jsonPointers:
+    - /spec
+    - /metadata/annotations
+  - group: ""
+    kind: Service
+    jsonPointers:
+    - /spec/clusterIP
+    - /spec/ports
+    - /spec/sessionAffinity
+    - /spec/type
+    - /metadata/annotations
   - group: datasciencecluster.opendatahub.io
     kind: DataScienceCluster
     jsonPointers:
