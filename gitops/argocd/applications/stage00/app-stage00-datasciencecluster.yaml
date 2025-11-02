@@ -33,10 +33,7 @@ spec:
   - group: ""
     kind: Service
     jsonPointers:
-    - /spec/clusterIP
-    - /spec/ports
-    - /spec/sessionAffinity
-    - /spec/type
+    - /spec
     - /metadata/annotations
   - group: datasciencecluster.opendatahub.io
     kind: DataScienceCluster
