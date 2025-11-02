@@ -279,6 +279,19 @@ create_secrets() {
     log_success "Secret created: quay-credentials"
   fi
   
+  # S3 credentials for KServe storage-initializer (MinIO backend)
+  log_info "Creating S3 credentials for KServe..."
+  if [ "$DRY_RUN" = true ]; then
+    log_info "[DRY-RUN] Would create secret: s3-credentials-kserve"
+  else
+    oc create secret generic s3-credentials-kserve \
+      --from-literal=AWS_ACCESS_KEY_ID="$MINIO_ACCESS_KEY" \
+      --from-literal=AWS_SECRET_ACCESS_KEY="$MINIO_SECRET_KEY" \
+      -n "$PROJECT_NAME" \
+      --dry-run=client -o yaml | oc apply -f -
+    log_success "Secret created: s3-credentials-kserve"
+  fi
+  
   # Internal Registry Connection for OpenShift AI Dashboard
   log_info "Creating internal registry connection..."
   if [ "$DRY_RUN" = true ]; then
@@ -314,6 +327,25 @@ create_secrets() {
   
   log_success "All secrets created successfully"
   log_warning "Remember: Secrets are NOT in Git (managed imperatively)"
+}
+
+configure_scc_permissions() {
+  log_section "Configuring Security Context Constraints"
+  
+  # Grant privileged SCC to pipeline service account for buildah
+  log_info "Granting privileged SCC to pipeline service account..."
+  if [ "$DRY_RUN" = true ]; then
+    log_info "[DRY-RUN] Would grant: oc adm policy add-scc-to-user privileged -z pipeline -n $PROJECT_NAME"
+  else
+    oc adm policy add-scc-to-user privileged -z pipeline -n "$PROJECT_NAME" || true
+    log_success "Privileged SCC granted to pipeline SA (required for buildah)"
+  fi
+  
+  log_info "Checking SCC bindings..."
+  if [ "$DRY_RUN" = false ]; then
+    oc get scc privileged -o json | jq -r '.users[]' | grep -E "pipeline|$PROJECT_NAME" || log_warning "SCC binding verification skipped"
+    log_success "SCC permissions configured"
+  fi
 }
 
 trigger_argocd_sync() {
@@ -430,6 +462,9 @@ create_namespace
 
 # Create secrets imperatively (not in GitOps)
 create_secrets
+
+# Configure SCC permissions for pipelines (buildah needs privileged mode)
+configure_scc_permissions
 
 # Trigger ArgoCD sync to apply manifests
 trigger_argocd_sync

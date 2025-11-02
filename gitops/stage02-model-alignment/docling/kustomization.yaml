@@ -1,41 +1,51 @@
+---
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 metadata:
-  name: docling-operator
+  name: docling
   annotations:
     config.kubernetes.io/local-config: "true"
 
 resources:
-  - operator-subscription.yaml
-  - doclingserve-cr.yaml
+  - deployment.yaml
 
-# Docling Operator Component
+# Docling Document Processing Service
 #
-# Official Docling Operator from Community Operators
-# Manages DoclingServe instances via Kubernetes operator pattern
+# Aligned with RHOAI 2.25 Documentation:
+# https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/2.25/html-single/working_with_llama_stack/index
+# Section 3.10: Preparing documents with Docling for Llama Stack retrieval
 #
-# Features:
-#   - REST API for document conversion
-#   - Multiple export formats (Markdown, JSON, HTML, DocTags)
-#   - Local or distributed (KFP) compute engine
-#   - WebSocket for status subscriptions
-#   - Built-in UI
+# Deployment Strategy:
+#   Standard Kubernetes Deployment (not operator-based)
+#   Reason: docling-operator not available in OperatorHub
 #
 # Architecture:
-#   - Operator namespace: docling-operator-system (cluster-scoped)
-#   - DoclingServe CR: ai-infrastructure (shared service)
+#   - ServiceAccount: docling-sa
+#   - Deployment: docling (REST API wrapper around Docling Python library)
+#   - Service: docling (ClusterIP, port 8080)
+#   - Route: docling (HTTPS, edge termination)
 #
-# Benefits:
-#   ✅ Official operator (Community Operators)
-#   ✅ Declarative CR-based management
-#   ✅ GitOps friendly
-#   ✅ Multi-tenant (CR per namespace)
-#   ✅ Follows Kubernetes best practices
+# Features:
+#   ✅ REST API for document conversion (PDF, DOCX, etc.)
+#   ✅ Multiple export formats (Markdown, JSON, HTML)
+#   ✅ Integration with Llama Stack RAG workflows
+#   ✅ Compatible with KFP pipelines
+#   ✅ OpenShift native (Route, SecurityContext)
+#
+# Usage:
+#   - Internal: http://docling.private-ai-demo.svc:8080
+#   - External: https://docling-private-ai-demo.apps.<cluster-domain>
+#
+# API Endpoints:
+#   GET  /health           - Health check
+#   POST /convert?format=  - Convert document (format: markdown|json|html)
+#
+# Integration with LlamaStack:
+#   Set DOCLING_URL environment variable in LlamaStackDistribution:
+#   - name: DOCLING_URL
+#     value: "http://docling.private-ai-demo.svc:8080"
 #
 # Reference:
-#   - Operator: https://github.com/docling-project/docling-operator
-#   - Docling: https://github.com/docling-project/docling
-#   - Package: community-operators/docling-operator
-
-
+#   - Docling project: https://github.com/docling-project/docling
+#   - RHOAI 2.25 Llama Stack: https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/2.25/html-single/working_with_llama_stack/index

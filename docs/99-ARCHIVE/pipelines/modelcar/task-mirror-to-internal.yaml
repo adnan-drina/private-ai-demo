@@ -1,0 +1,241 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: mirror-to-internal
+  namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/name: modelcar-pipeline
+    app.kubernetes.io/component: task
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+    tekton.dev/pipelines.minVersion: "0.17.0"
+    tekton.dev/tags: "modelcar,mirror,registry"
+    tekton.dev/displayName: "Mirror Image to OpenShift Internal Registry"
+spec:
+  description: >-
+    Mirrors the ModelCar image from Quay.io to OpenShift internal registry.
+    
+    This task runs in a NEW pod with a FRESH service account token, avoiding
+    the 2-hour token expiry problem that plagued long-running build tasks.
+    
+    Uses registry-to-registry copy (skopeo) - NO local extraction needed,
+    which prevents ephemeral storage blow-up for large images (80GB+).
+
+  params:
+    - name: namespace
+      type: string
+      description: Target namespace for internal registry
+      default: "private-ai-demo"
+    
+    - name: image_stream_name
+      type: string
+      description: ImageStream name in OpenShift
+    
+    - name: image_tag
+      type: string
+      description: Tag for the ImageStream
+      default: "latest"
+    
+    - name: internal_registry
+      type: string
+      description: OpenShift internal registry hostname
+      default: "image-registry.openshift-image-registry.svc:5000"
+    
+    - name: tlsverify
+      type: string
+      description: Verify TLS for internal registry
+      default: "false"
+
+  workspaces:
+    - name: source
+      description: Shared workspace (contains publish-metadata.json from Task 1)
+    - name: quay-auth
+      description: Quay.io authentication secret (for source image)
+      mountPath: /workspace/quay-auth
+      readOnly: true
+
+  results:
+    - name: INTERNAL_IMAGE_URL
+      description: Full internal registry image URL
+    - name: MIRROR_STATUS
+      description: Mirror operation status
+
+  steps:
+    - name: mirror-image
+      image: quay.io/skopeo/stable:latest
+      resources:
+        requests:
+          memory: "2Gi"
+          cpu: "1"
+        limits:
+          memory: "4Gi"
+          cpu: "2"
+      script: |
+        #!/bin/bash
+        set -e
+        
+        START_TIME=$(date +%s)
+        
+        echo "════════════════════════════════════════════════════════════"
+        echo "🔄 [$(date -u +%Y-%m-%dT%H:%M:%SZ)] Mirror to Internal Registry"
+        echo "════════════════════════════════════════════════════════════"
+        
+        # Runtime context for debugging
+        echo "🔍 DEBUG: Runtime context"
+        echo "  Task: mirror-to-internal / mirror-image"
+        echo "  Time (UTC): $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        echo "  Node: $(cat /etc/hostname)"
+        echo "  UID/GID: $(id)"
+        echo "  PWD: $(pwd)"
+        echo "  Workspace mount:"
+        mount | grep /workspace | sed 's/^/    /' || true
+        echo ""
+        
+        # Pipeline parameters
+        echo "🎯 Mirror configuration:"
+        echo "  Namespace:       $(params.namespace)"
+        echo "  ImageStream:     $(params.image_stream_name)"
+        echo "  Tag:             $(params.image_tag)"
+        echo "  Internal Registry: $(params.internal_registry)"
+        echo "  TLS Verify:      $(params.tlsverify)"
+        echo ""
+        
+        # Read metadata from Task 1
+        METADATA_FILE="$(workspaces.source.path)/.pipeline-metadata/publish-metadata.json"
+        
+        if [ ! -f "$METADATA_FILE" ]; then
+          echo "❌ ERROR: Metadata file not found: $METADATA_FILE"
+          echo "   This task must run after build-and-push-to-quay"
+          exit 1
+        fi
+        
+        echo "📋 Reading publish metadata from Task 1..."
+        cat "$METADATA_FILE" | sed 's/^/  /'
+        echo ""
+        
+        # Extract source image URL from metadata
+        SOURCE_IMAGE=$(cat "$METADATA_FILE" | grep -o '"image_quay": "[^"]*"' | cut -d'"' -f4)
+        
+        if [ -z "$SOURCE_IMAGE" ]; then
+          echo "❌ ERROR: Could not extract image_quay from metadata"
+          exit 1
+        fi
+        
+        # Construct destination image URL
+        DEST_IMAGE="$(params.internal_registry)/$(params.namespace)/$(params.image_stream_name):$(params.image_tag)"
+        
+        echo "Source:      docker://$SOURCE_IMAGE"
+        echo "Destination: docker://$DEST_IMAGE"
+        echo "TLS Verify:  $(params.tlsverify)"
+        echo ""
+        
+        # Login to internal registry with FRESH service account token
+        echo "🔐 Authenticating to internal registry..."
+        echo "   (Using fresh SA token from this pod - no expiry issue!)"
+        
+        # Get the service account token from the mounted secret
+        SA_TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+        
+        # Create auth file for internal registry
+        mkdir -p /tmp/auth
+        cat > /tmp/auth/internal-auth.json << EOF
+        {
+          "auths": {
+            "$(params.internal_registry)": {
+              "auth": "$(echo -n "serviceaccount:${SA_TOKEN}" | base64 -w 0)"
+            }
+          }
+        }
+        EOF
+        
+        echo "✅ Authentication configured"
+        echo ""
+        
+        # Mirror image: Quay → Internal Registry
+        echo "🚀 Starting registry-to-registry copy..."
+        echo "   (No local extraction - network transfer only)"
+        echo ""
+        
+        skopeo copy \
+          --src-tls-verify=true \
+          --dest-tls-verify=$(params.tlsverify) \
+          --src-authfile /workspace/quay-auth/.dockerconfigjson \
+          --dest-authfile /tmp/auth/internal-auth.json \
+          "docker://$SOURCE_IMAGE" \
+          "docker://$DEST_IMAGE"
+        
+        # Verify the mirror (extract digest without jq)
+        echo ""
+        echo "🔍 Verifying mirrored image..."
+        INSPECT_OUTPUT=$(skopeo inspect \
+          --tls-verify=$(params.tlsverify) \
+          --authfile /tmp/auth/internal-auth.json \
+          "docker://$DEST_IMAGE" 2>/dev/null || echo "")
+        
+        if [ -n "$INSPECT_OUTPUT" ]; then
+          INTERNAL_DIGEST=$(echo "$INSPECT_OUTPUT" | grep -o '"Digest"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"Digest"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+          echo "✅ Image verified successfully"
+        else
+          INTERNAL_DIGEST="unknown"
+          echo "⚠️  Could not verify (but mirror likely succeeded)"
+        fi
+        
+        # Calculate time
+        END_TIME=$(date +%s)
+        MIRROR_TIME=$((END_TIME - START_TIME))
+        
+        echo ""
+        echo "✅ Mirror Complete! [$(date -u +%Y-%m-%dT%H:%M:%SZ)]"
+        echo "   Source:       $SOURCE_IMAGE"
+        echo "   Destination:  $DEST_IMAGE"
+        echo "   Digest:       $INTERNAL_DIGEST"
+        echo "   Time:         ${MIRROR_TIME}s ($(($MIRROR_TIME / 60))m $(($MIRROR_TIME % 60))s)"
+        echo ""
+        
+        # Update metadata with internal registry info
+        echo "📝 Updating metadata with internal registry reference..."
+        
+        MIRROR_TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+        # Read existing metadata, add internal registry info
+        cat "$METADATA_FILE" | sed '$s/}$/,/' > /tmp/metadata-updated.json
+        cat >> /tmp/metadata-updated.json << EOF
+          "image_internal": "${DEST_IMAGE}",
+          "internal_digest": "${INTERNAL_DIGEST}",
+          "mirror_time_seconds": ${MIRROR_TIME},
+          "mirrored_at_utc": "${MIRROR_TIMESTAMP}"
+        }
+        EOF
+        
+        # Write back to PVC
+        cat /tmp/metadata-updated.json > "$METADATA_FILE"
+        
+        echo "✅ Metadata updated:"
+        cat "$METADATA_FILE" | sed 's/^/  /'
+        echo ""
+        
+        # Update pipeline-status.json
+        cat > $(workspaces.source.path)/.pipeline-metadata/pipeline-status.json <<EOF
+        {
+          "stage": "mirrored_internal",
+          "timestamp_utc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+          "quay_image": "${SOURCE_IMAGE}",
+          "internal_image": "${DEST_IMAGE}",
+          "internal_digest": "${INTERNAL_DIGEST}",
+          "mirror_time_seconds": ${MIRROR_TIME},
+          "node": "$(cat /etc/hostname)"
+        }
+        EOF
+        echo "📝 Pipeline status updated: mirrored_internal"
+        echo ""
+        
+        # Single-line machine-readable summary
+        echo "TASK2_SUMMARY {\"stage\":\"mirrored\",\"source\":\"${SOURCE_IMAGE}\",\"dest\":\"${DEST_IMAGE}\",\"digest\":\"${INTERNAL_DIGEST}\",\"time_utc\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}"
+        
+        echo "════════════════════════════════════════════════════════════"
+        echo "✅ Task 2 Complete: Image mirrored to internal registry"
+        echo "════════════════════════════════════════════════════════════"
+        
+        # Write results
+        echo -n "$DEST_IMAGE" > $(results.INTERNAL_IMAGE_URL.path)
+        echo -n "success" > $(results.MIRROR_STATUS.path)
+

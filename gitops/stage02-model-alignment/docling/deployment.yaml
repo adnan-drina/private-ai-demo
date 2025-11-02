@@ -1,0 +1,199 @@
+---
+# Docling Document Processing Service
+# Aligned with RHOAI 2.25 - Section 3.10: Preparing documents with Docling for Llama Stack retrieval
+# Reference: https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/2.25/html-single/working_with_llama_stack/index
+#
+# Note: Docling is primarily a Python library. This deployment provides a REST API wrapper
+# for use in KFP pipelines and Llama Stack RAG workflows.
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: docling-sa
+  namespace: private-ai-demo
+  labels:
+    app: docling
+    app.kubernetes.io/name: docling
+    app.kubernetes.io/component: document-processing
+    app.kubernetes.io/part-of: private-ai-demo
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: docling
+  namespace: private-ai-demo
+  labels:
+    app: docling
+    app.kubernetes.io/name: docling
+    app.kubernetes.io/component: document-processing
+    app.kubernetes.io/part-of: private-ai-demo
+    app.openshift.io/runtime: python
+  annotations:
+    app.openshift.io/connects-to: '[{"apiVersion":"apps/v1","kind":"Deployment","name":"llamastack"}]'
+    openshift.io/display-name: "Docling Document Processor"
+    description: "Document processing service for Llama Stack RAG workflows"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: docling
+  template:
+    metadata:
+      labels:
+        app: docling
+        app.kubernetes.io/name: docling
+        app.kubernetes.io/component: document-processing
+    spec:
+      serviceAccountName: docling-sa
+      
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      
+      containers:
+      - name: docling
+        # Use Red Hat UBI with Docling installed
+        # Note: This is a custom image that needs to be built
+        # See: stages/stage2-model-alignment/docker/docling/Dockerfile
+        image: registry.access.redhat.com/ubi9/python-311:latest
+        imagePullPolicy: IfNotPresent
+        
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          capabilities:
+            drop:
+              - ALL
+        
+        command:
+          - /bin/bash
+          - -c
+          - |
+            #!/bin/bash
+            set -euo pipefail
+            
+            echo "Installing Docling..."
+            pip install --no-cache-dir docling
+            
+            echo "Starting Docling REST API wrapper..."
+            python3 -c "
+            from fastapi import FastAPI, UploadFile, File
+            from docling.document_converter import DocumentConverter
+            import uvicorn
+            import tempfile
+            import os
+            
+            app = FastAPI(title='Docling Document Processor', version='1.0.0')
+            
+            @app.get('/health')
+            def health():
+                return {'status': 'healthy'}
+            
+            @app.post('/convert')
+            async def convert_document(file: UploadFile = File(...), format: str = 'markdown'):
+                '''Convert document to specified format (markdown, json, html)'''
+                with tempfile.NamedTemporaryFile(delete=False) as tmp:
+                    tmp.write(await file.read())
+                    tmp_path = tmp.name
+                
+                try:
+                    converter = DocumentConverter()
+                    result = converter.convert(tmp_path)
+                    
+                    if format == 'markdown':
+                        return {'content': result.document.export_to_markdown()}
+                    elif format == 'json':
+                        return result.document.export_to_dict()
+                    elif format == 'html':
+                        return {'content': result.document.export_to_html()}
+                    else:
+                        return {'error': f'Unsupported format: {format}'}
+                finally:
+                    os.unlink(tmp_path)
+            
+            if __name__ == '__main__':
+                uvicorn.run(app, host='0.0.0.0', port=8080, log_level='info')
+            "
+        
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        
+        env:
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1"
+            ephemeral-storage: "5Gi"
+          limits:
+            memory: "4Gi"
+            cpu: "2"
+            ephemeral-storage: "10Gi"
+        
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: docling
+  namespace: private-ai-demo
+  labels:
+    app: docling
+    app.kubernetes.io/name: docling
+    app.kubernetes.io/component: document-processing
+    app.kubernetes.io/part-of: private-ai-demo
+spec:
+  selector:
+    app: docling
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  type: ClusterIP
+
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: docling
+  namespace: private-ai-demo
+  labels:
+    app: docling
+    app.kubernetes.io/name: docling
+    app.kubernetes.io/component: document-processing
+  annotations:
+    openshift.io/display-name: "Docling Document Processor"
+spec:
+  to:
+    kind: Service
+    name: docling
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+

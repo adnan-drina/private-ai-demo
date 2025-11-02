@@ -1,0 +1,24 @@
+---
+apiVersion: datasciencepipelinesapplications.opendatahub.io/v1
+kind: DataSciencePipelinesApplication
+metadata:
+  name: dspa
+  namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/part-of: private-ai-demo
+    stage: "02"
+spec:
+  objectStorage:
+    externalStorage:
+      bucket: kfp-artifacts
+      host: minio.model-storage.svc.cluster.local
+      port: "9000"
+      scheme: http
+      s3CredentialsSecret:
+        secretName: dspa-minio-credentials
+        accessKey: accesskey
+        secretKey: secretkey
+  # Database settings can be auto-managed by the operator
+  # API Server and Persistence Agent use defaults
+
+

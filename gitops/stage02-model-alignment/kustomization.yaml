@@ -23,8 +23,8 @@ resources:
   # 3. Docling operator (for PDF processing)
   - docling
   
-  # 4. Document ingestion pipelines
-  - pipelines
+  # 4. Kubeflow Pipelines (DSPA)
+  - kfp
   
   # 5. RAG demonstration notebooks
   - notebooks

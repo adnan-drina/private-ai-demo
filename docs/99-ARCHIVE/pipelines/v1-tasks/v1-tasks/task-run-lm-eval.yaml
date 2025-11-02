@@ -1,0 +1,260 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: run-lm-eval
+  namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/name: run-lm-eval
+    app.kubernetes.io/component: pipeline-task
+    app.kubernetes.io/part-of: private-ai-demo
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+    tekton.dev/pipelines.minVersion: "0.17.0"
+    tekton.dev/tags: "evaluation,lm-eval,trustyai"
+    tekton.dev/displayName: "Run LM-Eval on Deployed Model"
+spec:
+  description: >-
+    Runs language model evaluation (lm-eval) against a deployed InferenceService.
+    Uses TrustyAI operator integration for standardized evaluation tasks.
+    
+    This task evaluates model accuracy on benchmark datasets like:
+    - hellaswag: Commonsense reasoning
+    - arc_easy: Science Q&A
+    - gsm8k: Math problem solving
+    - truthfulqa_mc2: Truthfulness evaluation
+    
+    Results are saved as JSON for downstream processing.
+
+  params:
+    - name: inference_service_name
+      type: string
+      description: Name of the deployed InferenceService to evaluate
+    
+    - name: namespace
+      type: string
+      description: Namespace where the InferenceService is deployed
+      default: "private-ai-demo"
+    
+    - name: model_name
+      type: string
+      description: vLLM model name (must match the name registered in vLLM, e.g. 'mistral-24b-quantized')
+    
+    - name: tasks
+      type: string
+      description: Comma-separated list of evaluation tasks
+      default: "hellaswag,arc_easy"
+    
+    - name: limit
+      type: string
+      description: Limit number of samples per task (for faster evaluation)
+      default: "500"
+    
+    - name: max_model_len
+      type: string
+      description: Maximum context length for the model
+      default: "8192"
+
+  workspaces:
+    - name: results
+      description: Workspace to store evaluation results
+
+  results:
+    - name: EVAL_STATUS
+      description: Status of evaluation (succeeded/failed)
+    
+    - name: RESULTS_FILE
+      description: Path to results JSON file
+    
+    - name: ACCURACY_SUMMARY
+      description: Summary of accuracy scores
+
+  steps:
+    - name: get-inference-url
+      image: registry.redhat.io/openshift4/ose-cli:latest
+      script: |
+        #!/bin/bash
+        set -e
+        
+        echo "🔍 Discovering InferenceService URL"
+        echo "════════════════════════════════════════════════════════════"
+        echo "InferenceService: $(params.inference_service_name)"
+        echo "Namespace: $(params.namespace)"
+        echo ""
+        
+        # Get the InferenceService URL
+        ISVC_URL=$(oc get inferenceservice $(params.inference_service_name) \
+          -n $(params.namespace) \
+          -o jsonpath='{.status.url}' 2>/dev/null || echo "")
+        
+        if [ -z "$ISVC_URL" ]; then
+          echo "❌ ERROR: InferenceService $(params.inference_service_name) not found or not ready"
+          exit 1
+        fi
+        
+        echo "✅ InferenceService URL: ${ISVC_URL}"
+        echo ""
+        
+        # Test connectivity
+        echo "🔗 Testing connectivity..."
+        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -k "${ISVC_URL}/v1/models" || echo "000")
+        
+        if [ "$HTTP_CODE" = "200" ]; then
+          echo "✅ Model endpoint is accessible"
+        else
+          echo "⚠️  Warning: Got HTTP ${HTTP_CODE} from model endpoint"
+          echo "   (Continuing anyway - vLLM may respond differently)"
+        fi
+        
+        # Save URL for next step
+        echo -n "${ISVC_URL}" > /workspace/results/model_url.txt
+        
+        # Pre-create directory structure for results with proper permissions
+        # (this step runs as root, next step runs as non-root)
+        install -d -m 2775 /workspace/results/eval
+        install -d -m 2775 /workspace/results/benchmarks
+        echo "✅ Created results directory structure"
+        
+        echo ""
+        echo "════════════════════════════════════════════════════════════"
+
+    - name: run-evaluation
+      image: registry.access.redhat.com/ubi9/python-311:latest
+      workingDir: /workspace/results
+      env:
+        - name: HOME
+          value: /tmp
+        - name: HF_HOME
+          value: /tmp/.cache/huggingface
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: huggingface-token
+              key: HF_TOKEN
+      script: |
+        #!/bin/bash
+        set -e
+        
+        MODEL_URL=$(cat model_url.txt)
+        
+        echo "🧪 Running LM-Eval"
+        echo "════════════════════════════════════════════════════════════"
+        echo "Model URL: ${MODEL_URL}"
+        echo "Model Name: $(params.model_name)"
+        echo "Tasks: $(params.tasks)"
+        echo "Limit: $(params.limit) samples per task"
+        echo "════════════════════════════════════════════════════════════"
+        echo ""
+        
+        # Install lm-eval with API dependencies
+        echo "📦 Installing lm-evaluation-harness..."
+        pip install --quiet --no-cache-dir "lm-eval[api]"
+        
+        echo "✅ Installation complete"
+        echo ""
+        
+        # Install sitecustomize.py with COMPLETE SSL bypass (requests.Session.request patch)
+        SITE_PACKAGES=$(python3 -c "import site; print(site.getsitepackages()[0])")
+        echo 'import ssl, warnings' > $SITE_PACKAGES/sitecustomize.py
+        echo 'warnings.filterwarnings("ignore")' >> $SITE_PACKAGES/sitecustomize.py
+        echo '' >> $SITE_PACKAGES/sitecustomize.py
+        echo '# 1. Kill SSL verification at the socket layer' >> $SITE_PACKAGES/sitecustomize.py
+        echo 'ssl._create_default_https_context = ssl._create_unverified_context' >> $SITE_PACKAGES/sitecustomize.py
+        echo 'def _insecure_ctx(*args, **kwargs):' >> $SITE_PACKAGES/sitecustomize.py
+        echo '    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)' >> $SITE_PACKAGES/sitecustomize.py
+        echo '    ctx.check_hostname = False' >> $SITE_PACKAGES/sitecustomize.py
+        echo '    ctx.verify_mode = ssl.CERT_NONE' >> $SITE_PACKAGES/sitecustomize.py
+        echo '    return ctx' >> $SITE_PACKAGES/sitecustomize.py
+        echo 'ssl.create_default_context = _insecure_ctx' >> $SITE_PACKAGES/sitecustomize.py
+        echo '' >> $SITE_PACKAGES/sitecustomize.py
+        echo '# 2. Silence urllib3 insecure warnings' >> $SITE_PACKAGES/sitecustomize.py
+        echo 'import urllib3' >> $SITE_PACKAGES/sitecustomize.py
+        echo 'urllib3.disable_warnings()' >> $SITE_PACKAGES/sitecustomize.py
+        echo '' >> $SITE_PACKAGES/sitecustomize.py
+        echo '# 3. Force requests to ALWAYS send verify=False (THE FIX!)' >> $SITE_PACKAGES/sitecustomize.py
+        echo 'import requests' >> $SITE_PACKAGES/sitecustomize.py
+        echo '_orig_request = requests.Session.request' >> $SITE_PACKAGES/sitecustomize.py
+        echo 'def _insecure_request(self, *args, **kwargs):' >> $SITE_PACKAGES/sitecustomize.py
+        echo '    kwargs["verify"] = False' >> $SITE_PACKAGES/sitecustomize.py
+        echo '    return _orig_request(self, *args, **kwargs)' >> $SITE_PACKAGES/sitecustomize.py
+        echo 'requests.Session.request = _insecure_request' >> $SITE_PACKAGES/sitecustomize.py
+        echo '' >> $SITE_PACKAGES/sitecustomize.py
+        # Don't print from sitecustomize.py as it interferes with command output
+        echo "✅ Complete SSL bypass installed (no verification, no warnings)"
+        
+        # Create output directory
+        mkdir -p /tmp/eval
+        
+        echo "🚀 Starting evaluation..."
+        echo ""
+        
+        # Get actual model name from vLLM /v1/models endpoint
+        VLLM_MODEL_NAME=$(curl -ks "${MODEL_URL}/v1/models" | python3 -c "import sys, json; print(json.load(sys.stdin)['data'][0]['id'])" || echo "mistral-24b-quantized")
+        echo "📋 vLLM model name: ${VLLM_MODEL_NAME}"
+        echo ""
+        
+        # Run lm-eval with correct model name
+        # - model= is for vLLM API (e.g., mistral-24b-quantized)
+        # - tokenizer= is for HuggingFace (e.g., mistralai/Mistral-Small-24B-Instruct-2501)
+        python3 -m lm_eval \
+          --model local-completions \
+          --model_args "model=${VLLM_MODEL_NAME},tokenizer=mistralai/Mistral-Small-24B-Instruct-2501,base_url=${MODEL_URL}/v1/completions,num_concurrent=1,max_retries=3,timeout=300" \
+          --tasks $(params.tasks) \
+          --limit $(params.limit) \
+          --output_path /tmp/eval \
+          --log_samples \
+          2>&1 | tee /tmp/eval.log
+        
+        echo ""
+        echo "════════════════════════════════════════════════════════════"
+        echo "✅ Evaluation Complete!"
+        echo "════════════════════════════════════════════════════════════"
+        
+        # Check for results (lm-eval saves to /tmp/eval/<model_name>/*.json)
+        echo ""
+        echo "📁 Checking for results files..."
+        ls -laR /tmp/eval/ || echo "Directory not found"
+        echo ""
+        
+        # Find the actual results file (recursively search for results.json)
+        RESULTS_FILE=$(find /tmp/eval -name "results.json" -type f | head -1)
+        
+        # If results.json not found, look for any JSON file
+        if [ -z "$RESULTS_FILE" ]; then
+          RESULTS_FILE=$(find /tmp/eval -name "*.json" -type f | head -1)
+        fi
+        
+        if [ ! -z "$RESULTS_FILE" ] && [ -f "$RESULTS_FILE" ]; then
+          echo "✅ Results file found: $RESULTS_FILE"
+          echo ""
+          
+          # Extract and display summary
+          echo "📊 Results Summary:"
+          echo "────────────────────────────────────────────────────────────"
+          cat "$RESULTS_FILE" | python3 -m json.tool 2>/dev/null || cat "$RESULTS_FILE"
+          echo "────────────────────────────────────────────────────────────"
+          
+          # Copy results to workspace for downstream tasks
+          # Copy results.json to the exact path publish-results expects
+          # (directory was pre-created in previous step with proper permissions)
+          cp "$RESULTS_FILE" /workspace/results/eval/results.json
+          echo "✅ Copied results to /workspace/results/eval/results.json"
+          
+          # Also keep full results for reference
+          cp -r /tmp/eval/* /workspace/results/ 2>/dev/null || true
+          
+          # Save task results
+          echo -n "succeeded" > $(results.EVAL_STATUS.path)
+          echo -n "$RESULTS_FILE" > $(results.RESULTS_FILE.path)
+          echo -n "Evaluation completed successfully" > $(results.ACCURACY_SUMMARY.path)
+        else
+          echo "❌ ERROR: Results file not found in /tmp/eval/"
+          echo -n "failed" > $(results.EVAL_STATUS.path)
+          echo -n "none" > $(results.RESULTS_FILE.path)
+          echo -n "Evaluation failed - no results" > $(results.ACCURACY_SUMMARY.path)
+          exit 1
+        fi
+        
+        echo ""
+        echo "════════════════════════════════════════════════════════════"
+
+

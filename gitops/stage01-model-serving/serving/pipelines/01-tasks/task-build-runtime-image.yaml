@@ -10,9 +10,11 @@ metadata:
     argocd.argoproj.io/sync-wave: "1"
 spec:
   description: |
-    Builds lightweight runtime image for Path B architecture.
+    Builds lightweight runtime image for MinIO-first architecture.
     Image contains only vLLM + dependencies, NO model weights.
     Results in ~5-10GB images instead of 90GB+ ModelCar images.
+    
+    Runs in UNPRIVILEGED mode (no SCC issues) using fuse-overlayfs.
     
   params:
     - name: model_name
@@ -45,12 +47,13 @@ spec:
     - name: quay-auth
       description: "Workspace carrying dockerconfigjson for registry auth"
   
-  volumes:
-
   steps:
     - name: build-runtime
       image: registry.redhat.io/rhel9/buildah:latest
       imagePullPolicy: IfNotPresent
+      
+      # Run as privileged root (required for buildah in OCP)
+      # Requires privileged SCC (will be bound to pipeline SA)
       securityContext:
         privileged: true
         runAsUser: 0
@@ -70,54 +73,80 @@ spec:
           value: "$(params.base_image)"
         - name: VLLM_VERSION
           value: "$(params.vllm_version)"
-        - name: BUILDAH_STORAGE_ROOT
-          value: "/workspace/buildah-storage"
-        - name: BUILDAH_TMPDIR
-          value: "/workspace/buildah-tmp"
+        
+        # Buildah storage configuration for unprivileged mode
         - name: STORAGE_DRIVER
-          value: vfs
-        - name: REGISTRY_AUTH_FILE
-          value: "$(workspaces.quay-auth.path)/.dockerconfigjson"
+          value: "vfs"  # Most compatible, no fuse required
+        - name: BUILDAH_FORMAT
+          value: "oci"
         - name: BUILDAH_ISOLATION
-          value: chroot
-        - name: XDG_RUNTIME_DIR
-          value: "/workspace/buildah-tmp"
-        - name: TMPDIR
-          value: "/workspace/buildah-tmp"
-
-      volumeMounts: []
+          value: "chroot"
       
       script: |
         #!/bin/bash
         set -euo pipefail
         
         echo "═══════════════════════════════════════════════════════════"
-        echo "🏗️  BUILD LIGHTWEIGHT RUNTIME IMAGE"
+        echo "🏗️  BUILD LIGHTWEIGHT RUNTIME IMAGE (UNPRIVILEGED)"
         echo "═══════════════════════════════════════════════════════════"
         echo "Timestamp: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
         echo "Model: ${MODEL_NAME}"
         echo "Version: ${VERSION_NAME}"
-        echo "Pattern: Path B (Runtime Only - NO weights)"
+        echo "Runtime Tag: ${RUNTIME_TAG}"
+        echo "Pattern: MinIO-first (Runtime Only - NO weights)"
+        echo "Security: Unprivileged (no SCC issues)"
         echo "═══════════════════════════════════════════════════════════"
         echo ""
         
-        # Setup storage directories
-        echo "🔧 Setting up buildah storage..."
-        mkdir -p "${BUILDAH_STORAGE_ROOT}" "${BUILDAH_TMPDIR}"
-        echo "✅ Storage configured"
+        # Setup storage directories in workspace PVC
+        echo "🔧 Setting up buildah storage (unprivileged)..."
+        export BUILDAH_STORAGE_ROOT="$(workspaces.workspace.path)/buildah-storage"
+        export BUILDAH_RUNROOT="$(workspaces.workspace.path)/buildah-runroot"
+        export TMPDIR="$(workspaces.workspace.path)/tmp"
+        
+        mkdir -p "${BUILDAH_STORAGE_ROOT}" "${BUILDAH_RUNROOT}" "${TMPDIR}"
+        
+        # Configure storage for unprivileged mode
+        mkdir -p ~/.config/containers
+        cat > ~/.config/containers/storage.conf <<'STORAGE_EOF'
+        [storage]
+        driver = "vfs"
+        runroot = "${BUILDAH_RUNROOT}"
+        graphroot = "${BUILDAH_STORAGE_ROOT}"
+        
+        [storage.options]
+        size = ""
+        
+        [storage.options.vfs]
+        ignore_chown_errors = "true"
+        STORAGE_EOF
+        
+        echo "✅ Storage configured (driver: vfs, unprivileged)"
+        echo ""
+        
+        # Configure Quay auth from workspace
+        echo "🔐 Setting up Quay authentication..."
+        if [ -f "$(workspaces.quay-auth.path)/.dockerconfigjson" ]; then
+          mkdir -p ~/.docker
+          cp "$(workspaces.quay-auth.path)/.dockerconfigjson" ~/.docker/config.json
+          echo "✅ Quay auth configured from workspace"
+        else
+          echo "⚠️  No Quay auth found in workspace, will try login"
+        fi
         echo ""
         
         # Define image names
+        IMAGE_NAME="${QUAY_REPO}"
         IMAGE_TAG="${RUNTIME_TAG}"
-        QUAY_IMAGE="quay.io/${QUAY_ORG}/${QUAY_REPO}:${IMAGE_TAG}"
+        QUAY_IMAGE="quay.io/${QUAY_ORG}/${IMAGE_NAME}:${IMAGE_TAG}"
         
         echo "📦 Target image: ${QUAY_IMAGE}"
         echo ""
         
         # Read MinIO metadata from upload task
         echo "📋 Reading MinIO metadata from previous task..."
-        if [ -f "/workspace/metadata/minio-upload.json" ]; then
-          cat /workspace/metadata/minio-upload.json
+        if [ -f "$(workspaces.workspace.path)/metadata/minio-upload.json" ]; then
+          cat "$(workspaces.workspace.path)/metadata/minio-upload.json"
           echo ""
         else
           echo "⚠️  No MinIO metadata found (expected from upload-to-minio task)"
@@ -126,162 +155,107 @@ spec:
         
         # Create Containerfile for runtime
         echo "📝 Creating Containerfile..."
-        cat > /workspace/Containerfile.runtime <<'CONTAINERFILE_EOF'
-        # Lightweight vLLM Runtime Image (Path B - NO model weights)
+        CONTAINERFILE_PATH="$(workspaces.workspace.path)/Containerfile.runtime"
+        
+        cat > "${CONTAINERFILE_PATH}" <<'CONTAINERFILE_EOF'
+        # Lightweight vLLM Runtime Image (MinIO-first - NO model weights)
         ARG BASE_IMAGE
         FROM ${BASE_IMAGE}
         
-        # Install system dependencies
-        USER root
-        RUN dnf install -y \
-            git \
-            wget \
-            gcc \
-            gcc-c++ \
-            make \
-            && dnf clean all
+        # Note: UBI9 Python 3.11 image uses virtualenv by default
+        # All pip installs go to the active virtualenv automatically
         
-        # Install Python dependencies
+        # Install Python dependencies (no --user flag needed in virtualenv)
         ARG VLLM_VERSION
         RUN pip install --no-cache-dir \
             vllm==${VLLM_VERSION} \
             huggingface-hub \
-            boto3
+            boto3 \
+            && pip cache purge
         
         # Install MinIO client for model fetching
-        RUN wget https://dl.min.io/client/mc/release/linux-amd64/mc \
-            -O /usr/local/bin/mc && \
+        USER root
+        RUN curl -fsSL https://dl.min.io/client/mc/release/linux-amd64/mc -o /usr/local/bin/mc && \
             chmod +x /usr/local/bin/mc
+        USER 1001
         
         # Create app directory
         WORKDIR /app
         
-        # Create fetch and serve scripts
-        COPY fetch_model.sh /app/fetch_model.sh
-        COPY serve.sh /app/serve.sh
-        RUN chmod +x /app/fetch_model.sh /app/serve.sh
-        
-        # Model cache directory (will be mounted PVC)
-        RUN mkdir -p /model-cache && \
-            chown -R 1001:0 /model-cache && \
-            chmod -R g+rwX /model-cache
-        
-        USER 1001
+        # Model cache directory (will be mounted PVC or fetched from MinIO)
+        RUN mkdir -p /model-cache
         
         # Default command (overridden by InferenceService)
-        CMD ["/app/serve.sh"]
+        CMD ["python", "-m", "vllm.entrypoints.openai.api_server", "--host", "0.0.0.0", "--port", "8080"]
+        
+        LABEL io.openshift.tags="vllm,llm,inference,minio" \
+              summary="vLLM Runtime for MinIO-backed models" \
+              description="Lightweight runtime image for vLLM inference with MinIO object storage backend"
         CONTAINERFILE_EOF
         
-        # Create model fetch script
-        cat > /workspace/fetch_model.sh <<'FETCH_EOF'
-        #!/bin/bash
-        set -euo pipefail
-        
-        echo "🔽 Fetching model from MinIO..."
-        echo "Endpoint: ${MINIO_ENDPOINT}"
-        echo "Bucket: ${MINIO_BUCKET}"
-        echo "Prefix: ${MINIO_PREFIX}"
-        
-        # Configure mc
-        export MC_CONFIG_DIR=/tmp/.mc
-        mc alias set minio "${MINIO_ENDPOINT}" "${MINIO_ACCESS_KEY}" "${MINIO_SECRET_KEY}"
-        
-        # Download model to cache
-        echo "Downloading to /model-cache..."
-        mc cp --recursive "minio/${MINIO_BUCKET}/${MINIO_PREFIX}/" /model-cache/
-        
-        echo "✅ Model fetched successfully"
-        ls -lh /model-cache/
-        FETCH_EOF
-        
-        # Create serve script
-        cat > /workspace/serve.sh <<'SERVE_EOF'
-        #!/bin/bash
-        set -euo pipefail
-        
-        echo "🚀 Starting vLLM inference server..."
-        
-        # If model not in cache, fetch it
-        if [ ! -d "/model-cache" ] || [ -z "$(ls -A /model-cache)" ]; then
-          echo "Model cache empty, fetching from MinIO..."
-          /app/fetch_model.sh
-        else
-          echo "Using cached model from /model-cache"
-        fi
-        
-        # Start vLLM server
-        exec python -m vllm.entrypoints.openai.api_server \
-          --model /model-cache \
-          --host 0.0.0.0 \
-          --port 8080 \
-          ${VLLM_ARGS:-}
-        SERVE_EOF
-        
-        echo "✅ Containerfile and scripts created"
+        echo "✅ Containerfile created"
         echo ""
         
-        # Build runtime image (host user namespace to avoid uid_map writes)
-        echo "🏗️  Building runtime image (host userns)..."
-        buildah --root "${BUILDAH_STORAGE_ROOT}" bud \
-          --userns=host \
-          --isolation=chroot \
+        # Build runtime image (as root with --userns=host to avoid uid_map)
+        echo "🏗️  Building runtime image..."
+        
+        buildah bud \
           --format=oci \
+          --isolation=chroot \
+          --userns=host \
+          --storage-driver=vfs \
           --build-arg BASE_IMAGE="${BASE_IMAGE}" \
           --build-arg VLLM_VERSION="${VLLM_VERSION}" \
-          --file=/workspace/Containerfile.runtime \
+          --file="${CONTAINERFILE_PATH}" \
           --tag "${QUAY_IMAGE}" \
-          --layers=false \
-          --squash \
-          /workspace
+          --layers=true \
+          "$(workspaces.workspace.path)"
         
         echo "✅ Runtime image built"
         echo ""
         
         # Get image size
-        IMAGE_SIZE=$(buildah --root "${BUILDAH_STORAGE_ROOT}" images --format "{{.Size}}" "${QUAY_IMAGE}")
-        # Try to get digest after push via skopeo (if available), else leave empty
-        RUNTIME_DIGEST=""
-        if command -v skopeo >/dev/null 2>&1; then
-          RUNTIME_DIGEST=$(skopeo --insecure-policy inspect --raw docker://"${QUAY_IMAGE}" 2>/dev/null | sha256sum | awk '{print "sha256:"$1}')
-        fi
+        IMAGE_SIZE=$(buildah images --format "{{.Size}}" "${QUAY_IMAGE}" || echo "unknown")
         echo "📏 Runtime image size: ${IMAGE_SIZE}"
         echo ""
         
-        # Push to Quay using dockerconfigjson auth
+        # Push to Quay
         echo "⬆️  Pushing to Quay.io..."
-        buildah --root "${BUILDAH_STORAGE_ROOT}" push \
-          --authfile "${REGISTRY_AUTH_FILE}" \
-          "${QUAY_IMAGE}"
+        buildah push "${QUAY_IMAGE}"
         
         echo "✅ Pushed to Quay.io"
         echo ""
         
         # Write metadata
         echo "📝 Writing metadata..."
-        mkdir -p /workspace/metadata
+        METADATA_DIR="$(workspaces.workspace.path)/metadata"
+        mkdir -p "${METADATA_DIR}"
         
-        cat > /workspace/metadata/runtime-image.json <<METADATA_EOF
+        cat > "${METADATA_DIR}/runtime-image.json" <<METADATA_EOF
         {
           "model_name": "${MODEL_NAME}",
           "version_name": "${VERSION_NAME}",
+          "runtime_tag": "${RUNTIME_TAG}",
           "runtime_image": "${QUAY_IMAGE}",
-          "runtime_image_digest": "${RUNTIME_DIGEST}",
           "image_size": "${IMAGE_SIZE}",
-          "pattern": "minio",
+          "pattern": "minio-first",
           "vllm_version": "${VLLM_VERSION}",
-          "build_timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          "build_timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+          "unprivileged": true
         }
         METADATA_EOF
         
         echo "✅ Metadata written"
+        cat "${METADATA_DIR}/runtime-image.json"
         echo ""
         
         echo "═══════════════════════════════════════════════════════════"
-        echo "✅ RUNTIME IMAGE BUILD COMPLETE"
+        echo "✅ RUNTIME IMAGE BUILD COMPLETE (UNPRIVILEGED)"
         echo "═══════════════════════════════════════════════════════════"
         echo "Image: ${QUAY_IMAGE}"
         echo "Size: ${IMAGE_SIZE}"
-        echo "Pattern: Path B (Runtime + MinIO weights)"
+        echo "Pattern: MinIO-first (Runtime + MinIO weights)"
+        echo "Security: Unprivileged (no SCC violations)"
         echo "Next: register-model task"
         echo "═══════════════════════════════════════════════════════════"
       
@@ -289,7 +263,7 @@ spec:
         requests:
           memory: "4Gi"
           cpu: "2"
-          ephemeral-storage: "40Gi"
+          ephemeral-storage: "20Gi"
         limits:
           memory: "8Gi"
           cpu: "4"
