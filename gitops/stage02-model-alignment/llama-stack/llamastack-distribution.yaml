@@ -13,9 +13,9 @@ metadata:
     app.kubernetes.io/part-of: private-ai-demo
     app.openshift.io/runtime: python
   annotations:
-    app.openshift.io/connects-to: '[{"apiVersion":"apps/v1","kind":"Deployment","name":"milvus-standalone"}]'
+    app.openshift.io/connects-to: '[{"apiVersion":"apps/v1","kind":"Deployment","name":"milvus-standalone"},{"apiVersion":"apps/v1","kind":"Deployment","name":"docling"}]'
     openshift.io/display-name: "Llama Stack (RHOAI 2.25)"
-    description: "Llama Stack RAG runtime with vLLM inference and Milvus vector storage"
+    description: "Llama Stack RAG runtime with vLLM inference, Milvus vector storage, and Docling document processing"
 spec:
   replicas: 1
   
@@ -42,6 +42,11 @@ spec:
         # Embedding model configuration (for inline::sentence-transformers provider)
         - name: EMBEDDING_MODEL
           value: "sentence-transformers/all-MiniLM-L6-v2"
+        
+        # Docling document processing service (for RAG document preparation)
+        # Reference: RHOAI 2.25 - Section 3.10: Preparing documents with Docling for Llama Stack retrieval
+        - name: DOCLING_URL
+          value: "http://docling.private-ai-demo.svc:8080"
         
         # Data persistence
         - name: SQLITE_STORE_DIR
