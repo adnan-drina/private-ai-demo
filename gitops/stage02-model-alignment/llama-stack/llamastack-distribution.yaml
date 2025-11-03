@@ -30,6 +30,7 @@ spec:
       args:
         - --yaml-config
         - /opt/app-root/run.yaml
+      imagePullPolicy: Always
       
       env:
         # Config and writable homes
