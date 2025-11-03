@@ -22,7 +22,7 @@ spec:
   server:
     # Use the full Llama Stack distribution image for RHOAI 2.25
     distribution:
-      image: "registry.redhat.io/rhoai/odh-llama-stack-rhel9:2.25"
+      image: "registry.redhat.io/rhoai/odh-llama-stack-rhel9:v2.25"
     
     containerSpec:
       name: llamastack
