@@ -2,7 +2,7 @@
 
 ## Overview
 
-Stage 1 demonstrates production-ready model serving using vLLM on GPU-accelerated infrastructure. This stage deploys two Mistral 24B models (quantized and full precision) with automated MLOps pipelines for model import, testing, and registration.
+Stage 1 demonstrates production-ready model serving using vLLM on GPU-accelerated infrastructure. This stage deploys two Mistral 24B models (quantized and full precision) with automated MLOps pipelines for model import and registration.
 
 ## Architecture
 
@@ -12,19 +12,15 @@ Stage 1 demonstrates production-ready model serving using vLLM on GPU-accelerate
 - **Mistral 24B Full** - 4 GPUs (g6.12xlarge), FP16 precision, PVC-backed storage (120Gi)
 
 ### Storage
-- **MinIO** - S3-compatible object storage (`model-storage` namespace)
-  - Model weights storage
-  - Testing results archive
+- **MinIO** - S3-compatible object storage (`model-storage` namespace) for model weights
 - **PVC** - Persistent volume for full model (avoids ephemeral storage pressure)
 
-### MLOps Pipelines (Tekton)
+### MLOps Pipeline (Tekton)
 - **Model Import Pipeline** - Download from HuggingFace, upload to MinIO, build runtime image, register in Model Registry
-- **Model Testing Pipeline** - lm-eval + GuideLLM benchmarks with Model Registry integration
 
 ### Model Registry
 - Centralized model metadata and versioning
-- Automated test results publishing
-- Integration with all pipelines
+- Integration with import pipeline
 
 ## Prerequisites
 
@@ -63,28 +59,15 @@ cp .env.template .env
 ./monitor-pipeline.sh -n private-ai-demo -r <pipelinerun-name>
 ```
 
-### 3. Run Testing Pipelines
-
-```bash
-# Test quantized model
-./run-model-testing.sh quantized
-
-# Test full model
-./run-model-testing.sh full
-
-# Check results in Model Registry dashboard
-```
-
 ## Scripts Reference
 
 | Script | Purpose |
 |--------|---------|
 | `deploy.sh` | Main deployment script (GitOps resources + secrets) |
 | `run-model-import.sh` | Start model import pipeline |
-| `run-model-testing.sh` | Start model testing pipeline |
 | `monitor-pipeline.sh` | Monitor Tekton pipeline execution |
 
-Obsolete scripts from previous architecture iterations are in `archive/` with documentation explaining why they were archived.
+**Archived**: Obsolete scripts from previous architecture iterations are in `archive/` with documentation.
 
 ## Model Import Pipeline
 
@@ -105,25 +88,6 @@ The `model-import` Tekton pipeline automates the full model lifecycle:
 **PipelineRun manifests**:
 - `gitops/.../03-pipelineruns/pipelinerun-mistral-quantized.yaml`
 - `gitops/.../03-pipelineruns/pipelinerun-mistral-full.yaml`
-
-## Model Testing Pipeline
-
-The `model-testing-v2` pipeline validates deployed models:
-
-**Tasks**:
-1. **run-lm-eval** - Language model evaluation (perplexity, accuracy)
-2. **run-guidellm** - Performance benchmarks (TTFT, throughput, latency)
-3. **publish-results** - Uploads results to Model Registry
-
-**Results Include**:
-- Evaluation metrics (eval_*)
-- Benchmark metrics (benchmark_*)
-- Provenance (pipeline_run_uid, timestamp, inferenceservice_revision)
-- Artifact URIs (raw results in MinIO)
-
-**PipelineRun manifests**:
-- `gitops/.../03-pipelineruns/pipelinerun-test-mistral-quantized-v2.yaml`
-- `gitops/.../03-pipelineruns/pipelinerun-test-mistral-full-v2.yaml`
 
 ## InferenceService Configuration
 
