@@ -27,6 +27,9 @@ spec:
     containerSpec:
       name: llamastack
       port: 8321
+      args:
+        - --yaml-config
+        - /opt/app-root/run.yaml
       
       env:
         # Config and writable homes
