@@ -10,7 +10,7 @@ metadata:
 data:
   run.yaml: |
     version: '2'
-    image_name: remote-vllm-mistral-rag
+    image_name: rh
     
     # RAG-enabled APIs - Following OpenDataHub pattern
     apis:
