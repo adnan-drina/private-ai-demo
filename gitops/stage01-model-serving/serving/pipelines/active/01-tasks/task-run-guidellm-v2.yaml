@@ -12,19 +12,7 @@ spec:
   description: |
     Runs GuideLLM benchmarking against deployed InferenceService using internal HTTP.
     Requires Istio sidecar injection when STRICT mTLS is enabled.
-  volumes:
-    - name: trusted-ca
-      configMap:
-        name: trusted-ca
-        items:
-          - key: ca-bundle.crt
-            path: ca.crt
-    - name: router-ca
-      configMap:
-        name: router-ca
-        items:
-          - key: ca-bundle.crt
-            path: ca-bundle.crt
+    Uses service mesh for mTLS (no external CA bundles needed).
 
   params:
     - name: inference_service_name
@@ -63,22 +51,6 @@ spec:
   steps:
     - name: get-inference-url
       image: registry.redhat.io/openshift4/ose-cli:latest
-      env:
-        - name: REQUESTS_CA_BUNDLE
-          value: /var/run/router-ca/ca-bundle.crt
-        - name: SSL_CERT_FILE
-          value: /var/run/router-ca/ca-bundle.crt
-        - name: CURL_CA_BUNDLE
-          value: /var/run/router-ca/ca-bundle.crt
-        - name: PIP_CERT
-          value: /var/run/router-ca/ca-bundle.crt
-      volumeMounts:
-        - name: trusted-ca
-          mountPath: /var/run/ca
-          readOnly: true
-        - name: router-ca
-          mountPath: /var/run/router-ca
-          readOnly: true
       script: |
         #!/bin/bash
         set -e
@@ -103,13 +75,6 @@ spec:
             secretKeyRef:
               name: huggingface-token
               key: HF_TOKEN
-      volumeMounts:
-        - name: trusted-ca
-          mountPath: /var/run/ca
-          readOnly: true
-        - name: router-ca
-          mountPath: /var/run/router-ca
-          readOnly: true
       script: |
         #!/bin/bash
         set -euo pipefail
