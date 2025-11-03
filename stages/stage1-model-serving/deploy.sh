@@ -292,10 +292,13 @@ create_secrets() {
     oc create secret generic s3-credentials-kserve \
       --from-literal=AWS_ACCESS_KEY_ID="$ACCESS" \
       --from-literal=AWS_SECRET_ACCESS_KEY="$SECRET" \
-      --from-literal=awsEndpointUrl="http://minio.model-storage.svc:9000" \
+      --from-literal=AWS_ENDPOINT_URL="http://minio.model-storage.svc:9000" \
+      --from-literal=AWS_DEFAULT_REGION="us-east-1" \
+      --from-literal=S3_ENDPOINT="minio.model-storage.svc:9000" \
+      --from-literal=S3_USE_HTTPS="0" \
       -n "$PROJECT_NAME" \
       --dry-run=client -o yaml | oc apply -f -
-    log_success "Secret created: s3-credentials-kserve (copied from model-storage or .env)"
+    log_success "Secret created: s3-credentials-kserve (with boto3-compatible env vars for MinIO)"
   fi
   
   # Internal Registry Connection for OpenShift AI Dashboard

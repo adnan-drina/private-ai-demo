@@ -18,7 +18,7 @@ metadata:
     app.openshift.io/connects-to: '[{"apiVersion":"apps/v1","kind":"Deployment","name":"llama-stack"}]'
     openshift.io/display-name: "Mistral 24B Full"
     serving.kserve.io/deploymentMode: "Serverless"
-    description: "Mistral Small 24B Instruct full precision - 4 GPU (weights in S3)"
+    description: "Mistral Small 24B Instruct full precision - 4 GPU (weights in PVC)"
     security.opendatahub.io/enable-auth: "true"
     serving.knative.openshift.io/enablePassthrough: "true"
     sidecar.istio.io/inject: "true"
@@ -26,12 +26,6 @@ metadata:
     autoscaling.knative.dev/min-scale: "1"
     autoscaling.knative.dev/target: "4"
     autoscaling.knative.dev/scale-to-zero-pod-retention-period: "60m"
-    # S3 configuration (no protocol prefix - host:port only)
-    serving.kserve.io/s3-endpoint: "minio.model-storage.svc:9000"
-    serving.kserve.io/s3-usehttps: "0"
-    serving.kserve.io/s3-verifyssl: "0"
-    serving.kserve.io/s3-region: "us-east-1"
-    serving.kserve.io/s3-secret-name: "s3-credentials-kserve"
 spec:
   predictor:
     containerConcurrency: 32  # Phase 1 optimization: match max_num_seqs (was 4)
@@ -44,20 +38,20 @@ spec:
         name: vLLM
       name: ""
       runtime: vllm-cuda-runtime  # Shared runtime for all vLLM models
-      # Path B: weights in MinIO (S3-compatible) populated by pipeline
-      storageUri: s3://llm-models/Mistral-Small-24B-Instruct/full-fp16/
+      # PVC storage (Red Hat best practice for large models to avoid node ephemeral-storage pressure)
+      storageUri: pvc://mistral-24b-pvc/
       # Model-specific resources for 4-GPU full precision model
       resources:
         requests:
           cpu: "16"
           memory: 80Gi
           nvidia.com/gpu: "4"
-          ephemeral-storage: "60Gi"  # S3-backed: 48GB model + vLLM runtime + cache
+          ephemeral-storage: "10Gi"  # PVC-backed: only vLLM runtime + cache needed
         limits:
           cpu: "32"
           memory: 80Gi
           nvidia.com/gpu: "4"
-          ephemeral-storage: "70Gi"
+          ephemeral-storage: "15Gi"
       # Model-specific vLLM args for Mistral Small 24B full precision (FP16)
       args:
         - --dtype=bfloat16                  # Use BF16 for better performance on L4 GPUs

@@ -18,8 +18,6 @@ resources:
   - servingruntime-vllm-cuda.yaml
   # PVC for full model (large models use PVC to avoid node ephemeral-storage pressure)
   - pvc-mistral-24b.yaml
-  # PostSync Job to mirror full model from MinIO to PVC (runs after PVC creation)
-  - job-mirror-full-model.yaml
   # InferenceServices (quantized uses S3, full uses PVC)
   - inferenceservice-mistral-24b.yaml
   - inferenceservice-mistral-24b-quantized.yaml
