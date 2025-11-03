@@ -22,7 +22,6 @@ spec:
   server:
     # Use dev image requested
     distribution:
-      name: custom
       image: "quay.io/redhat-et/llama:vllm-0.2.7"
     
     containerSpec:
@@ -31,7 +30,6 @@ spec:
       args:
         - --yaml-config
         - /opt/app-root/run.yaml
-      imagePullPolicy: Always
       
       env:
         # Config and writable homes
