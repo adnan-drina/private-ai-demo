@@ -301,38 +301,10 @@ create_secrets() {
     log_success "Secret created: s3-credentials-kserve (with boto3-compatible env vars for MinIO)"
   fi
   
-  # Internal Registry Connection for OpenShift AI Dashboard
-  log_info "Creating internal registry connection..."
-  if [ "$DRY_RUN" = true ]; then
-    log_info "[DRY-RUN] Would create connection: internal-registry-private-ai"
-  else
-    # Get the dockerconfigjson from model-pipeline-sa service account
-    DOCKERCONFIG=$(oc get secret -n "$PROJECT_NAME" -l kubernetes.io/service-account.name=model-pipeline-sa -o jsonpath='{.items[0].data.\.dockerconfigjson}' 2>/dev/null)
-    
-    if [ -n "$DOCKERCONFIG" ]; then
-      oc create secret generic internal-registry-private-ai \
-        --from-literal=.dockerconfigjson="$(echo $DOCKERCONFIG | base64 -d)" \
-        --from-literal=OCI_HOST="image-registry.openshift-image-registry.svc:5000" \
-        --type=kubernetes.io/dockerconfigjson \
-        -n "$PROJECT_NAME" \
-        --dry-run=client -o yaml | \
-        oc label --local -f - \
-          opendatahub.io/dashboard=true \
-          app.kubernetes.io/name=registry-connection \
-          app.kubernetes.io/component=connection \
-          app.kubernetes.io/part-of=private-ai-demo \
-          --dry-run=client -o yaml | \
-        oc annotate --local -f - \
-          opendatahub.io/connection-type-ref=oci-v1 \
-          openshift.io/description="Internal OpenShift Registry for ModelCar Images" \
-          openshift.io/display-name=internal-registry-private-ai \
-          --dry-run=client -o yaml | \
-        oc apply -f -
-      log_success "Connection created: internal-registry-private-ai"
-    else
-      log_warning "model-pipeline-sa not found yet, connection will be created by GitOps"
-    fi
-  fi
+  # Internal Registry Connection - REMOVED
+  # NOTE: Pipelines now push directly to Quay.io, not internal registry
+  # ImageStreams are archived in gitops/stage01-model-serving/serving/archive/imagestreams/
+  # See docs/03-REFERENCE/secrets/connection-internal-registry.yaml for reference
   
   log_success "All secrets created successfully"
   log_warning "Remember: Secrets are NOT in Git (managed imperatively)"
