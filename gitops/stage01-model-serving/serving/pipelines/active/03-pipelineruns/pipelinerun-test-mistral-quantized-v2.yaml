@@ -53,7 +53,7 @@ spec:
   taskRunTemplate:
     podTemplate:
       securityContext:
-        fsGroup: 65532  # Fix PVC write permissions for non-root containers
+        fsGroup: 1001130000  # Within namespace supplemental-groups range for affinity-assistant compatibility
   
   timeouts:
     pipeline: "2h"
