@@ -1,0 +1,162 @@
+---
+# One-time Job to populate mistral-24b-pvc with full model weights from MinIO
+#
+# This Job mirrors the full precision model (48GB) from MinIO object storage
+# to the PVC before the InferenceService starts. Required for large models
+# that exceed node ephemeral storage capacity.
+#
+# Prerequisites:
+#   - MinIO deployed with full model at: s3://llm-models/Mistral-Small-24B-Instruct/full-fp16/
+#   - PVC mistral-24b-pvc created and Bound
+#   - Secret s3-credentials-kserve exists
+#
+# Usage:
+#   # Create job manually (one-time setup):
+#   oc apply -f gitops/stage01-model-serving/serving/vllm/job-mirror-full-model.yaml
+#
+#   # Monitor progress:
+#   oc logs -f -n private-ai-demo job/mirror-full-model-to-pvc
+#
+#   # Expected duration: 10-15 minutes for 48GB model
+#
+# Note: This is a one-time setup Job, not managed by ArgoCD.
+#       Delete and recreate if you need to refresh the PVC contents.
+#
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mirror-full-model-to-pvc
+  namespace: private-ai-demo
+  labels:
+    app: model-mirror
+    model: mistral-24b-full
+  annotations:
+    argocd.argoproj.io/sync-options: "Prune=false"
+    description: "One-time Job to populate PVC with full model from MinIO"
+spec:
+  # Do not recreate on failure - must be manually deleted and recreated
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 86400  # Keep for 24h after completion for log review
+  template:
+    metadata:
+      labels:
+        app: model-mirror
+        model: mistral-24b-full
+    spec:
+      restartPolicy: Never
+      securityContext:
+        fsGroup: 1001130000  # Namespace-specific group for volume permissions
+      containers:
+      - name: mirror
+        image: quay.io/minio/mc:latest
+        command:
+          - /bin/sh
+          - -c
+          - |
+            set -e
+            echo "════════════════════════════════════════════════════════════"
+            echo "Mirroring Full Model from MinIO to PVC"
+            echo "════════════════════════════════════════════════════════════"
+            echo "Started at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo ""
+            
+            # Set writable MC config directory
+            export MC_CONFIG_DIR=/tmp/.mc
+            mkdir -p $MC_CONFIG_DIR
+            
+            # Configure MinIO client
+            echo "Configuring MinIO client..."
+            mc alias set minio http://minio.model-storage.svc:9000 ${AWS_ACCESS_KEY_ID} ${AWS_SECRET_ACCESS_KEY}
+            
+            # Verify source exists
+            echo ""
+            echo "Checking source..."
+            if ! mc ls minio/llm-models/Mistral-Small-24B-Instruct/full-fp16/ | head -5; then
+              echo "❌ ERROR: Source model not found in MinIO"
+              echo "   Expected: minio/llm-models/Mistral-Small-24B-Instruct/full-fp16/"
+              exit 1
+            fi
+            
+            # Check destination is empty or warn
+            echo ""
+            echo "Checking destination PVC..."
+            if [ -f /mnt/models/config.json ]; then
+              echo "⚠️  WARNING: PVC already contains files. Using --overwrite flag."
+            else
+              echo "✅ PVC is empty or new. Proceeding with mirror."
+            fi
+            
+            # Mirror model from MinIO to PVC
+            echo ""
+            echo "════════════════════════════════════════════════════════════"
+            echo "Starting mirror operation..."
+            echo "Source: minio/llm-models/Mistral-Small-24B-Instruct/full-fp16/"
+            echo "Target: /mnt/models/"
+            echo "════════════════════════════════════════════════════════════"
+            echo ""
+            
+            mc mirror --overwrite --summary minio/llm-models/Mistral-Small-24B-Instruct/full-fp16/ /mnt/models/
+            
+            echo ""
+            echo "════════════════════════════════════════════════════════════"
+            echo "✅ Mirror Complete!"
+            echo "════════════════════════════════════════════════════════════"
+            echo "Finished at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo ""
+            
+            # Verify contents
+            echo "Verifying PVC contents:"
+            ls -lh /mnt/models/ | head -20
+            echo ""
+            echo "Total size:"
+            du -sh /mnt/models/
+            
+            # Verify critical files
+            echo ""
+            echo "Verifying critical model files..."
+            MISSING_FILES=""
+            for file in config.json model-00001-of-00009.safetensors model.safetensors.index.json tokenizer.json; do
+              if [ ! -f "/mnt/models/$file" ]; then
+                echo "❌ Missing: $file"
+                MISSING_FILES="$MISSING_FILES $file"
+              else
+                echo "✅ Found: $file"
+              fi
+            done
+            
+            if [ ! -z "$MISSING_FILES" ]; then
+              echo ""
+              echo "❌ ERROR: Critical files missing:$MISSING_FILES"
+              exit 1
+            fi
+            
+            echo ""
+            echo "✅ PVC populated successfully with full model weights!"
+            
+        env:
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: s3-credentials-kserve
+              key: AWS_ACCESS_KEY_ID
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: s3-credentials-kserve
+              key: AWS_SECRET_ACCESS_KEY
+        volumeMounts:
+        - name: model-storage
+          mountPath: /mnt/models
+        resources:
+          requests:
+            cpu: "2"
+            memory: 4Gi
+          limits:
+            cpu: "4"
+            memory: 8Gi
+      volumes:
+      - name: model-storage
+        persistentVolumeClaim:
+          claimName: mistral-24b-pvc
+
+
