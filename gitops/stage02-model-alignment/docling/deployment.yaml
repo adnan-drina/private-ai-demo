@@ -140,8 +140,8 @@ spec:
           httpGet:
             path: /health
             port: 8080
-          initialDelaySeconds: 30
-          periodSeconds: 10
+          initialDelaySeconds: 900  # 15 minutes - allows time for 2GB+ CUDA/PyTorch downloads
+          periodSeconds: 30
           timeoutSeconds: 5
           failureThreshold: 3
         
@@ -149,8 +149,8 @@ spec:
           httpGet:
             path: /health
             port: 8080
-          initialDelaySeconds: 10
-          periodSeconds: 5
+          initialDelaySeconds: 600  # 10 minutes - allows time for pip installs before health check
+          periodSeconds: 10
           timeoutSeconds: 3
           failureThreshold: 3
 

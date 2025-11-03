@@ -20,15 +20,23 @@ spec:
   replicas: 1
   
   server:
-    # Use Red Hat's Llama Stack distribution image
+    # Use Red Hat's official RHOAI Llama Stack distribution
+    # Using pre-configured "rh-dev" distribution with built-in run.yaml
+    # The operator will use registry.redhat.io/rhoai/odh-llama-stack-core-rhel9
     distribution:
-      image: "quay.io/redhat-et/llama-stack:latest"
+      name: "rh-dev"
     
     containerSpec:
       name: llamastack
       port: 8080  # Standard OpenAI-compatible port
       
       env:
+        # Inference model configuration (required by rh-dev distribution)
+        - name: INFERENCE_MODEL
+          value: "mistral-24b-quantized"
+        - name: INFERENCE_MODEL_ID
+          value: "mistral-24b-quantized"
+        
         # vLLM endpoint configuration (for remote::vllm provider)
         - name: VLLM_URL
           value: "http://mistral-24b-quantized-predictor.private-ai-demo.svc.cluster.local/v1"
@@ -38,6 +46,8 @@ spec:
           value: "milvus-standalone.private-ai-demo.svc.cluster.local"
         - name: MILVUS_PORT
           value: "19530"
+        - name: MILVUS_URI
+          value: "tcp://milvus-standalone.private-ai-demo.svc.cluster.local:19530"
         
         # Embedding model configuration (for inline::sentence-transformers provider)
         - name: EMBEDDING_MODEL
