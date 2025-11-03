@@ -20,11 +20,9 @@ spec:
   replicas: 1
   
   server:
-    # Use Red Hat's official RHOAI Llama Stack image without pre-configured distribution
-    # This allows environment variables to configure the stack dynamically
-    # Using image from operator's RELATED_IMAGE_RH_DISTRIBUTION
-    distribution:
-      image: "registry.redhat.io/rhoai/odh-llama-stack-core-rhel9@sha256:86f8d82f589b4044ce9ac30cb62b4611951d2c383e669c8e2dc5bc74e69e6c86"
+    # Let operator inject the default RHOAI 2.25 image with all required APIs (prompts, etc.)
+    # This ensures compatibility with the distribution's initialization requirements
+    distribution: {}
     
     containerSpec:
       name: llamastack

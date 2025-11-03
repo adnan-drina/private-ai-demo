@@ -17,8 +17,8 @@ data:
       type: sqlite
       db_path: /data/dist_registry.db
     
-    # RAG-enabled APIs - Following OpenDataHub pattern
-    # Note: eval API disabled until TrustyAI provider is available
+    # RAG-enabled APIs - Following RHOAI 2.25 operator pattern
+    # Using operator default image which includes all required modules
     apis:
       - inference
       - agents
@@ -26,8 +26,8 @@ data:
       - telemetry
       - tool_runtime
       - vector_io
-      # - files  # DISABLED: remote::s3-files provider not available in rh-dev distribution
-      # - eval  # DISABLED: Provider not available in rh-dev distribution
+      - prompts      # Enabled: supported in operator default image with inline::prompts provider
+      # - eval       # DISABLED: Provider not available in current distribution
     
     providers:
       inference:
@@ -108,20 +108,15 @@ data:
         #     exporter_type: otlp
         #     endpoint: http://tempo-distributor.openshift-distributed-tracing.svc:4317
       
-      # files:
-        # Files API not available in rh-dev distribution
-        # remote::s3-files and inline::files providers both unavailable
-        # - provider_id: s3-files
-        #   provider_type: remote::s3-files
-        #   config:
-        #     endpoint_url: "http://minio.model-storage.svc:9000"
-        #     bucket: "llama-files"
-        #     region: "us-east-1"
-        #     tls_verify: false
-        #     s3_force_path_style: true
-        #     credentials:
-        #       access_key_id_from_env: "FILES_S3_ACCESS_KEY_ID"
-        #       secret_access_key_from_env: "FILES_S3_SECRET_ACCESS_KEY"
+      prompts:
+        # Inline prompts provider with SQLite backend
+        # Required by operator default image for stack initialization
+        - provider_id: inline-prompts
+          provider_type: inline::prompts
+          config:
+            kvstore:
+              type: sqlite
+              db_path: /data/prompts_store.db
       
       tool_runtime:
         # Note: rag-runtime disabled (requires Files API not available in rh-dev distribution)
