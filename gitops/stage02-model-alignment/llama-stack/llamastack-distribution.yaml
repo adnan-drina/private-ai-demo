@@ -20,49 +20,33 @@ spec:
   replicas: 1
   
   server:
-    # Use Red Hat's Llama Stack distribution image
-    distribution:
-      image: "quay.io/redhat-et/llama-stack:latest"
+    # Let the operator inject the RHOAI 2.25 full distribution image
+    distribution: {}
     
     containerSpec:
       name: llamastack
-      port: 8080  # Standard OpenAI-compatible port
+      port: 8321
       
       env:
-        # vLLM endpoint configuration (for remote::vllm provider)
+        # Config and writable homes
+        - name: LLAMA_STACK_CONFIG
+          value: "/opt/app-root/run.yaml"
+        - name: LLAMA_STACK_HOME
+          value: "/data/.llama"
+        - name: HF_HOME
+          value: "/data/hf_home"
+
+        # vLLM endpoint (external HTTPS Route)
         - name: VLLM_URL
-          value: "http://mistral-24b-quantized-predictor.private-ai-demo.svc.cluster.local/v1"
-        
-        # Milvus connection (for remote::milvus provider)
-        - name: MILVUS_HOST
-          value: "milvus-standalone.private-ai-demo.svc.cluster.local"
-        - name: MILVUS_PORT
-          value: "19530"
-        
-        # Embedding model configuration (for inline::sentence-transformers provider)
-        - name: EMBEDDING_MODEL
-          value: "sentence-transformers/all-MiniLM-L6-v2"
-        
-        # Docling document processing service (for RAG document preparation)
-        # Reference: RHOAI 2.25 - Section 3.10: Preparing documents with Docling for Llama Stack retrieval
-        - name: DOCLING_URL
-          value: "http://docling.private-ai-demo.svc:8080"
-        
-        # Data persistence
-        - name: SQLITE_STORE_DIR
-          value: "/data"
-        
-        # Logging level
-        - name: LLAMA_STACK_LOG_LEVEL
-          value: "INFO"
-        
-        # HuggingFace token for model downloads (if needed)
-        - name: HF_TOKEN
-          valueFrom:
-            secretKeyRef:
-              name: huggingface-secret
-              key: token
-              optional: true
+          value: "https://mistral-24b-quantized-private-ai-demo.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com/v1"
+        - name: VLLM_API_TOKEN
+          value: "fake"
+        - name: VLLM_TLS_VERIFY
+          value: "false"
+
+        # Milvus (gRPC)
+        - name: MILVUS_URI
+          value: "tcp://milvus-standalone.private-ai-demo.svc.cluster.local:19530"
       
       resources:
         requests:
@@ -82,7 +66,14 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: llamastack-data
+        - name: config
+          configMap:
+            name: llamastack-config
       
       volumeMounts:
         - name: data
           mountPath: /data
+        - name: config
+          mountPath: /opt/app-root/run.yaml
+          subPath: run.yaml
+          readOnly: true

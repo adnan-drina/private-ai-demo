@@ -1,6 +1,6 @@
 ---
 # Service for Llama Stack (RHOAI 2.25)
-# Exposes OpenAI-compatible API on port 8080
+# Exposes OpenAI-compatible API on port 8321
 apiVersion: v1
 kind: Service
 metadata:
@@ -14,15 +14,15 @@ metadata:
   annotations:
     # Prometheus metrics scraping
     prometheus.io/scrape: "true"
-    prometheus.io/port: "8080"
+    prometheus.io/port: "8321"
     prometheus.io/path: "/metrics"
 spec:
   selector:
     app: llama-stack
   ports:
     - name: http
-      port: 8080
-      targetPort: 8080
+      port: 8321
+      targetPort: 8321
       protocol: TCP
   type: ClusterIP
 

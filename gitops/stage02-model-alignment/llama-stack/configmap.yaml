@@ -13,7 +13,6 @@ data:
     image_name: remote-vllm-mistral-rag
     
     # RAG-enabled APIs - Following OpenDataHub pattern
-    # + Evaluation API (Phase 2: TrustyAI Integration)
     apis:
       - inference
       - agents
@@ -21,7 +20,8 @@ data:
       - telemetry
       - tool_runtime
       - vector_io
-      - eval  # NEW: Enable evaluation API via TrustyAI provider
+      - prompts
+      - files
     
     providers:
       inference:
@@ -30,7 +30,7 @@ data:
         - provider_id: mistral-24b-quantized
           provider_type: remote::vllm
           config:
-            url: "http://mistral-24b-quantized-predictor.private-ai-demo.svc.cluster.local/v1"
+            url: "https://mistral-24b-quantized-private-ai-demo.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com/v1"
             max_tokens: 4096
             api_token: fake
             tls_verify: false
@@ -39,7 +39,7 @@ data:
         - provider_id: mistral-24b-full
           provider_type: remote::vllm
           config:
-            url: "http://mistral-24b-predictor.private-ai-demo.svc.cluster.local/v1"
+            url: "https://mistral-24b-private-ai-demo.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com/v1"
             max_tokens: 4096
             api_token: fake
             tls_verify: false
@@ -103,29 +103,26 @@ data:
           provider_type: remote::model-context-protocol
           config: {}
       
-      eval:
-        # TrustyAI LM-Eval provider for model quality assessment
-        # Phase 2: Llama Stack Integration
-        - provider_id: trustyai-lmeval
-          provider_type: remote::trustyai-lmeval
+      prompts:
+        - provider_id: inline-prompts
+          provider_type: inline::prompts
           config:
-            url: "http://trustyai-lmeval-provider.private-ai-demo.svc:8080"
-            namespace: "private-ai-demo"
-            # Model configurations for evaluation
-            models:
-              - model_id: mistral-24b-quantized
-                endpoint: "http://mistral-24b-quantized-predictor.private-ai-demo.svc.cluster.local/v1/completions"
-                tokenizer: "RedHatAI/Mistral-Small-24B-Instruct-2501-quantized.w4a16"
-                num_concurrent: 2
-              - model_id: mistral-24b-full
-                endpoint: "http://mistral-24b-predictor.private-ai-demo.svc.cluster.local/v1/completions"
-                tokenizer: "mistralai/Mistral-Small-24B-Instruct-2501"
-                num_concurrent: 4
-            # Default evaluation settings
-            default_sample_limit: 100
-            default_batch_size: 1
-            allow_online: true
-            allow_code_execution: true
+            kvstore:
+              type: sqlite
+              db_path: /data/prompts_store.db
+
+      files:
+        - provider_id: s3-files
+          provider_type: remote::s3-files
+          config:
+            endpoint_url: "http://minio.model-storage.svc:9000"
+            bucket: "llama-files"
+            region: "us-east-1"
+            tls_verify: false
+            s3_force_path_style: true
+            credentials:
+              access_key_id_from_env: "FILES_S3_ACCESS_KEY_ID"
+              secret_access_key_from_env: "FILES_S3_SECRET_ACCESS_KEY"
     
     models:
       # Quantized model - cost-efficient (1 GPU)
