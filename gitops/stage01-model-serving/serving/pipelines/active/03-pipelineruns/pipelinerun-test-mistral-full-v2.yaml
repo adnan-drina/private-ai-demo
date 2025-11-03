@@ -50,6 +50,10 @@ spec:
             requests:
               storage: 2Gi
   
+  podTemplate:
+    securityContext:
+      fsGroup: 65532  # Fix PVC write permissions for non-root containers
+  
   timeouts:
     pipeline: "2h"
     tasks: "1h30m"
