@@ -28,6 +28,10 @@ spec:
     - name: vllm_model_name
       value: "mistral-24b-quantized"
     
+    # Tokenizer (HuggingFace model ID for downloading tokenizer)
+    - name: tokenizer_name
+      value: "mistralai/Mistral-Small-Instruct-2409"
+    
     # Evaluation parameters
     - name: eval_tasks
       value: "hellaswag"
