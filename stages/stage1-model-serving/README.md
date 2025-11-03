@@ -48,9 +48,6 @@ cp .env.template .env
 
 # Deploy all Stage 1 components
 ./deploy.sh
-
-# Validate deployment
-./validate.sh
 ```
 
 ### 2. Import Models
@@ -62,7 +59,7 @@ cp .env.template .env
 # Import full model (~48GB, 60 minutes)
 ./run-model-import.sh full
 
-# Monitor progress
+# Monitor progress (optional, script offers to auto-monitor)
 ./monitor-pipeline.sh -n private-ai-demo -r <pipelinerun-name>
 ```
 
@@ -75,24 +72,17 @@ cp .env.template .env
 # Test full model
 ./run-model-testing.sh full
 
-# Check results
-./check-testing-results.sh
+# Check results in Model Registry dashboard
 ```
 
 ## Scripts Reference
 
-### Active Scripts
-
 | Script | Purpose |
 |--------|---------|
 | `deploy.sh` | Main deployment script (GitOps resources + secrets) |
-| `validate.sh` | Validate Stage 1 deployment status |
 | `run-model-import.sh` | Start model import pipeline |
 | `run-model-testing.sh` | Start model testing pipeline |
 | `monitor-pipeline.sh` | Monitor Tekton pipeline execution |
-| `check-testing-results.sh` | Validate Model Registry test results |
-
-### Archived Scripts
 
 Obsolete scripts from previous architecture iterations are in `archive/` with documentation explaining why they were archived.
 
