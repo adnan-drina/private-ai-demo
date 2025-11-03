@@ -20,7 +20,6 @@ data:
       - telemetry
       - tool_runtime
       - vector_io
-      - prompts
       - files
     
     providers:
@@ -103,14 +102,6 @@ data:
           provider_type: remote::model-context-protocol
           config: {}
       
-      prompts:
-        - provider_id: inline-prompts
-          provider_type: inline::prompts
-          config:
-            kvstore:
-              type: sqlite
-              db_path: /data/prompts_store.db
-
       files:
         - provider_id: s3-files
           provider_type: remote::s3-files
