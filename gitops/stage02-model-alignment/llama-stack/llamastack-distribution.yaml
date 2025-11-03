@@ -20,9 +20,9 @@ spec:
   replicas: 1
   
   server:
-    # Use ODH Quay distribution that includes prompts/files providers
+    # Use dev image requested
     distribution:
-      image: "quay.io/opendatahub/llama-stack:odh"
+      image: "quay.io/redhat-et/llama:vllm-0.2.7"
     
     containerSpec:
       name: llamastack
