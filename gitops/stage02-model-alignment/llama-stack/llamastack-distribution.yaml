@@ -68,6 +68,10 @@ spec:
         - name: SQLITE_STORE_DIR
           value: "/data"
         
+        # Config file path (explicit to avoid ambiguity across builds)
+        - name: LLAMA_STACK_CONFIG
+          value: "/opt/app-root/run.yaml"
+        
         # Logging level
         - name: LLAMA_STACK_LOG_LEVEL
           value: "INFO"
