@@ -13,6 +13,7 @@ data:
     image_name: rh
     
     # RAG-enabled APIs - Following OpenDataHub pattern
+    # Files API disabled: no provider available in quay.io/redhat-et/llama:vllm-0.2.7
     apis:
       - inference
       - agents
@@ -20,7 +21,7 @@ data:
       - telemetry
       - tool_runtime
       - vector_io
-      - files
+      # - files  # DISABLED: No provider available in Red Hat ET image
     
     providers:
       inference:
@@ -102,18 +103,13 @@ data:
           provider_type: remote::model-context-protocol
           config: {}
       
-      files:
-        - provider_id: s3-files
-          provider_type: remote::s3-files
-          config:
-            endpoint_url: "http://minio.model-storage.svc:9000"
-            bucket: "llama-files"
-            region: "us-east-1"
-            tls_verify: false
-            s3_force_path_style: true
-            credentials:
-              access_key_id_from_env: "FILES_S3_ACCESS_KEY_ID"
-              secret_access_key_from_env: "FILES_S3_SECRET_ACCESS_KEY"
+      # files:
+        # Files API not available in Red Hat ET image (quay.io/redhat-et/llama:vllm-0.2.7)
+        # Neither remote::s3-files nor inline::files providers are available
+        # - provider_id: local-files
+        #   provider_type: inline::files
+        #   config:
+        #     storage_dir: "/data/files"
     
     models:
       # Quantized model - cost-efficient (1 GPU)
