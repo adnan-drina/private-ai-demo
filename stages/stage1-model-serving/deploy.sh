@@ -284,12 +284,18 @@ create_secrets() {
   if [ "$DRY_RUN" = true ]; then
     log_info "[DRY-RUN] Would create secret: s3-credentials-kserve"
   else
+    ACCESS="$(oc -n model-storage get secret minio-credentials -o jsonpath='{.data.accesskey}' 2>/dev/null | base64 -d || true)"
+    SECRET="$(oc -n model-storage get secret minio-credentials -o jsonpath='{.data.secretkey}' 2>/dev/null | base64 -d || true)"
+    if [ -z "$ACCESS" ] || [ -z "$SECRET" ]; then
+      ACCESS="$MINIO_ACCESS_KEY"; SECRET="$MINIO_SECRET_KEY"
+    fi
     oc create secret generic s3-credentials-kserve \
-      --from-literal=AWS_ACCESS_KEY_ID="$MINIO_ACCESS_KEY" \
-      --from-literal=AWS_SECRET_ACCESS_KEY="$MINIO_SECRET_KEY" \
+      --from-literal=AWS_ACCESS_KEY_ID="$ACCESS" \
+      --from-literal=AWS_SECRET_ACCESS_KEY="$SECRET" \
+      --from-literal=awsEndpointUrl="http://minio.model-storage.svc:9000" \
       -n "$PROJECT_NAME" \
       --dry-run=client -o yaml | oc apply -f -
-    log_success "Secret created: s3-credentials-kserve"
+    log_success "Secret created: s3-credentials-kserve (copied from model-storage or .env)"
   fi
   
   # Internal Registry Connection for OpenShift AI Dashboard
@@ -372,6 +378,23 @@ trigger_argocd_sync() {
   fi
 
   log_info "Run manually: argocd login <server>; argocd app sync stage01-model-serving --prune"
+}
+
+wait_for_mesh_membership() {
+  if [ "$DRY_RUN" = true ]; then
+    return
+  fi
+  log_section "Waiting for Service Mesh Membership"
+  # Ensure ServiceMeshMember exists (managed by GitOps stage00)
+  for i in $(seq 1 30); do
+    if oc -n "$PROJECT_NAME" get servicemeshmember default >/dev/null 2>&1; then
+      log_success "ServiceMeshMember detected in namespace $PROJECT_NAME"
+      return
+    fi
+    log_info "ServiceMeshMember not found yet; waiting..."
+    sleep 5
+  done
+  log_warning "ServiceMeshMember not detected; Knative serverless ISVCs may be denied by mesh webhook"
 }
 
 wait_for_models() {
@@ -471,6 +494,9 @@ trigger_argocd_sync
 
 # Wait for model downloads (optional)
 wait_for_models
+
+# Wait for mesh membership to avoid Knative admission denial
+wait_for_mesh_membership
 
 # Display next steps
 display_next_steps
