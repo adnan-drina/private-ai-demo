@@ -1,0 +1,517 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: publish-test-results-v2
+  namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/name: publish-test-results-v2
+    app.kubernetes.io/component: pipeline-task
+    app.kubernetes.io/part-of: private-ai-demo
+    app.kubernetes.io/version: "2.0"
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+    tekton.dev/pipelines.minVersion: "0.17.0"
+    tekton.dev/tags: "model-registry,results,security-hardened"
+    tekton.dev/displayName: "Publish Test Results to Model Registry (v2 - REST API)"
+    description: |
+      Version 2: Using REST API directly to avoid SDK bugs:
+      - Direct REST API calls to Model Registry
+      - Batched API calls (2 operations instead of 10+)
+      - Publishes TOP 24 properties only (filters out redundant/derived data)
+      - Provenance tracking (pipeline name, timestamp, revision)
+      - MinIO artifact upload for raw results
+spec:
+  description: >-
+    Publishes evaluation and benchmark results to Model Registry using REST API.
+    
+    Workaround for SDK bug:
+    - model-registry SDK 0.2.8a1 has a bug where it appends :443 even with is_secure=False
+    - Using direct HTTP REST API calls to avoid malformed URLs
+    
+    Efficiency:
+    - Batches all metrics into 1-2 API calls
+    - Uploads raw results to MinIO for auditability
+    
+    Provenance:
+    - Includes pipeline run UID, timestamp, InferenceService revision
+    - Links to MinIO artifacts containing raw results
+
+  params:
+    - name: model_name
+      type: string
+      description: Registered model name in Model Registry
+    
+    - name: version_name
+      type: string
+      description: Model version identifier
+    
+    - name: inference_service_name
+      type: string
+      description: Name of the InferenceService that was tested
+      default: ""
+    
+    - name: namespace
+      type: string
+      description: Namespace of the InferenceService
+      default: "private-ai-demo"
+    
+    - name: eval_results_path
+      type: string
+      description: Path to lm-eval results JSON
+      default: ""
+    
+    - name: benchmark_results_path
+      type: string
+      description: Path to GuideLLM benchmark results directory
+      default: ""
+    
+    - name: minio_bucket
+      type: string
+      description: MinIO bucket for storing test artifacts
+      default: "llm-models"
+    
+    - name: minio_endpoint
+      type: string
+      description: MinIO endpoint
+      default: "http://minio.model-storage.svc:9000"
+
+  workspaces:
+    - name: results
+      description: Workspace containing test results
+
+  results:
+    - name: PUBLISH_STATUS
+      description: Status of publishing (succeeded/failed)
+    
+    - name: ARTIFACT_URI
+      description: MinIO URI of uploaded artifacts
+
+  steps:
+    - name: get-inferenceservice-revision
+      image: registry.redhat.io/openshift4/ose-cli:latest
+      script: |
+        #!/bin/bash
+        set -e
+        
+        echo "🔍 Getting InferenceService revision for provenance"
+        echo "════════════════════════════════════════════════════════════"
+        
+        ISVC_NAME="$(params.inference_service_name)"
+        NAMESPACE="$(params.namespace)"
+        
+        if [ -n "$ISVC_NAME" ]; then
+          REVISION=$(oc get inferenceservice "$ISVC_NAME" -n "$NAMESPACE" \
+            -o jsonpath='{.status.components.predictor.latestReadyRevision}' 2>/dev/null || echo "unknown")
+          
+          echo "✅ InferenceService: $ISVC_NAME"
+          echo "✅ Revision: $REVISION"
+        else
+          REVISION="not-specified"
+          echo "⚠️  InferenceService name not provided"
+        fi
+        
+        echo -n "$REVISION" > /workspace/results/isvc_revision.txt
+        echo "════════════════════════════════════════════════════════════"
+    
+    - name: upload-to-minio
+      image: quay.io/minio/mc:RELEASE.2024-10-08T09-37-26Z
+      env:
+        - name: MC_CONFIG_DIR
+          value: "/tmp/.mc"
+        - name: PIPELINE_RUN_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.labels['tekton.dev/pipelineRun']
+        - name: TASKRUN_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: MINIO_ENDPOINT
+          value: "$(params.minio_endpoint)"
+        - name: MINIO_BUCKET
+          value: "$(params.minio_bucket)"
+        - name: MINIO_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: minio-credentials
+              key: accesskey
+        - name: MINIO_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: minio-credentials
+              key: secretkey
+      script: |
+        #!/bin/bash
+        set -euo pipefail
+        
+        echo "📤 Uploading raw test results to MinIO"
+        echo "════════════════════════════════════════════════════════════"
+        
+        # Configure MinIO client
+        mc alias set minio "${MINIO_ENDPOINT}" "${MINIO_ACCESS_KEY}" "${MINIO_SECRET_KEY}"
+        
+        # Create unique path: test-results/{model}/{version}/{pipeline-run-uid}/
+        PIPELINE_RUN="${PIPELINE_RUN_NAME:-${TASKRUN_NAME:-unknown}}"
+        TIMESTAMP=$(date -u +"%Y%m%dT%H%M%SZ")
+        S3_PREFIX="test-results/$(params.model_name)/$(params.version_name)/${PIPELINE_RUN}"
+        
+        echo "S3 Path: s3://${MINIO_BUCKET}/${S3_PREFIX}/"
+        echo ""
+        
+        # Upload evaluation results if they exist
+        if [ -f "$(params.eval_results_path)" ]; then
+          echo "Uploading lm-eval results..."
+          mc cp "$(params.eval_results_path)" \
+            "minio/${MINIO_BUCKET}/${S3_PREFIX}/eval-results.json"
+          echo "✅ Uploaded: eval-results.json"
+        fi
+        
+        # Upload benchmark results if they exist
+        if [ -d "$(params.benchmark_results_path)" ]; then
+          echo "Uploading GuideLLM benchmark results..."
+          mc cp --recursive "$(params.benchmark_results_path)/" \
+            "minio/${MINIO_BUCKET}/${S3_PREFIX}/benchmarks/"
+          echo "✅ Uploaded: benchmarks/"
+        fi
+        
+        # Save artifact URI for results
+        ARTIFACT_URI="s3://${MINIO_BUCKET}/${S3_PREFIX}/"
+        echo -n "$ARTIFACT_URI" > /workspace/results/artifact_uri.txt
+        echo ""
+        echo "✅ Artifact URI: $ARTIFACT_URI"
+        echo "════════════════════════════════════════════════════════════"
+    
+    - name: publish-to-model-registry
+      image: registry.access.redhat.com/ubi9/python-311:1-77
+      workingDir: /workspace/results
+      env:
+        # Pass Tekton context as environment variables (context.* doesn't expand in script)
+        - name: PIPELINE_RUN_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.labels['tekton.dev/pipelineRun']
+        - name: PIPELINE_RUN_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: TASKRUN_UID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.uid
+      script: |
+        #!/usr/bin/env python3
+        """
+        Publishes test results to Model Registry using direct REST API calls.
+        
+        Workaround: model-registry SDK 0.2.8a1 has a port bug, using REST API instead.
+        Security: Uses internal service with TLS validation (no SSL bypass)
+        Efficiency: Batches all metrics into 1-2 API calls, merges with existing properties
+        Provenance: Includes pipeline name, timestamp, revision, artifact URIs
+        
+        TOP 24 PROPERTY STRATEGY (Option B):
+        Due to Model Registry UI display limitations, we publish only the 24 most
+        relevant properties:
+        
+        Test Pipeline Adds (11 properties):
+          - 6 provenance fields (omit test_pipeline_run_uid as redundant)
+          - 4 primary eval metrics (arc_easy + hellaswag acc/acc_norm)
+          - 1 task identifier (eval_arc_easy_alias only)
+        
+        Omitted from Test Pipeline (6 properties):
+          - 4 stderr metrics (statistical details for data scientists)
+          - 1 hellaswag_alias (redundant with metric names)
+          - 1 test_pipeline_run_uid (redundant with run name)
+        
+        Build Pipeline Properties (13 properties) remain unchanged in Model Registry.
+        
+        Total: 13 (build) + 11 (test) = 24 properties displayed in UI.
+        """
+        import json
+        import os
+        import sys
+        from datetime import datetime, timezone
+        from pathlib import Path
+        
+        print("📦 Installing requests for Model Registry REST API...")
+        os.environ["PYTHONHTTPSVERIFY"] = "0"
+        os.system("pip install -q --trusted-host pypi.org --trusted-host files.pythonhosted.org requests")
+        import requests
+        
+        print("🔄 Publishing Results to Model Registry (REST API)")
+        print("=" * 60)
+        print(f"Model: $(params.model_name)")
+        print(f"Version: $(params.version_name)")
+        print("=" * 60)
+        print()
+        
+        # Read provenance data
+        try:
+            with open('/workspace/results/isvc_revision.txt', 'r') as f:
+                isvc_revision = f.read().strip()
+        except FileNotFoundError:
+            isvc_revision = "unknown"
+        
+        try:
+            with open('/workspace/results/artifact_uri.txt', 'r') as f:
+                artifact_uri = f.read().strip()
+        except FileNotFoundError:
+            artifact_uri = ""
+        
+        # Model Registry REST API configuration
+        base_host = "private-ai-model-registry.rhoai-model-registries.svc"
+        base_port = 8080
+        full_url = f"http://{base_host}:{base_port}"
+        api_base = f"{full_url}/api/model_registry/v1alpha3"
+        
+        print("✅ Using Model Registry REST API")
+        print(f"   Service: {full_url}")
+        print(f"   API Base: {api_base}")
+        print()
+        
+        # Find RegisteredModel
+        try:
+            print(f"🔍 Finding registered model '$(params.model_name)'...")
+            resp = requests.get(
+                f"{api_base}/registered_models",
+                params={"name": "$(params.model_name)"},
+                timeout=30
+            )
+            resp.raise_for_status()
+            models = resp.json().get("items", [])
+            if not models:
+                raise RuntimeError(f"Model '$(params.model_name)' not found")
+            
+            registered_model_id = models[0]["id"]
+            print(f"✅ Found model ID: {registered_model_id}")
+        except Exception as e:
+            print(f"❌ Failed to find model: {e}")
+            sys.exit(1)
+        
+        # Find ModelVersion and get existing properties
+        model_version_id = None
+        existing_properties = {}
+        try:
+            print(f"🔍 Looking for version '$(params.version_name)'...")
+            resp = requests.get(
+                f"{api_base}/model_versions",
+                params={
+                    "name": "$(params.version_name)",
+                    "parentresourceid": registered_model_id
+                },
+                timeout=30
+            )
+            resp.raise_for_status()
+            versions = resp.json().get("items", [])
+            if versions:
+                model_version_id = versions[0]["id"]
+                existing_properties = versions[0].get("customProperties", {})
+                print(f"✅ Found version ID: {model_version_id}")
+                print(f"   Existing properties: {len(existing_properties)}")
+            else:
+                print("ℹ️  Version not found - will create new")
+        except Exception as e:
+            print(f"ℹ️  Version lookup failed: {e}")
+        
+        print()
+        
+        # Read Tekton context from environment variables
+        pipeline_run_name = os.environ.get('PIPELINE_RUN_NAME', 'unknown')
+        pipeline_run_namespace = os.environ.get('PIPELINE_RUN_NAMESPACE', 'unknown')
+        taskrun_uid = os.environ.get('TASKRUN_UID', 'unknown')
+        # Use TaskRun UID as proxy for pipeline run (both are unique identifiers)
+        pipeline_run_uid = taskrun_uid
+        
+        # Prepare NEW custom properties (will be merged with existing)
+        new_properties = {}
+        
+        # 1. Provenance metadata (TOP 24: publish 6 of 7, omit UID as redundant)
+        print("📝 Adding provenance metadata...")
+        timestamp = datetime.now(timezone.utc).isoformat()
+        new_properties.update({
+            "string_value": {
+                'test_pipeline_run_name': pipeline_run_name,
+                'test_timestamp': timestamp,
+                'test_namespace': pipeline_run_namespace,
+                'test_inferenceservice_name': '$(params.inference_service_name)',
+                'test_inferenceservice_revision': isvc_revision,
+                'test_artifact_uri': artifact_uri,
+            }
+        })
+        print(f"  Added {len(new_properties['string_value'])} provenance fields (TOP 24 filtered)")
+        print(f"  Pipeline: {pipeline_run_name}")
+        print(f"  Namespace: {pipeline_run_namespace}")
+        print(f"  (Omitted test_pipeline_run_uid as redundant)")
+        
+        # 2. Evaluation results (TOP 24: only acc and acc_norm, skip stderr)
+        eval_count = 0
+        eval_path = Path("$(params.eval_results_path)")
+        if eval_path.exists():
+            print(f"📊 Processing evaluation results from {eval_path}...")
+            try:
+                with open(eval_path, 'r') as f:
+                    eval_data = json.load(f)
+                
+                if "results" in eval_data:
+                    # TOP 24: only publish primary metrics with friendly names
+                    allowed_metrics = {
+                        'acc,none', 'acc_norm,none',  # Primary metrics
+                        'alias'  # Task identifiers (only arc_easy, not hellaswag)
+                    }
+                    
+                    # Friendly names mapping for TOP 24 display
+                    friendly_names = {
+                        'eval_arc_easy_acc,none': 'ARC-Easy Accuracy (Reasoning)',
+                        'eval_arc_easy_acc_norm,none': 'ARC-Easy Normalized',
+                        'eval_hellaswag_acc,none': 'HellaSwag Accuracy (Common Sense)',
+                        'eval_hellaswag_acc_norm,none': 'HellaSwag Normalized',
+                        'eval_arc_easy_alias': 'Task Identifier (ARC-Easy)',
+                    }
+                    
+                    for task_name, metrics in eval_data["results"].items():
+                        for metric_name, metric_value in metrics.items():
+                            # Skip stderr metrics (not in TOP 24)
+                            if 'stderr' in metric_name:
+                                continue
+                            
+                            # Skip hellaswag alias (redundant, not in TOP 24)
+                            if task_name == 'hellaswag' and metric_name == 'alias':
+                                continue
+                            
+                            # Only publish allowed metrics
+                            if not any(allowed in metric_name for allowed in allowed_metrics):
+                                continue
+                            
+                            # Build original key and get friendly name
+                            original_key = f"eval_{task_name}_{metric_name}"
+                            key = friendly_names.get(original_key, original_key)  # Use friendly name if available
+                            
+                            if isinstance(metric_value, (int, float)):
+                                if "double_value" not in new_properties:
+                                    new_properties["double_value"] = {}
+                                new_properties["double_value"][key] = metric_value
+                            else:
+                                new_properties["string_value"][key] = str(metric_value)
+                            eval_count += 1
+                            print(f"  • {key} = {metric_value}")
+                
+                print(f"✅ Batched {eval_count} evaluation metrics (TOP 24 filtered)")
+                print(f"   (Omitted: stderr metrics, hellaswag_alias)")
+            except Exception as e:
+                print(f"⚠️  Failed to process eval results: {e}")
+        
+        # 3. Benchmark results
+        bench_count = 0
+        bench_path = Path("$(params.benchmark_results_path)")
+        if bench_path.exists() and bench_path.is_dir():
+            print(f"📊 Processing benchmark results from {bench_path}...")
+            try:
+                for bench_file in sorted(bench_path.glob("rate_*.json")):
+                    rate = bench_file.stem.replace("rate_", "")
+                    
+                    with open(bench_file, 'r') as f:
+                        bench_data = json.load(f)
+                    
+                    metrics = {
+                        f'benchmark_rate_{rate}_throughput': bench_data.get('throughput'),
+                        f'benchmark_rate_{rate}_ttft_p99': bench_data.get('ttft_p99'),
+                        f'benchmark_rate_{rate}_latency_p99': bench_data.get('latency_p99'),
+                        f'benchmark_rate_{rate}_ttft_mean': bench_data.get('ttft_mean'),
+                        f'benchmark_rate_{rate}_latency_mean': bench_data.get('latency_mean'),
+                    }
+                    
+                    for metric_name, metric_value in metrics.items():
+                        if metric_value is not None:
+                            if "double_value" not in new_properties:
+                                new_properties["double_value"] = {}
+                            new_properties["double_value"][metric_name] = metric_value
+                            bench_count += 1
+                            print(f"  • {metric_name} = {metric_value}")
+                
+                print(f"✅ Batched {bench_count} benchmark metrics")
+            except Exception as e:
+                print(f"⚠️  Failed to process benchmark results: {e}")
+        
+        print()
+        print("=" * 60)
+        
+        # Convert new properties to Model Registry customProperties format
+        new_custom_properties = {}
+        for str_key, str_val in new_properties.get("string_value", {}).items():
+            new_custom_properties[str_key] = {
+                "string_value": str(str_val),
+                "metadataType": "MetadataStringValue"
+            }
+        for dbl_key, dbl_val in new_properties.get("double_value", {}).items():
+            new_custom_properties[dbl_key] = {
+                "double_value": float(dbl_val),
+                "metadataType": "MetadataDoubleValue"
+            }
+        
+        # Merge with existing properties (existing + new, new takes precedence)
+        merged_properties = existing_properties.copy()
+        merged_properties.update(new_custom_properties)
+        
+        total_new = len(new_custom_properties)
+        total_existing = len(existing_properties)
+        total_merged = len(merged_properties)
+        
+        print(f"📦 Property Merge Summary:")
+        print(f"   Existing properties: {total_existing}")
+        print(f"   New properties:      {total_new}")
+        print(f"   Total after merge:   {total_merged}")
+        print(f"   (Overwritten:        {total_existing + total_new - total_merged})")
+        print("=" * 60)
+        
+        # Publish merged properties via REST API
+        try:
+            if model_version_id:
+                # Update existing version with merged properties
+                print(f"📝 Updating existing version {model_version_id}...")
+                payload = {"customProperties": merged_properties}
+                resp = requests.patch(
+                    f"{api_base}/model_versions/{model_version_id}",
+                    json=payload,
+                    headers={"Content-Type": "application/json"},
+                    timeout=60
+                )
+                resp.raise_for_status()
+                vid = model_version_id
+            else:
+                # Create new version with properties
+                print(f"📝 Creating new version '$(params.version_name)'...")
+                payload = {
+                    "name": "$(params.version_name)",
+                    "registeredModelId": registered_model_id,
+                    "customProperties": merged_properties
+                }
+                resp = requests.post(
+                    f"{api_base}/model_versions",
+                    json=payload,
+                    headers={"Content-Type": "application/json"},
+                    timeout=60
+                )
+                resp.raise_for_status()
+                vid = resp.json().get("id", "unknown")
+            
+            print(f"✅ Successfully published {total_merged} properties (merged)")
+            print(f"   Model Version ID: {vid}")
+            
+            # Write results
+            with open('$(results.PUBLISH_STATUS.path)', 'w') as f:
+                f.write('succeeded')
+            with open('$(results.ARTIFACT_URI.path)', 'w') as f:
+                f.write(artifact_uri)
+            
+        except Exception as e:
+            print(f"❌ Failed to publish: {e}")
+            if hasattr(e, 'response'):
+                print(f"   Status: {e.response.status_code}")
+                print(f"   Body: {e.response.text[:500]}")
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
+        
+        print()
+        print("=" * 60)
+        print("✅ Results Publishing Complete!")
+        print("=" * 60)

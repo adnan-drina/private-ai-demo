@@ -1,0 +1,56 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: test-mistral-quantized-v2-
+  namespace: private-ai-demo
+  labels:
+    model: mistral-quantized
+    pipeline: model-testing-v2
+    tekton.dev/pipeline: model-testing-v2
+spec:
+  pipelineRef:
+    name: model-testing-v2
+  
+  params:
+    # InferenceService identification
+    - name: inference_service_name
+      value: "mistral-24b-quantized"
+    - name: namespace
+      value: "private-ai-demo"
+    
+    # Model Registry metadata
+    - name: model_name
+      value: "Mistral-Small-24B-Instruct"
+    - name: version_name
+      value: "quantized-w4a16-2501"
+    
+    # vLLM model name
+    - name: vllm_model_name
+      value: "mistral-24b-quantized"
+    
+    # Evaluation parameters
+    - name: eval_tasks
+      value: "hellaswag"
+    - name: eval_limit
+      value: "100"
+    
+    # Benchmark parameters
+    - name: benchmark_profiles
+      value: "single"
+    - name: benchmark_duration
+      value: "60"
+  
+  workspaces:
+    - name: results
+      volumeClaimTemplate:
+        spec:
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 2Gi
+  
+  timeouts:
+    pipeline: "2h"
+    tasks: "1h30m"
+

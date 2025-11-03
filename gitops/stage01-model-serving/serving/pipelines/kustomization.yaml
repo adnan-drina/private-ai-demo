@@ -8,8 +8,9 @@ resources:
   # RBAC (ServiceAccounts, Roles, RoleBindings)
   - 00-rbac
   
-  # Active MinIO-First Pipeline
-  # Works for ALL model sizes (quantized and full)
+  # Active Pipelines
+  # - Model Import: MinIO-First Pipeline (works for ALL model sizes)
+  # - Model Testing: Evaluation and benchmarking pipeline (v2)
   - active/01-tasks
   - active/02-pipeline
   # PipelineRuns are created imperatively (generateName); not managed by GitOps

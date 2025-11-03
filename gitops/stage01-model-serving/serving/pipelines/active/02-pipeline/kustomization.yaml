@@ -3,6 +3,7 @@ kind: Kustomization
 
 resources:
   - pipeline-model-import.yaml
+  - pipeline-model-testing-v2.yaml
 
 labels:
   - includeSelectors: true

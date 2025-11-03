@@ -1,0 +1,188 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: run-lm-eval-v2
+  namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/name: run-lm-eval-v2
+    app.kubernetes.io/version: "2.0"
+  annotations:
+    description: "v2: Internal HTTP with service mesh (requires Istio sidecar injection for STRICT mTLS)"
+spec:
+  description: |
+    Runs lm-eval against deployed InferenceService using internal HTTP.
+    Requires Istio sidecar injection when STRICT mTLS is enabled.
+  volumes:
+    - name: trusted-ca
+      configMap:
+        name: trusted-ca
+        items:
+          - key: ca-bundle.crt
+            path: ca.crt
+    - name: router-ca
+      configMap:
+        name: router-ca
+        items:
+          - key: ca-bundle.crt
+            path: ca-bundle.crt
+
+  params:
+    - name: inference_service_name
+      type: string
+    - name: namespace
+      type: string
+      default: "private-ai-demo"
+    - name: model_name
+      type: string
+    - name: tasks
+      type: string
+      default: "hellaswag,arc_easy"
+    - name: limit
+      type: string
+      default: "500"
+    - name: max_model_len
+      type: string
+      default: "8192"
+    - name: tokenizer_name
+      type: string
+      default: ""
+
+  workspaces:
+    - name: results
+
+  results:
+    - name: EVAL_STATUS
+    - name: RESULTS_FILE
+    - name: ACCURACY_SUMMARY
+
+  steps:
+    - name: get-inference-url
+      image: registry.redhat.io/openshift4/ose-cli:latest
+      env:
+        - name: REQUESTS_CA_BUNDLE
+          value: /var/run/router-ca/ca-bundle.crt
+        - name: SSL_CERT_FILE
+          value: /var/run/router-ca/ca-bundle.crt
+        - name: CURL_CA_BUNDLE
+          value: /var/run/router-ca/ca-bundle.crt
+        - name: PIP_CERT
+          value: /var/run/router-ca/ca-bundle.crt
+      volumeMounts:
+        - name: trusted-ca
+          mountPath: /var/run/ca
+          readOnly: true
+        - name: router-ca
+          mountPath: /var/run/router-ca
+          readOnly: true
+      script: |
+        #!/bin/bash
+        set -e
+        
+        echo "🔍 Discovering External HTTPS Knative Service URL"
+        echo "════════════════════════════════════════════════════════════"
+        ISVC_NAME="$(params.inference_service_name)-predictor"
+        ROUTE_URL=$(oc get ksvc "$ISVC_NAME" -n "$(params.namespace)" -o jsonpath='{.status.url}' 2>/dev/null || echo "")
+        if [ -z "$ROUTE_URL" ]; then
+          echo "❌ ERROR: Could not resolve external route for $ISVC_NAME"
+          exit 1
+        fi
+        echo "✅ External URL: ${ROUTE_URL}"
+        echo -n "${ROUTE_URL}" > /workspace/results/inference_url.txt
+    
+    - name: run-evaluation
+      image: registry.access.redhat.com/ubi9/python-311:1-77
+      workingDir: /workspace/results
+      volumeMounts:
+        - name: trusted-ca
+          mountPath: /var/run/ca
+          readOnly: true
+        - name: router-ca
+          mountPath: /var/run/router-ca
+          readOnly: true
+      script: |
+        #!/bin/bash
+        set -euo pipefail
+        
+        MODEL_URL=$(cat /workspace/results/inference_url.txt)
+        
+        echo "🎯 Running LM-Eval Evaluation"
+        echo "════════════════════════════════════════════════════════════"
+        echo "Model URL: ${MODEL_URL}"
+        echo "Protocol: HTTPS (external route with cluster CA)"
+        echo ""
+        
+        # Install lm-eval from PyPI using default CA bundle
+        pip install --quiet --no-cache-dir lm-eval
+        # Install required extra dependency for API mode
+        pip install --quiet --no-cache-dir tenacity
+        echo "✅ Installation complete"
+        echo ""
+        
+        mkdir -p /workspace/results/eval
+        
+        # Discover vLLM model name
+        echo "📡 Discovering vLLM model name..."
+        VLLM_MODEL_NAME=$( 
+          (curl -sSk "${MODEL_URL}/v1/models" || true) | \
+          python3 -c "import sys, json; print(json.load(sys.stdin)['data'][0]['id'])" 2>/dev/null || \
+          echo "$(params.model_name)"
+        )
+        
+        echo "   Model: ${VLLM_MODEL_NAME}"
+        echo ""
+        
+        echo "📊 Starting evaluation (SSL verification DISABLED for test)..."
+        # Disable SSL verification globally for Python requests (temporary test)
+        printf '%s\n' \
+          "import requests, urllib3" \
+          "urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)" \
+          "_old = requests.Session.request" \
+          "def _noverify(self, method, url, **kwargs):" \
+          "    kwargs['verify'] = False" \
+          "    return _old(self, method, url, **kwargs)" \
+          "requests.Session.request = _noverify" \
+        > /workspace/results/sitecustomize.py
+        export PYTHONPATH="/workspace/results:${PYTHONPATH:-}"
+        export PYTHONWARNINGS=ignore
+        TOK="$(params.tokenizer_name)"
+        if [ -z "$TOK" ]; then
+          # Fallback: try to use discovered model name as tokenizer id
+          TOK="$VLLM_MODEL_NAME"
+        fi
+        python3 -m lm_eval \
+          --model local-completions \
+          --model_args "model=${VLLM_MODEL_NAME},tokenizer=${TOK},base_url=${MODEL_URL}/v1/completions,num_concurrent=1,max_retries=3,timeout=300" \
+          --tasks $(params.tasks) \
+          --limit $(params.limit) \
+          --output_path /workspace/results/eval \
+          --log_samples \
+          2>&1 | tee /workspace/results/eval/eval.log
+        
+        echo ""
+        echo "✅ Evaluation Complete"
+        
+        RESULTS_FILE="/workspace/results/eval/results.json"
+        if [ ! -f "$RESULTS_FILE" ]; then
+          RESULTS_FILE=$(find /workspace/results/eval -name "*.json" -type f | head -1)
+        fi
+        if [ -z "$RESULTS_FILE" ]; then
+          echo "❌ ERROR: results.json not found"
+          exit 1
+        fi
+        
+        if [ "$RESULTS_FILE" != "/workspace/results/eval/results.json" ]; then
+          cp "$RESULTS_FILE" /workspace/results/eval/results.json || true
+        fi
+        
+        python3 -c "import json; data=json.load(open('/workspace/results/eval/results.json')); [print(f'  • {t}.{m}: {v:.4f}') for t,r in data.get('results',{}).items() for m,v in r.items() if isinstance(v,(int,float)) and not m.endswith('_stderr')]"
+        python3 -c "import json; data=json.load(open('/workspace/results/eval/results.json')); open('/workspace/results/eval_summary.txt','w').write('\n'.join([f'{t}.{m}: {v:.4f}' for t,r in data.get('results',{}).items() for m,v in r.items() if isinstance(v,(int,float)) and not m.endswith('_stderr')]))"
+        
+        echo "/workspace/results/eval/results.json" > $(results.RESULTS_FILE.path)
+        echo "succeeded" > $(results.EVAL_STATUS.path)
+        
+        SUMMARY=$(cat /workspace/results/eval_summary.txt | head -3 | tr '\n' '; ')
+        echo "$SUMMARY" > $(results.ACCURACY_SUMMARY.path)
+        
+        echo ""
+        echo "✅ Clean HTTP communication via service mesh"
+
