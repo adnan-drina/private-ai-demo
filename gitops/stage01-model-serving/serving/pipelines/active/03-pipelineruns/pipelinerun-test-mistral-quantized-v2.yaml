@@ -22,7 +22,7 @@ spec:
     - name: model_name
       value: "Mistral-Small-24B-Instruct"
     - name: version_name
-      value: "quant-w4a16"
+      value: "quantized-w4a16"
     
     # vLLM model name
     - name: vllm_model_name
