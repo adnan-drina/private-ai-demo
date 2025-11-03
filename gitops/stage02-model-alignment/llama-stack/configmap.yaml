@@ -20,8 +20,7 @@ data:
       - telemetry
       - tool_runtime
       - vector_io
-      - prompts
-      - files
+      # prompts/files not supported in this dev image
     
     providers:
       inference:
@@ -103,26 +102,7 @@ data:
           provider_type: remote::model-context-protocol
           config: {}
       
-      prompts:
-        - provider_id: inline-prompts
-          provider_type: inline::prompts
-          config:
-            kvstore:
-              type: sqlite
-              db_path: /data/prompts_store.db
-
-      files:
-        - provider_id: s3-files
-          provider_type: remote::s3-files
-          config:
-            endpoint_url: "http://minio.model-storage.svc:9000"
-            bucket: "llama-files"
-            region: "us-east-1"
-            tls_verify: false
-            s3_force_path_style: true
-            credentials:
-              access_key_id_from_env: "FILES_S3_ACCESS_KEY_ID"
-              secret_access_key_from_env: "FILES_S3_SECRET_ACCESS_KEY"
+      # prompts/files providers omitted
     
     models:
       # Quantized model - cost-efficient (1 GPU)
