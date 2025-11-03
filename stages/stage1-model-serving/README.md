@@ -54,9 +54,18 @@ cp .env.template .env
 
 # Import full model (~48GB, 60 minutes)
 ./run-model-import.sh full
+```
 
-# Monitor progress (optional, script offers to auto-monitor)
-./monitor-pipeline.sh -n private-ai-demo -r <pipelinerun-name>
+### 3. Test Models (Optional)
+
+```bash
+# Test quantized model (lm-eval + benchmarks)
+./run-model-testing.sh quantized
+
+# Test full model
+./run-model-testing.sh full
+
+# Check results in Model Registry dashboard
 ```
 
 ## Scripts Reference
@@ -65,7 +74,7 @@ cp .env.template .env
 |--------|---------|
 | `deploy.sh` | Main deployment script (GitOps resources + secrets) |
 | `run-model-import.sh` | Start model import pipeline |
-| `monitor-pipeline.sh` | Monitor Tekton pipeline execution |
+| `run-model-testing.sh` | Start model testing pipeline (lm-eval + benchmarks) |
 
 **Archived**: Obsolete scripts from previous architecture iterations are in `archive/` with documentation.
 
@@ -88,6 +97,26 @@ The `model-import` Tekton pipeline automates the full model lifecycle:
 **PipelineRun manifests**:
 - `gitops/.../03-pipelineruns/pipelinerun-mistral-quantized.yaml`
 - `gitops/.../03-pipelineruns/pipelinerun-mistral-full.yaml`
+
+## Model Testing Pipeline
+
+The `model-testing-v2` Tekton pipeline validates deployed InferenceServices:
+
+**Tasks**:
+1. **run-lm-eval-v2** - Language model evaluation (hellaswag, arc_easy)
+2. **run-guidellm-v2** - Performance benchmarks (TTFT, throughput, latency)
+3. **publish-test-results-v2** - Uploads results to Model Registry
+
+**Features**:
+- Tests deployed models (no download/build needed)
+- Security-hardened (internal HTTP services, service mesh mTLS)
+- Model Registry SDK integration
+- Provenance tracking (pipeline UID, timestamp, artifacts)
+- MinIO artifact storage for audit trail
+
+**PipelineRun manifests**:
+- `gitops/.../03-pipelineruns/pipelinerun-test-mistral-quantized-v2.yaml`
+- `gitops/.../03-pipelineruns/pipelinerun-test-mistral-full-v2.yaml`
 
 ## InferenceService Configuration
 
