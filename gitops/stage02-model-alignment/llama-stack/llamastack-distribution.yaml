@@ -20,9 +20,9 @@ spec:
   replicas: 1
   
   server:
-    # Use the full Llama Stack distribution image for RHOAI 2.25
+    # Use Quay dev image to unblock (no RH entitlement required)
     distribution:
-      image: "registry.redhat.io/rhoai/odh-llama-stack-rhel9:v2.25"
+      image: "quay.io/redhat-et/llama:vllm-0.2.7"
     
     containerSpec:
       name: llamastack
@@ -60,8 +60,6 @@ spec:
     # Pod-level configuration
     podOverrides:
       serviceAccountName: rag-workload-sa
-      imagePullSecrets:
-        - name: redhat-pull-secret
       
       volumes:
         - name: data
