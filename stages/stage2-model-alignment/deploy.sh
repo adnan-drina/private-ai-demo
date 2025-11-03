@@ -18,24 +18,32 @@ set -euo pipefail
 ##############################################################################
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-GITOPS_PATH="${SCRIPT_DIR}/../../gitops/stage02-model-alignment"
-ENV_FILE="${SCRIPT_DIR}/.env"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+GITOPS_PATH="${PROJECT_ROOT}/gitops/stage02-model-alignment"
+ENV_FILE="${PROJECT_ROOT}/.env"
 
 echo "════════════════════════════════════════════════════════════════"
 echo "  Stage 2: Model Alignment with RAG + KFP v2"
 echo "════════════════════════════════════════════════════════════════"
 echo ""
 
-# Load environment variables
+# Load environment variables from project root
 if [ ! -f "$ENV_FILE" ]; then
     echo "❌ ERROR: .env file not found at $ENV_FILE"
-    echo "   Create it from env.template:"
-    echo "   cp env.template .env"
-    echo "   Then edit .env with your MinIO credentials"
+    echo "   Please create .env at project root with:"
+    echo "     PROJECT_NAME=private-ai-demo"
+    echo "     MINIO_ENDPOINT=minio.model-storage.svc.cluster.local:9000"
+    echo "     MINIO_ACCESS_KEY=<from stage00>"
+    echo "     MINIO_SECRET_KEY=<from stage00>"
+    echo "     MINIO_KFP_BUCKET=kfp-artifacts"
+    echo ""
+    echo "   Get MinIO credentials from stage00:"
+    echo "   oc get secret minio-root-credentials -n model-storage -o jsonpath='{.data.accesskey}' | base64 -d"
+    echo "   oc get secret minio-root-credentials -n model-storage -o jsonpath='{.data.secretkey}' | base64 -d"
     exit 1
 fi
 
-echo "📄 Loading configuration from .env..."
+echo "📄 Loading configuration from .env (project root)..."
 # shellcheck source=/dev/null
 source "$ENV_FILE"
 

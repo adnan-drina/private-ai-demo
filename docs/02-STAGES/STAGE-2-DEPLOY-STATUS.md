@@ -25,17 +25,16 @@ The deployment script now captures ALL required setup:
 #   - Applies all manifests from gitops/stage02-model-alignment
 ```
 
-**Configuration:** `.env` file with MinIO credentials (template provided)
+**Configuration:** Project root `.env` file with MinIO credentials (shared across all stages)
 
 **Usage:**
 ```bash
 cd stages/stage2-model-alignment
-cp .env.template .env
-# Edit .env with MinIO credentials from stage00
 ./deploy.sh
+# Script sources .env from project root
 ```
 
-**✅ Fully reproducible** - All secrets and configuration are managed by script + `.env`
+**✅ Fully reproducible** - All secrets and configuration are managed by script + shared `.env`
 
 ---
 
@@ -223,9 +222,10 @@ Deploy LlamaStack as a standard Deployment (not via operator) with full control 
    - ✅ MinIO secret creation
    - ✅ GitOps deployment
 
-2. **`stages/stage2-model-alignment/.env`**
-   - ✅ Template for MinIO credentials
-   - ✅ Project configuration
+2. **`.env` (project root)**
+   - ✅ Shared configuration across all stages
+   - ✅ MinIO credentials and settings
+   - ✅ Project-wide variables
 
 3. **`gitops/stage02-model-alignment/llama-stack/`**
    - ✅ `serviceaccount.yaml` - with Red Hat pull secret reference
