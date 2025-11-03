@@ -20,8 +20,9 @@ spec:
   replicas: 1
   
   server:
-    # Let the operator inject the RHOAI 2.25 full distribution image
-    distribution: {}
+    # Use the full Llama Stack distribution image for RHOAI 2.25
+    distribution:
+      image: "registry.redhat.io/rhoai/odh-llama-stack-rhel9:2.25"
     
     containerSpec:
       name: llamastack
