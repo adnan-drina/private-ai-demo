@@ -20,15 +20,15 @@ spec:
   replicas: 1
   
   server:
-    # Use Red Hat's official RHOAI Llama Stack distribution
-    # Using pre-configured "rh-dev" distribution with built-in run.yaml
-    # The operator will use registry.redhat.io/rhoai/odh-llama-stack-core-rhel9
+    # Use Red Hat's official RHOAI Llama Stack image without pre-configured distribution
+    # This allows environment variables to configure the stack dynamically
+    # Using image from operator's RELATED_IMAGE_RH_DISTRIBUTION
     distribution:
-      name: "rh-dev"
+      image: "registry.redhat.io/rhoai/odh-llama-stack-core-rhel9@sha256:86f8d82f589b4044ce9ac30cb62b4611951d2c383e669c8e2dc5bc74e69e6c86"
     
     containerSpec:
       name: llamastack
-      port: 8080  # Standard OpenAI-compatible port
+      port: 8321  # Port defined in rh-dev distribution's run.yaml
       
       env:
         # Inference model configuration (required by rh-dev distribution)
@@ -38,8 +38,14 @@ spec:
           value: "mistral-24b-quantized"
         
         # vLLM endpoint configuration (for remote::vllm provider)
+        # Using external HTTPS route as LlamaStack Operator blocks Istio sidecar injection
+        # Internal URL would require sidecar: http://mistral-24b-quantized-predictor.private-ai-demo.svc.cluster.local/v1
         - name: VLLM_URL
-          value: "http://mistral-24b-quantized-predictor.private-ai-demo.svc.cluster.local/v1"
+          value: "https://mistral-24b-quantized-private-ai-demo.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com/v1"
+        - name: VLLM_API_TOKEN
+          value: "fake"
+        - name: VLLM_TLS_VERIFY
+          value: "false"
         
         # Milvus connection (for remote::milvus provider)
         - name: MILVUS_HOST
@@ -92,7 +98,14 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: llamastack-data
+        - name: config
+          configMap:
+            name: llamastack-config
       
       volumeMounts:
         - name: data
           mountPath: /data
+        - name: config
+          mountPath: /opt/app-root/run.yaml
+          subPath: run.yaml
+          readOnly: true

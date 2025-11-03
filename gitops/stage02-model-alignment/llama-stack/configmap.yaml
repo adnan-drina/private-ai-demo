@@ -26,20 +26,23 @@ data:
     providers:
       inference:
         # Quantized Mistral 24B from Stage 1 (1 GPU, cost-efficient)
-        # NOTE: URL is dynamically injected by deploy.sh using envsubst
+        # Using external HTTPS route as LlamaStack Operator blocks Istio sidecar injection
+        # Internal URL would require sidecar: http://mistral-24b-quantized-predictor.private-ai-demo.svc.cluster.local/v1
         - provider_id: mistral-24b-quantized
           provider_type: remote::vllm
           config:
-            url: "http://mistral-24b-quantized-predictor.private-ai-demo.svc.cluster.local/v1"
+            url: "https://mistral-24b-quantized-private-ai-demo.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com/v1"
             max_tokens: 4096
             api_token: fake
             tls_verify: false
         
         # Full Precision Mistral 24B from Stage 1 (4 GPUs, maximum quality)
+        # Using external HTTPS route as LlamaStack Operator blocks Istio sidecar injection  
+        # Internal URL would require sidecar: http://mistral-24b-predictor.private-ai-demo.svc.cluster.local/v1
         - provider_id: mistral-24b-full
           provider_type: remote::vllm
           config:
-            url: "http://mistral-24b-predictor.private-ai-demo.svc.cluster.local/v1"
+            url: "https://mistral-24b-private-ai-demo.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com/v1"
             max_tokens: 4096
             api_token: fake
             tls_verify: false
