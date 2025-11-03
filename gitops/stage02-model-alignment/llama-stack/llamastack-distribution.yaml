@@ -60,6 +60,8 @@ spec:
     # Pod-level configuration
     podOverrides:
       serviceAccountName: rag-workload-sa
+      imagePullSecrets:
+        - name: redhat-pull-secret
       
       volumes:
         - name: data

@@ -59,6 +59,33 @@ echo "   MinIO: $MINIO_ENDPOINT"
 echo "   KFP Bucket: $MINIO_KFP_BUCKET"
 echo ""
 
+# Step 0: Ensure Red Hat registry pull secret available in namespace
+echo "──────────────────────────────────────────────────────────────────"
+echo "Step 0: Ensure Red Hat registry pull secret in namespace ($PROJECT_NAME)"
+echo "──────────────────────────────────────────────────────────────────"
+echo ""
+
+if oc get secret pull-secret -n openshift-config >/dev/null 2>&1; then
+  echo "🔐 Copying cluster pull-secret to namespace as redhat-pull-secret"
+  DATA=$(oc get secret pull-secret -n openshift-config -o jsonpath='{.data\.\.dockerconfigjson}' || true)
+  if [ -n "$DATA" ]; then
+    TMP=$(mktemp)
+    echo "$DATA" | base64 -d > "$TMP"
+    oc create secret generic redhat-pull-secret \
+      -n "$PROJECT_NAME" \
+      --type=kubernetes.io/dockerconfigjson \
+      --from-file=.dockerconfigjson="$TMP" \
+      --dry-run=client -o yaml | oc apply -f -
+    rm -f "$TMP"
+    echo "✅ redhat-pull-secret ensured"
+  else
+    echo "⚠️  Could not read .dockerconfigjson from openshift-config/pull-secret"
+  fi
+else
+  echo "⚠️  Global pull-secret not found; ensure registry.redhat.io credentials are configured cluster-wide"
+fi
+
+
 # Step 1: Create MinIO bucket for KFP artifacts
 echo "──────────────────────────────────────────────────────────────────"
 echo "Step 1: Create MinIO bucket for KFP artifacts"
