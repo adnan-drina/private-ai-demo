@@ -12,8 +12,13 @@ data:
     version: '2'
     image_name: remote-vllm-mistral-rag
     
+    # Metadata store configuration - use writable /data volume
+    metadata_store:
+      type: sqlite
+      db_path: /data/dist_registry.db
+    
     # RAG-enabled APIs - Following OpenDataHub pattern
-    # + Evaluation API (Phase 2: TrustyAI Integration)
+    # Note: eval API disabled until TrustyAI provider is available
     apis:
       - inference
       - agents
@@ -21,7 +26,8 @@ data:
       - telemetry
       - tool_runtime
       - vector_io
-      - eval  # NEW: Enable evaluation API via TrustyAI provider
+      - files  # Required by rag-runtime tool_runtime provider
+      # - eval  # DISABLED: Provider not available in rh-dev distribution
     
     providers:
       inference:
@@ -60,7 +66,11 @@ data:
           provider_type: remote::milvus
           config:
             uri: "tcp://milvus-standalone.private-ai-demo.svc.cluster.local:19530"
+            token: ""  # Empty token for local Milvus without authentication
             collection_name: "rag_documents"
+            kvstore:
+              type: sqlite
+              db_path: /data/milvus_registry.db
       
       agents:
         # Inline agent provider for RAG
@@ -95,6 +105,13 @@ data:
         #     exporter_type: otlp
         #     endpoint: http://tempo-distributor.openshift-distributed-tracing.svc:4317
       
+      files:
+        # Inline files provider for RAG document storage
+        - provider_id: inline-files
+          provider_type: inline::files
+          config:
+            root_dir: /data/files
+      
       tool_runtime:
         # RAG runtime tool provider (required for agent RAG)
         - provider_id: rag-runtime
@@ -106,29 +123,29 @@ data:
           provider_type: remote::model-context-protocol
           config: {}
       
-      eval:
-        # TrustyAI LM-Eval provider for model quality assessment
-        # Phase 2: Llama Stack Integration
-        - provider_id: trustyai-lmeval
-          provider_type: remote::trustyai-lmeval
-          config:
-            url: "http://trustyai-lmeval-provider.private-ai-demo.svc:8080"
-            namespace: "private-ai-demo"
-            # Model configurations for evaluation
-            models:
-              - model_id: mistral-24b-quantized
-                endpoint: "http://mistral-24b-quantized-predictor.private-ai-demo.svc.cluster.local/v1/completions"
-                tokenizer: "RedHatAI/Mistral-Small-24B-Instruct-2501-quantized.w4a16"
-                num_concurrent: 2
-              - model_id: mistral-24b-full
-                endpoint: "http://mistral-24b-predictor.private-ai-demo.svc.cluster.local/v1/completions"
-                tokenizer: "mistralai/Mistral-Small-24B-Instruct-2501"
-                num_concurrent: 4
-            # Default evaluation settings
-            default_sample_limit: 100
-            default_batch_size: 1
-            allow_online: true
-            allow_code_execution: true
+      # eval:
+      #   # TrustyAI LM-Eval provider for model quality assessment
+      #   # Phase 2: Llama Stack Integration - DISABLED: Provider not available
+      #   - provider_id: trustyai-lmeval
+      #     provider_type: remote::trustyai-lmeval
+      #     config:
+      #       url: "http://trustyai-lmeval-provider.private-ai-demo.svc:8080"
+      #       namespace: "private-ai-demo"
+      #       # Model configurations for evaluation
+      #       models:
+      #         - model_id: mistral-24b-quantized
+      #           endpoint: "http://mistral-24b-quantized-predictor.private-ai-demo.svc.cluster.local/v1/completions"
+      #           tokenizer: "RedHatAI/Mistral-Small-24B-Instruct-2501-quantized.w4a16"
+      #           num_concurrent: 2
+      #         - model_id: mistral-24b-full
+      #           endpoint: "http://mistral-24b-predictor.private-ai-demo.svc.cluster.local/v1/completions"
+      #           tokenizer: "mistralai/Mistral-Small-24B-Instruct-2501"
+      #           num_concurrent: 4
+      #       # Default evaluation settings
+      #       default_sample_limit: 100
+      #       default_batch_size: 1
+      #       allow_online: true
+      #       allow_code_execution: true
     
     models:
       # Quantized model - cost-efficient (1 GPU)
