@@ -94,20 +94,31 @@ fi
 
 echo ""
 
-# Step 2: Create DSPA MinIO credentials secret
+# Step 2: Create MinIO credentials secrets
 echo "──────────────────────────────────────────────────────────────────"
-echo "Step 2: Create DSPA MinIO credentials secret"
+echo "Step 2: Create MinIO credentials secrets"
 echo "──────────────────────────────────────────────────────────────────"
 echo ""
 
-echo "🔐 Creating secret: dspa-minio-credentials in namespace $PROJECT_NAME"
+echo "🔐 Creating secret: dspa-minio-credentials (for KFP artifacts)"
 oc create secret generic dspa-minio-credentials \
     -n "${PROJECT_NAME}" \
     --from-literal=accesskey="${MINIO_ACCESS_KEY}" \
     --from-literal=secretkey="${MINIO_SECRET_KEY}" \
     --dry-run=client -o yaml | oc apply -f -
 
-echo "✅ Secret created"
+echo ""
+echo "🔐 Creating secret: llama-files-credentials (for LlamaStack Files API)"
+# Copy credentials from model-storage namespace (source of truth)
+ACCESS=$(oc -n model-storage get secret minio-credentials -o jsonpath='{.data.accesskey}' 2>/dev/null | base64 -d || echo "${MINIO_ACCESS_KEY}")
+SECRET=$(oc -n model-storage get secret minio-credentials -o jsonpath='{.data.secretkey}' 2>/dev/null | base64 -d || echo "${MINIO_SECRET_KEY}")
+
+oc -n "${PROJECT_NAME}" create secret generic llama-files-credentials \
+  --from-literal=accesskey="$ACCESS" \
+  --from-literal=secretkey="$SECRET" \
+  --dry-run=client -o yaml | oc apply -f -
+
+echo "✅ Secrets created"
 echo ""
 
 # Step 3: Configure SCC permissions for LlamaStack
