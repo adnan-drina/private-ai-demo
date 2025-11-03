@@ -71,12 +71,12 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: minio-credentials
-                  key: MINIO_ROOT_USER
+                  key: accesskey
             - name: MINIO_ROOT_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: minio-credentials
-                  key: MINIO_ROOT_PASSWORD
+                  key: secretkey
           volumeMounts:
             - name: model-storage
               mountPath: /mnt/models
