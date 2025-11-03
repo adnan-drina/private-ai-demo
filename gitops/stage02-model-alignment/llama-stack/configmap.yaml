@@ -21,12 +21,13 @@ data:
     # Note: eval API disabled until TrustyAI provider is available
     apis:
       - inference
-      - agents
+      - prompts  # Required by rh-dev distribution (core API)
+      # - agents  # TEMPORARILY DISABLED: Testing without agents first
       - safety
       - telemetry
       - tool_runtime
       - vector_io
-      # files - Disabled: No Files API provider available in rh-dev distribution yet  # Required by rag-runtime tool_runtime provider
+      - files
       # - eval  # DISABLED: Provider not available in rh-dev distribution
     
     providers:
@@ -72,28 +73,29 @@ data:
               type: sqlite
               db_path: /data/milvus_registry.db
       
-      # prompts:
-        # Prompts API not available in rh-dev distribution
-        # Causes KeyError when configured
-        # - provider_id: inline-prompts
-        #   provider_type: inline::prompts
-        #   config:
-        #     kvstore:
-        #       type: sqlite
-        #       db_path: /data/prompts_store.db
-      
-      agents:
-        # Inline agent provider for RAG
-        - provider_id: inline-agent
-          provider_type: inline::meta-reference
+      prompts:
+        # Prompts API is REQUIRED by rh-dev distribution (core API)
+        # Must provide with writable kvstore
+        - provider_id: inline-prompts
+          provider_type: inline::prompts
           config:
-            persistence_store:
+            kvstore:
               type: sqlite
-              namespace: null
-              db_path: /data/agents_store.db
-            responses_store:
-              type: sqlite
-              db_path: /data/responses_store.db
+              db_path: /data/prompts_store.db
+      
+      # agents:
+        # Agents API requires prompts API (not available in rh-dev)
+        # TEMPORARILY DISABLED
+        # - provider_id: inline-agent
+        #   provider_type: inline::meta-reference
+        #   config:
+        #     persistence_store:
+        #       type: sqlite
+        #       namespace: null
+        #       db_path: /data/agents_store.db
+        #     responses_store:
+        #       type: sqlite
+        #       db_path: /data/responses_store.db
       
       safety:
         # Inline safety provider (required by agents)
@@ -118,14 +120,21 @@ data:
         #     exporter_type: otlp
         #     endpoint: http://tempo-distributor.openshift-distributed-tracing.svc:4317
       
-      # files:
-        # Files API not available in rh-dev distribution
-        # No supported provider types (remote::s3-files, inline::files both fail)
-        # Will be enabled when Red Hat provides correct provider
-        # - provider_id: local-files
-        #   provider_type: inline::files
-        #   config:
-        #     root_dir: /data/files
+      files:
+        # S3/MinIO files provider for RAG document storage
+        # Reads credentials from process env (set in LlamaStackDistribution)
+        - provider_id: s3-files
+          provider_type: remote::s3-files
+          config:
+            endpoint_url: "http://minio.model-storage.svc:9000"
+            bucket: "llama-files"
+            region: "us-east-1"
+            tls_verify: false
+            s3_force_path_style: true
+            # Credentials read from environment variables
+            credentials:
+              access_key_id_from_env: "FILES_S3_ACCESS_KEY_ID"
+              secret_access_key_from_env: "FILES_S3_SECRET_ACCESS_KEY"
       
       tool_runtime:
         # Note: rag-runtime disabled (requires Files API not available in rh-dev distribution)
