@@ -22,6 +22,7 @@ spec:
   server:
     # Use dev image requested
     distribution:
+      name: custom
       image: "quay.io/redhat-et/llama:vllm-0.2.7"
     
     containerSpec:
