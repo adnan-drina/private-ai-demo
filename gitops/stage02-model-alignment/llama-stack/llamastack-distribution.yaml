@@ -20,9 +20,9 @@ spec:
   replicas: 1
   
   server:
-    # Use Quay dev image to unblock (no RH entitlement required)
+    # Use ODH Quay distribution that includes prompts/files providers
     distribution:
-      image: "quay.io/redhat-et/llama:vllm-0.2.7"
+      image: "quay.io/opendatahub/llama-stack:odh"
     
     containerSpec:
       name: llamastack
@@ -49,6 +49,28 @@ spec:
         # Milvus (gRPC)
         - name: MILVUS_URI
           value: "tcp://milvus-standalone.private-ai-demo.svc.cluster.local:19530"
+
+        # Files (MinIO) for Files API provider
+        - name: FILES_S3_ENDPOINT
+          value: "http://minio.model-storage.svc:9000"
+        - name: FILES_S3_BUCKET
+          value: "llama-files"
+        - name: FILES_S3_REGION
+          value: "us-east-1"
+        - name: FILES_S3_TLS_VERIFY
+          value: "false"
+        - name: FILES_S3_FORCE_PATH_STYLE
+          value: "true"
+        - name: FILES_S3_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: llama-files-credentials
+              key: accesskey
+        - name: FILES_S3_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: llama-files-credentials
+              key: secretkey
       
       resources:
         requests:
