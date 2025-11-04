@@ -44,12 +44,11 @@ data:
             api_token: fake
             tls_verify: false
         
-        # Embedding provider: Granite Embedding (OpenAI-compatible API)
-        - provider_id: granite-embedding
-          provider_type: remote::openai
-          config:
-            url: "http://granite-embedding.ai-infrastructure.svc.cluster.local/v1"
-            tls_verify: false
+        # Sentence Transformers for embeddings (inline, no external dependencies)
+        # Using inline provider to avoid litellm dependency issue
+        - provider_id: sentence-transformers
+          provider_type: inline::sentence-transformers
+          config: {}
       
       vector_io:
         # Milvus in private-ai-demo (dedicated for this demo)
@@ -139,7 +138,7 @@ data:
           embedding_dimension: 768
         model_id: ibm-granite/granite-embedding-125m-english
         model_type: embedding
-        provider_id: granite-embedding
+        provider_id: sentence-transformers
         provider_model_id: ibm-granite/granite-embedding-125m-english
     
     tool_groups:
