@@ -97,19 +97,39 @@ def process_with_docling(
     # Parse response
     result = response.json()
     
+    # Log response structure for debugging
+    print(f"Response keys: {list(result.keys())}")
+    
     # Extract markdown content from response
-    # The sync endpoint returns the result directly
+    # Try different response formats Docling might return
     if "markdown" in result:
+        # Format 1: Direct markdown field
         markdown_content = result["markdown"]
     elif "documents" in result and len(result["documents"]) > 0:
-        # Some versions return documents array
-        markdown_content = result["documents"][0].get("markdown", "")
+        # Format 2: Documents array with markdown
+        doc = result["documents"][0]
+        if isinstance(doc, dict) and "markdown" in doc:
+            markdown_content = doc["markdown"]
+        elif isinstance(doc, dict) and "md_content" in doc:
+            markdown_content = doc["md_content"]
+        else:
+            markdown_content = str(doc)
+    elif "document" in result:
+        # Format 3: Single document object with md_content
+        doc = result["document"]
+        if isinstance(doc, dict):
+            markdown_content = doc.get("md_content", doc.get("markdown", str(doc)))
+        else:
+            markdown_content = str(doc)
     elif "content" in result:
+        # Format 4: Direct content field
         markdown_content = result["content"]
     else:
-        # Fallback: try to get any text content
+        # Fallback: stringify result and warn
         markdown_content = str(result)
-        print(f"Warning: Unexpected response format: {list(result.keys())}")
+        print(f"WARNING: Unexpected response format, stringifying result!")
+        print(f"Response keys: {list(result.keys())}")
+        print(f"Sample: {str(result)[:500]}")
     
     # Write markdown output
     with open(output_markdown.path, "w") as f:
