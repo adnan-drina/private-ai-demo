@@ -20,7 +20,8 @@ spec:
   replicas: 1
   
   server:
-    # Use dev image requested
+    # Use Red Hat Emerging Technologies image (publicly available, working)
+    # This image supports all RAG APIs with inline::sentence-transformers
     distribution:
       image: "quay.io/redhat-et/llama:vllm-0.2.7"
     
