@@ -14,6 +14,7 @@ data:
     
     # RAG-enabled APIs - Following OpenDataHub pattern
     # Files API disabled: no provider available in quay.io/redhat-et/llama:vllm-0.2.7
+    # Note: Embeddings are provided through the inference API with sentence-transformers provider
     apis:
       - inference
       - agents
