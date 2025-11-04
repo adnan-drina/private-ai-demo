@@ -1,0 +1,17 @@
+---
+apiVersion: maistra.io/v1
+kind: ServiceMeshMember
+metadata:
+  name: default
+  namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/part-of: stage00-ai-platform
+    app.kubernetes.io/component: servicemesh
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  controlPlaneRef:
+    name: data-science-smcp
+    namespace: istio-system
+
+

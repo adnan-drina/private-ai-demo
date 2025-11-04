@@ -1,0 +1,22 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mistral-24b-pvc
+  namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/name: mistral-24b
+    app.kubernetes.io/component: model-storage
+    app.kubernetes.io/part-of: vllm-serving
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+    description: "Persistent storage for Mistral 24B full-precision model (48GB weights)"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 120Gi  # 48GB model + overhead for safety
+  storageClassName: gp3-csi
+
+

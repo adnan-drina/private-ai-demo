@@ -284,46 +284,27 @@ create_secrets() {
   if [ "$DRY_RUN" = true ]; then
     log_info "[DRY-RUN] Would create secret: s3-credentials-kserve"
   else
+    ACCESS="$(oc -n model-storage get secret minio-credentials -o jsonpath='{.data.accesskey}' 2>/dev/null | base64 -d || true)"
+    SECRET="$(oc -n model-storage get secret minio-credentials -o jsonpath='{.data.secretkey}' 2>/dev/null | base64 -d || true)"
+    if [ -z "$ACCESS" ] || [ -z "$SECRET" ]; then
+      ACCESS="$MINIO_ACCESS_KEY"; SECRET="$MINIO_SECRET_KEY"
+    fi
     oc create secret generic s3-credentials-kserve \
-      --from-literal=AWS_ACCESS_KEY_ID="$MINIO_ACCESS_KEY" \
-      --from-literal=AWS_SECRET_ACCESS_KEY="$MINIO_SECRET_KEY" \
+      --from-literal=AWS_ACCESS_KEY_ID="$ACCESS" \
+      --from-literal=AWS_SECRET_ACCESS_KEY="$SECRET" \
+      --from-literal=AWS_ENDPOINT_URL="http://minio.model-storage.svc:9000" \
+      --from-literal=AWS_DEFAULT_REGION="us-east-1" \
+      --from-literal=S3_ENDPOINT="minio.model-storage.svc:9000" \
+      --from-literal=S3_USE_HTTPS="0" \
       -n "$PROJECT_NAME" \
       --dry-run=client -o yaml | oc apply -f -
-    log_success "Secret created: s3-credentials-kserve"
+    log_success "Secret created: s3-credentials-kserve (with boto3-compatible env vars for MinIO)"
   fi
   
-  # Internal Registry Connection for OpenShift AI Dashboard
-  log_info "Creating internal registry connection..."
-  if [ "$DRY_RUN" = true ]; then
-    log_info "[DRY-RUN] Would create connection: internal-registry-private-ai"
-  else
-    # Get the dockerconfigjson from model-pipeline-sa service account
-    DOCKERCONFIG=$(oc get secret -n "$PROJECT_NAME" -l kubernetes.io/service-account.name=model-pipeline-sa -o jsonpath='{.items[0].data.\.dockerconfigjson}' 2>/dev/null)
-    
-    if [ -n "$DOCKERCONFIG" ]; then
-      oc create secret generic internal-registry-private-ai \
-        --from-literal=.dockerconfigjson="$(echo $DOCKERCONFIG | base64 -d)" \
-        --from-literal=OCI_HOST="image-registry.openshift-image-registry.svc:5000" \
-        --type=kubernetes.io/dockerconfigjson \
-        -n "$PROJECT_NAME" \
-        --dry-run=client -o yaml | \
-        oc label --local -f - \
-          opendatahub.io/dashboard=true \
-          app.kubernetes.io/name=registry-connection \
-          app.kubernetes.io/component=connection \
-          app.kubernetes.io/part-of=private-ai-demo \
-          --dry-run=client -o yaml | \
-        oc annotate --local -f - \
-          opendatahub.io/connection-type-ref=oci-v1 \
-          openshift.io/description="Internal OpenShift Registry for ModelCar Images" \
-          openshift.io/display-name=internal-registry-private-ai \
-          --dry-run=client -o yaml | \
-        oc apply -f -
-      log_success "Connection created: internal-registry-private-ai"
-    else
-      log_warning "model-pipeline-sa not found yet, connection will be created by GitOps"
-    fi
-  fi
+  # Internal Registry Connection - REMOVED
+  # NOTE: Pipelines now push directly to Quay.io, not internal registry
+  # ImageStreams are archived in gitops/stage01-model-serving/serving/archive/imagestreams/
+  # See docs/03-REFERENCE/secrets/connection-internal-registry.yaml for reference
   
   log_success "All secrets created successfully"
   log_warning "Remember: Secrets are NOT in Git (managed imperatively)"
@@ -372,6 +353,23 @@ trigger_argocd_sync() {
   fi
 
   log_info "Run manually: argocd login <server>; argocd app sync stage01-model-serving --prune"
+}
+
+wait_for_mesh_membership() {
+  if [ "$DRY_RUN" = true ]; then
+    return
+  fi
+  log_section "Waiting for Service Mesh Membership"
+  # Ensure ServiceMeshMember exists (managed by GitOps stage00)
+  for i in $(seq 1 30); do
+    if oc -n "$PROJECT_NAME" get servicemeshmember default >/dev/null 2>&1; then
+      log_success "ServiceMeshMember detected in namespace $PROJECT_NAME"
+      return
+    fi
+    log_info "ServiceMeshMember not found yet; waiting..."
+    sleep 5
+  done
+  log_warning "ServiceMeshMember not detected; Knative serverless ISVCs may be denied by mesh webhook"
 }
 
 wait_for_models() {
@@ -471,6 +469,9 @@ trigger_argocd_sync
 
 # Wait for model downloads (optional)
 wait_for_models
+
+# Wait for mesh membership to avoid Knative admission denial
+wait_for_mesh_membership
 
 # Display next steps
 display_next_steps

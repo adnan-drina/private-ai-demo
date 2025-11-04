@@ -1,0 +1,94 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mirror-full-model-to-pvc
+  namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/name: mistral-24b
+    app.kubernetes.io/component: model-storage
+    app.kubernetes.io/part-of: vllm-serving
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: mirror-full-model
+    spec:
+      restartPolicy: Never
+      serviceAccountName: default
+      containers:
+        - name: mc-mirror
+          image: quay.io/minio/mc:latest
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              echo "═══════════════════════════════════════════════════════════════════════════════"
+              echo "Starting model mirror from MinIO to PVC"
+              echo "═══════════════════════════════════════════════════════════════════════════════"
+              echo ""
+              
+              # Set MC home directory to writable location
+              export MC_CONFIG_DIR=/tmp/.mc
+              mkdir -p "$MC_CONFIG_DIR"
+              
+              echo "📦 Configuring MinIO alias..."
+              mc alias set minio-src \
+                http://minio.model-storage.svc:9000 \
+                ${MINIO_ROOT_USER} \
+                ${MINIO_ROOT_PASSWORD}
+              
+              echo ""
+              echo "📥 Mirroring model from MinIO to PVC..."
+              echo "Source: llm-models/Mistral-Small-24B-Instruct/full-fp16/"
+              echo "Target: /mnt/models/"
+              echo "Size: ~90GB (this will take 5-10 minutes)"
+              echo ""
+              
+              # Mirror with progress
+              mc mirror --overwrite --remove \
+                minio-src/llm-models/Mistral-Small-24B-Instruct/full-fp16/ \
+                /mnt/models/
+              
+              echo ""
+              echo "✅ Mirror complete!"
+              echo ""
+              echo "📊 Verification:"
+              ls -lh /mnt/models/
+              echo ""
+              du -sh /mnt/models/
+              echo ""
+              echo "═══════════════════════════════════════════════════════════════════════════════"
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: minio-credentials
+                  key: accesskey
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: minio-credentials
+                  key: secretkey
+          volumeMounts:
+            - name: model-storage
+              mountPath: /mnt/models
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+      volumes:
+        - name: model-storage
+          persistentVolumeClaim:
+            claimName: mistral-24b-pvc
+

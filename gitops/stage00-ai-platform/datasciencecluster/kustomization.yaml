@@ -12,4 +12,5 @@ resources:
 - servicemeshcontrolplane.yaml
 - datasciencecluster.yaml
 - istio-knative-gateways.yaml
+- servicemeshmember-private-ai-demo.yaml
 

@@ -53,7 +53,6 @@ spec:
       imagePullPolicy: IfNotPresent
       securityContext:
         privileged: true
-        runAsUser: 0
       
       env:
         - name: MODEL_NAME
@@ -220,11 +219,10 @@ spec:
         echo "✅ Containerfile and scripts created"
         echo ""
         
-        # Build runtime image (host user namespace to avoid uid_map writes)
-        echo "🏗️  Building runtime image (host userns)..."
+        # Build runtime image
+        echo "🏗️  Building runtime image..."
         buildah --root "${BUILDAH_STORAGE_ROOT}" bud \
-          --userns=host \
-          --isolation=chroot \
+          --isolation chroot \
           --format=oci \
           --build-arg BASE_IMAGE="${BASE_IMAGE}" \
           --build-arg VLLM_VERSION="${VLLM_VERSION}" \

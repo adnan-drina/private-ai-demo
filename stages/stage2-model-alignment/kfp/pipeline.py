@@ -266,7 +266,7 @@ def verify_ingestion(
 def docling_rag_pipeline(
     input_uri: str = "s3://llama-files/sample/rag-mini.pdf",
     docling_url: str = "http://docling.private-ai-demo.svc:8080",
-    embedding_url: str = "http://granite-embedding.ai-infrastructure.svc.cluster.local/v1",
+    embedding_url: str = "http://llamastack.private-ai-demo.svc:8321/v1",
     embedding_model: str = "ibm-granite/granite-embedding-125m-english",
     milvus_uri: str = "tcp://milvus-standalone.private-ai-demo.svc.cluster.local:19530",
     milvus_collection: str = "rag_documents",

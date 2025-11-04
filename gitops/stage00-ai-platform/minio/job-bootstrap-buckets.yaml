@@ -73,6 +73,13 @@ spec:
             echo "ℹ️  Bucket llm-models already exists"
           fi
           
+          # Bucket for LlamaStack Files API
+          if mc mb minio/llama-files --ignore-existing --insecure; then
+            echo "✅ Created bucket: llama-files"
+          else
+            echo "ℹ️  Bucket llama-files already exists"
+          fi
+          
           # Set bucket policies
           echo ""
           echo "🔐 Configuring bucket policies..."
@@ -111,6 +118,9 @@ spec:
           echo "🔄 Enabling versioning..."
           mc version enable minio/llm-models
           echo "✅ Versioning enabled for llm-models"
+          
+          mc version enable minio/llama-files
+          echo "✅ Versioning enabled for llama-files"
           
           # List buckets and verify
           echo ""

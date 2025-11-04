@@ -18,24 +18,32 @@ set -euo pipefail
 ##############################################################################
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-GITOPS_PATH="${SCRIPT_DIR}/../../gitops/stage02-model-alignment"
-ENV_FILE="${SCRIPT_DIR}/.env"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+GITOPS_PATH="${PROJECT_ROOT}/gitops/stage02-model-alignment"
+ENV_FILE="${PROJECT_ROOT}/.env"
 
 echo "════════════════════════════════════════════════════════════════"
 echo "  Stage 2: Model Alignment with RAG + KFP v2"
 echo "════════════════════════════════════════════════════════════════"
 echo ""
 
-# Load environment variables
+# Load environment variables from project root
 if [ ! -f "$ENV_FILE" ]; then
     echo "❌ ERROR: .env file not found at $ENV_FILE"
-    echo "   Create it from env.template:"
-    echo "   cp env.template .env"
-    echo "   Then edit .env with your MinIO credentials"
+    echo "   Please create .env at project root with:"
+    echo "     PROJECT_NAME=private-ai-demo"
+    echo "     MINIO_ENDPOINT=minio.model-storage.svc.cluster.local:9000"
+    echo "     MINIO_ACCESS_KEY=<from stage00>"
+    echo "     MINIO_SECRET_KEY=<from stage00>"
+    echo "     MINIO_KFP_BUCKET=kfp-artifacts"
+    echo ""
+    echo "   Get MinIO credentials from stage00:"
+    echo "   oc get secret minio-root-credentials -n model-storage -o jsonpath='{.data.accesskey}' | base64 -d"
+    echo "   oc get secret minio-root-credentials -n model-storage -o jsonpath='{.data.secretkey}' | base64 -d"
     exit 1
 fi
 
-echo "📄 Loading configuration from .env..."
+echo "📄 Loading configuration from .env (project root)..."
 # shellcheck source=/dev/null
 source "$ENV_FILE"
 
@@ -113,25 +121,62 @@ fi
 
 echo ""
 
-# Step 2: Create DSPA MinIO credentials secret
+# Step 2: Create MinIO credentials secrets
 echo "──────────────────────────────────────────────────────────────────"
-echo "Step 2: Create DSPA MinIO credentials secret"
+echo "Step 2: Create MinIO credentials secrets"
 echo "──────────────────────────────────────────────────────────────────"
 echo ""
 
-echo "🔐 Creating secret: dspa-minio-credentials in namespace $PROJECT_NAME"
+echo "🔐 Creating secret: dspa-minio-credentials (for KFP artifacts)"
 oc create secret generic dspa-minio-credentials \
     -n "${PROJECT_NAME}" \
     --from-literal=accesskey="${MINIO_ACCESS_KEY}" \
     --from-literal=secretkey="${MINIO_SECRET_KEY}" \
     --dry-run=client -o yaml | oc apply -f -
 
-echo "✅ Secret created"
+echo ""
+echo "🔐 Creating secret: llama-files-credentials (for LlamaStack Files API)"
+# Copy credentials from model-storage namespace (source of truth)
+ACCESS=$(oc -n model-storage get secret minio-credentials -o jsonpath='{.data.accesskey}' 2>/dev/null | base64 -d || echo "${MINIO_ACCESS_KEY}")
+SECRET=$(oc -n model-storage get secret minio-credentials -o jsonpath='{.data.secretkey}' 2>/dev/null | base64 -d || echo "${MINIO_SECRET_KEY}")
+
+oc -n "${PROJECT_NAME}" create secret generic llama-files-credentials \
+  --from-literal=accesskey="$ACCESS" \
+  --from-literal=secretkey="$SECRET" \
+  --dry-run=client -o yaml | oc apply -f -
+
+echo "✅ Secrets created"
 echo ""
 
-# Step 3: Deploy GitOps resources
+# Step 3: Configure SCC permissions for LlamaStack
 echo "──────────────────────────────────────────────────────────────────"
-echo "Step 3: Deploy GitOps resources"
+echo "Step 3: Configure SCC permissions for LlamaStack"
+echo "──────────────────────────────────────────────────────────────────"
+echo ""
+
+echo "🔐 Granting anyuid SCC to rag-workload-sa (required by LlamaStack Operator)..."
+echo "   Note: LlamaStack Operator sets fsGroup: 0 which requires anyuid SCC"
+oc adm policy add-scc-to-user anyuid -z rag-workload-sa -n "${PROJECT_NAME}" 2>&1 || echo "   Already granted"
+
+echo "✅ SCC configured"
+echo ""
+
+# Step 4: Enable Service Mesh sidecar injection
+echo "──────────────────────────────────────────────────────────────────"
+echo "Step 4: Enable Service Mesh sidecar injection"
+echo "──────────────────────────────────────────────────────────────────"
+echo ""
+
+echo "🌐 Enabling Istio sidecar injection for LlamaStack → vLLM connectivity..."
+echo "   Note: Required for LlamaStack to connect to Knative-based InferenceServices"
+oc label namespace "${PROJECT_NAME}" istio.io/rev=data-science-smcp --overwrite 2>&1 || echo "   Already labeled"
+
+echo "✅ Service Mesh injection enabled"
+echo ""
+
+# Step 5: Deploy GitOps resources
+echo "──────────────────────────────────────────────────────────────────"
+echo "Step 5: Deploy GitOps resources"
 echo "──────────────────────────────────────────────────────────────────"
 echo ""
 
@@ -142,28 +187,39 @@ echo ""
 echo "✅ Deployment complete!"
 echo ""
 
-# Step 4: Verification instructions
+# Step 6: Verification instructions
 echo "══════════════════════════════════════════════════════════════════"
-echo "📋 Next Steps"
+echo "📋 Verification & Next Steps"
 echo "══════════════════════════════════════════════════════════════════"
 echo ""
-echo "1. Verify DSPA is running:"
+echo "1. Verify Stage 2 components:"
+echo "   oc get llamastackdistribution llama-stack -n $PROJECT_NAME"
+echo "   oc get deployment docling milvus-standalone -n $PROJECT_NAME"
 echo "   oc get dspa -n $PROJECT_NAME"
-echo "   oc get pods -n $PROJECT_NAME -l app=ds-pipeline-dspa"
 echo ""
-echo "2. Check Data Science Pipelines API:"
-echo "   oc get route ds-pipeline-dspa -n $PROJECT_NAME"
+echo "2. Check LlamaStack has istio sidecar (2/2 containers):"
+echo "   oc get pods -l app=llama-stack -n $PROJECT_NAME"
+echo "   # Should show: llama-stack-xxx  2/2  Running"
+echo "   # (llamastack + istio-proxy containers)"
 echo ""
-echo "3. Compile the KFP pipeline:"
-echo "   cd ${SCRIPT_DIR}/kfp"
-echo "   ./compile.sh"
+echo "3. Verify LlamaStack can connect to vLLM:"
+echo "   oc logs -l app=llama-stack -c llamastack -n $PROJECT_NAME --tail=50"
+echo "   # Should show successful vLLM registration, no connection errors"
 echo ""
-echo "4. Access RHOAI Dashboard to register and run pipeline:"
-echo "   - Navigate to Data Science Pipelines"
-echo "   - Import: kfp/artifacts/docling-rag-pipeline.yaml"
-echo "   - Create experiment and run"
+echo "4. Access LlamaStack API:"
+echo "   oc get route llamastack -n $PROJECT_NAME"
 echo ""
-echo "5. Monitor deployment:"
+echo "5. Monitor Docling startup (takes ~10 minutes for first start):"
+echo "   oc get pods -l app=docling -n $PROJECT_NAME -w"
+echo ""
+echo "6. Run validation:"
 echo "   ./validate.sh"
+echo ""
+echo "══════════════════════════════════════════════════════════════════"
+echo "📚 Documentation"
+echo "══════════════════════════════════════════════════════════════════"
+echo ""
+echo "• LlamaStack status: ../../docs/02-STAGES/STAGE-2-LLAMASTACK-STATUS.md"
+echo "• RHOAI 2.25 docs: https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/2.25/html-single/working_with_llama_stack/index"
 echo ""
 echo "══════════════════════════════════════════════════════════════════"

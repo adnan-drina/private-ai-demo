@@ -16,7 +16,9 @@ commonAnnotations:
 resources:
   # Shared ServingRuntime (ONE for all models)
   - servingruntime-vllm-cuda.yaml
-  # InferenceServices (S3-backed via storage-initializer, no PVCs needed)
+  # PVC for full model (large models use PVC to avoid node ephemeral-storage pressure)
+  - pvc-mistral-24b.yaml
+  # InferenceServices (quantized uses S3, full uses PVC)
   - inferenceservice-mistral-24b.yaml
   - inferenceservice-mistral-24b-quantized.yaml
   # VirtualServices for timeout configuration (applied after InferenceServices)

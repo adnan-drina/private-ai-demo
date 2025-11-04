@@ -20,6 +20,6 @@ resources:
   - resource-quota.yaml
   - serviceaccount.yaml
   - role-model-registry-access.yaml
-  - connection-internal-registry.yaml
+  # connection-internal-registry.yaml - managed by deploy.sh (requires runtime SA token)
   - trusted-ca-configmap.yaml
 

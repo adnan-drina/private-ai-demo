@@ -4,50 +4,48 @@ metadata:
   generateName: test-mistral-quantized-v2-
   namespace: private-ai-demo
   labels:
-    model: mistral-24b-quantized
+    model: mistral-quantized
     pipeline: model-testing-v2
-    version: quant-w4a16
-  annotations:
-    argocd.argoproj.io/sync-wave: "5"
-    description: Test quantized Mistral model with TOP 24 property schema and friendly names
+    tekton.dev/pipeline: model-testing-v2
 spec:
   pipelineRef:
     name: model-testing-v2
+  
   params:
+    # InferenceService identification
     - name: inference_service_name
-      value: mistral-24b-quantized
+      value: "mistral-24b-quantized"
     - name: namespace
-      value: private-ai-demo
+      value: "private-ai-demo"
+    
+    # Model Registry metadata
     - name: model_name
-      value: Mistral-Small-24B-Instruct
+      value: "Mistral-Small-24B-Instruct"
     - name: version_name
-      value: quant-w4a16
+      value: "quantized-w4a16"
+    
+    # vLLM model name
     - name: vllm_model_name
-      value: mistral-24b-quantized
+      value: "mistral-24b-quantized"
+    
+    # Tokenizer (HuggingFace model ID for downloading tokenizer)
     - name: tokenizer_name
-      value: mistralai/Mistral-Small-Instruct-2409
+      value: "mistralai/Mistral-Small-Instruct-2409"
+    
+    # Evaluation parameters
     - name: eval_tasks
       value: "arc_easy,hellaswag"
     - name: eval_limit
       value: "100"
-    - name: guidellm_target
-      value: "http://mistral-24b-quantized-predictor.private-ai-demo.svc.cluster.local/v1"
-    - name: guidellm_max_requests
-      value: "50"
-    # Phase 1 Optimization: Comparable GuideLLM parameters (apple-to-apple)
-    - name: request_count
-      value: "150"      # Same for both models
-    - name: max_seconds
-      value: "240"      # Same timeout for both
+    
+    # GuideLLM benchmark parameters (Phase 1 Optimization)
     - name: prompt_tokens
       value: "512"      # Same input size for comparison
     - name: generated_tokens
       value: "512"      # Same output size for comparison
     - name: rates
-      value: "1 3 5"
-  timeouts:
-    pipeline: "3h"
-    tasks: "2h30m"
+      value: "1 3 5"    # Quantized: 1, 3, 5 rps
+  
   workspaces:
     - name: results
       volumeClaimTemplate:
@@ -56,6 +54,14 @@ spec:
             - ReadWriteOnce
           resources:
             requests:
-              storage: 10Gi
-          storageClassName: gp3-csi
+              storage: 2Gi
+  
+  taskRunTemplate:
+    podTemplate:
+      securityContext:
+        fsGroup: 1001130000  # Within namespace supplemental-groups range for affinity-assistant compatibility
+  
+  timeouts:
+    pipeline: "2h"
+    tasks: "1h30m"
 

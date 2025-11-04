@@ -26,7 +26,7 @@ metadata:
     sidecar.istio.io/inject: "true"
     sidecar.istio.io/rewriteAppHTTPProbers: "true"
     security.opendatahub.io/enable-auth: "true"
-    # S3 configuration (no protocol prefix - host:port only)
+    # S3 configuration per KServe: host:port + s3-usehttps controls scheme
     serving.kserve.io/s3-endpoint: "minio.model-storage.svc:9000"
     serving.kserve.io/s3-usehttps: "0"
     serving.kserve.io/s3-verifyssl: "0"
