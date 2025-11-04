@@ -110,44 +110,42 @@ else
 fi
 
 echo ""
-echo -e "${YELLOW}⏳ Checking if pipeline is uploaded...${NC}"
+echo -e "${YELLOW}⏳ Ensuring pipeline is uploaded...${NC}"
 echo ""
 
-# Get DSPA route and check for pipeline
-DSPA_ROUTE=$(oc get route ds-pipeline-dspa -n "$NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
-if [ -z "$DSPA_ROUTE" ]; then
-  echo -e "${RED}❌ ERROR: DSPA route not found${NC}"
+# Check if jq is available
+if ! command -v jq &> /dev/null; then
+  echo -e "${RED}❌ ERROR: jq is required for pipeline management${NC}"
+  echo "   Install jq: https://stedolan.github.io/jq/"
   exit 1
 fi
 
-# Use programmatic access to check for pipeline
-HOST="https://$DSPA_ROUTE"
-TOKEN=$(oc whoami -t)
-
-PIPELINES=$(curl -sk -H "Authorization: Bearer $TOKEN" "$HOST/apis/v2beta1/pipelines?page_size=100" 2>/dev/null || echo "{}")
-PIPELINE_ID=$(echo "$PIPELINES" | jq -r '.pipelines[]? | select(.display_name=="docling-rag-ingestion") | .pipeline_id' 2>/dev/null || echo "")
-
-if [ -z "$PIPELINE_ID" ]; then
-  echo -e "${RED}❌ ERROR: Pipeline 'docling-rag-ingestion' not found in DSPA${NC}"
-  echo ""
-  echo "You need to upload the pipeline first:"
-  echo ""
-  echo "  1. Open RHOAI Dashboard:"
-  echo "     https://rhods-dashboard-redhat-ods-applications.apps.$(oc get dns cluster -o jsonpath='{.spec.baseDomain}')"
-  echo ""
-  echo "  2. Navigate: Data Science Projects → $NAMESPACE → Pipelines"
-  echo ""
-  echo "  3. Upload pipeline:"
-  echo "     File: $PROJECT_ROOT/artifacts/docling-rag-pipeline.yaml"
-  echo "     Name: docling-rag-ingestion"
-  echo ""
-  echo "See detailed instructions:"
-  echo "  $PROJECT_ROOT/gitops/stage02-model-alignment/kfp/DEPLOY.md"
-  echo ""
+# Source KFP API helpers
+KFP_HELPERS="${SCRIPT_DIR}/kfp/kfp-api-helpers.sh"
+if [ ! -f "$KFP_HELPERS" ]; then
+  echo -e "${RED}❌ ERROR: KFP helpers not found: $KFP_HELPERS${NC}"
   exit 1
 fi
 
-echo -e "${GREEN}✅ Pipeline found (ID: $PIPELINE_ID)${NC}"
+# shellcheck source=/dev/null
+source "$KFP_HELPERS"
+
+# Ensure pipeline is imported (idempotent)
+PIPELINE_FILE="$PROJECT_ROOT/artifacts/docling-rag-pipeline.yaml"
+PIPELINE_NAME="docling-rag-pipeline"
+
+if [ ! -f "$PIPELINE_FILE" ]; then
+  echo -e "${RED}❌ ERROR: Pipeline file not found: $PIPELINE_FILE${NC}"
+  echo "   Run deployment first: cd stages/stage2-model-alignment && ./deploy.sh"
+  exit 1
+fi
+
+if ! ensure_pipeline_imported "$PIPELINE_FILE" "$PIPELINE_NAME"; then
+  echo -e "${RED}❌ ERROR: Failed to ensure pipeline is uploaded${NC}"
+  exit 1
+fi
+
+echo -e "${GREEN}✅ Pipeline ready (ID: $PIPELINE_ID, Version: $PIPELINE_VERSION_ID)${NC}"
 echo ""
 
 # Create the run
@@ -170,39 +168,40 @@ if [ -z "$MINIO_SECRET" ]; then
   exit 1
 fi
 
-# Create run request
+# Create run name
 RUN_NAME="rag-ingestion-$(date +%s)"
-RUN_REQUEST=$(cat <<EOF
-{
-  "display_name": "$RUN_NAME",
-  "description": "RAG ingestion for $DOCUMENT_URI",
-  "pipeline_id": "$PIPELINE_ID",
-  "runtime_config": {
-    "parameters": {
-      "input_uri": {"string_value": "$DOCUMENT_URI"},
-      "docling_url": {"string_value": "http://docling.$NAMESPACE.svc:8080"},
-      "embedding_url": {"string_value": "http://llamastack.$NAMESPACE.svc:8321/v1"},
-      "embedding_model": {"string_value": "ibm-granite/granite-embedding-125m-english"},
-      "milvus_uri": {"string_value": "tcp://milvus-standalone.$NAMESPACE.svc.cluster.local:19530"},
-      "milvus_collection": {"string_value": "rag_documents"},
-      "embedding_dimension": {"int_value": 768},
-      "chunk_size": {"int_value": 512},
-      "minio_endpoint": {"string_value": "minio.model-storage.svc:9000"},
-      "aws_access_key_id": {"string_value": "$MINIO_KEY"},
-      "aws_secret_access_key": {"string_value": "$MINIO_SECRET"},
-      "min_entities": {"int_value": 10}
-    }
-  }
-}
-EOF
-)
 
-# Submit the run
-RESPONSE=$(curl -sk -X POST \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d "$RUN_REQUEST" \
-  "$HOST/apis/v2beta1/runs" 2>/dev/null)
+# Build parameters JSON
+PARAMS_JSON=$(jq -n \
+  --arg input_uri "$DOCUMENT_URI" \
+  --arg docling_url "http://docling.$NAMESPACE.svc:8080" \
+  --arg embedding_url "http://llamastack.$NAMESPACE.svc:8321/v1" \
+  --arg embedding_model "ibm-granite/granite-embedding-125m-english" \
+  --arg milvus_uri "tcp://milvus-standalone.$NAMESPACE.svc.cluster.local:19530" \
+  --arg milvus_collection "rag_documents" \
+  --argjson embedding_dimension 768 \
+  --argjson chunk_size 512 \
+  --arg minio_endpoint "minio.model-storage.svc:9000" \
+  --arg minio_key "$MINIO_KEY" \
+  --arg minio_secret "$MINIO_SECRET" \
+  --argjson min_entities 10 \
+  '{
+    input_uri: {string_value: $input_uri},
+    docling_url: {string_value: $docling_url},
+    embedding_url: {string_value: $embedding_url},
+    embedding_model: {string_value: $embedding_model},
+    milvus_uri: {string_value: $milvus_uri},
+    milvus_collection: {string_value: $milvus_collection},
+    embedding_dimension: {int_value: $embedding_dimension},
+    chunk_size: {int_value: $chunk_size},
+    minio_endpoint: {string_value: $minio_endpoint},
+    aws_access_key_id: {string_value: $minio_key},
+    aws_secret_access_key: {string_value: $minio_secret},
+    min_entities: {int_value: $min_entities}
+  }')
+
+# Create the run using helper function
+RESPONSE=$(kfp_create_run "$RUN_NAME" "$PIPELINE_VERSION_ID" "$PARAMS_JSON")
 
 RUN_ID=$(echo "$RESPONSE" | jq -r '.run_id // empty' 2>/dev/null)
 
@@ -233,7 +232,7 @@ echo ""
 echo "Monitor via CLI:"
 echo "  # Get run status"
 echo "  curl -sk -H \"Authorization: Bearer \$(oc whoami -t)\" \\"
-echo "    \"$HOST/apis/v2beta1/runs/$RUN_ID\""
+echo "    \"$KFP_HOST/apis/v2beta1/runs/$RUN_ID\""
 echo ""
 echo "  # Watch pods"
 echo "  oc get pods -n $NAMESPACE -w | grep -E 'docling|rag'"

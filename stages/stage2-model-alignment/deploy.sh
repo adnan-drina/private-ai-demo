@@ -187,15 +187,17 @@ echo ""
 echo "✅ Deployment complete!"
 echo ""
 
-# Step 6: Compile KFP Pipeline
+# Step 6: Compile and Upload KFP Pipeline
 echo "──────────────────────────────────────────────────────────────────"
-echo "Step 6: Compile KFP v2 Pipeline"
+echo "Step 6: Compile and Upload KFP v2 Pipeline"
 echo "──────────────────────────────────────────────────────────────────"
 echo ""
 
 PIPELINE_SOURCE="${SCRIPT_DIR}/kfp/pipeline.py"
 PIPELINE_OUTPUT="${PROJECT_ROOT}/artifacts/docling-rag-pipeline.yaml"
+PIPELINE_NAME="docling-rag-pipeline"
 VENV_PATH="${PROJECT_ROOT}/.venv-kfp"
+KFP_HELPERS="${SCRIPT_DIR}/kfp/kfp-api-helpers.sh"
 
 if [ -f "$PIPELINE_SOURCE" ]; then
     echo "📦 Compiling RAG ingestion pipeline..."
@@ -219,6 +221,36 @@ if [ -f "$PIPELINE_SOURCE" ]; then
     if [ -f "$PIPELINE_OUTPUT" ]; then
         PIPELINE_SIZE=$(du -h "$PIPELINE_OUTPUT" | cut -f1)
         echo "✅ Pipeline compiled: $PIPELINE_OUTPUT ($PIPELINE_SIZE)"
+        
+        # Upload pipeline to DSPA (idempotent)
+        echo ""
+        echo "📤 Uploading pipeline to DSPA..."
+        
+        # Check if jq is available
+        if ! command -v jq &> /dev/null; then
+            echo "⚠️  jq not found. Skipping automatic upload."
+            echo "   Install jq: https://stedolan.github.io/jq/"
+            echo "   Or upload manually via RHOAI Dashboard"
+        else
+            # Source KFP API helpers
+            if [ -f "$KFP_HELPERS" ]; then
+                # shellcheck source=/dev/null
+                source "$KFP_HELPERS"
+                
+                # Ensure pipeline is imported
+                if ensure_pipeline_imported "$PIPELINE_OUTPUT" "$PIPELINE_NAME"; then
+                    echo ""
+                    echo "Pipeline is ready in DSPA!"
+                    echo "   Pipeline ID: $PIPELINE_ID"
+                    echo "   Version ID: $PIPELINE_VERSION_ID"
+                else
+                    echo "⚠️  Automatic upload failed. You can upload manually via dashboard."
+                fi
+            else
+                echo "⚠️  KFP helpers not found: $KFP_HELPERS"
+                echo "   Skipping automatic upload"
+            fi
+        fi
     else
         echo "⚠️  Pipeline compilation may have failed"
         echo "   Check: $PIPELINE_SOURCE"
@@ -255,17 +287,16 @@ echo ""
 echo "5. Monitor Docling startup (takes ~10 minutes for first start):"
 echo "   oc get pods -l app=docling -n $PROJECT_NAME -w"
 echo ""
-echo "6. Upload KFP Pipeline (ONE-TIME MANUAL STEP):"
-echo "   📖 See: ${PROJECT_ROOT}/gitops/stage02-model-alignment/kfp/DEPLOY.md"
-echo ""
-echo "   Quick steps:"
-echo "   a) Open RHOAI Dashboard:"
+echo "6. Pipeline Status:"
+if [ -n "${PIPELINE_ID:-}" ]; then
+echo "   ✅ Pipeline automatically uploaded to DSPA"
+echo "   📖 View in RHOAI Dashboard:"
 echo "      https://rhods-dashboard-redhat-ods-applications.apps.$(oc get dns cluster -o jsonpath='{.spec.baseDomain}' 2>/dev/null || echo '<cluster-domain>')"
-echo ""
-echo "   b) Navigate: Data Science Projects → $PROJECT_NAME → Pipelines"
-echo ""
-echo "   c) Upload: ${PROJECT_ROOT}/artifacts/docling-rag-pipeline.yaml"
-echo "      Name: docling-rag-ingestion"
+echo "      → Data Science Projects → $PROJECT_NAME → Pipelines"
+else
+echo "   ⚠️  Pipeline not uploaded (jq may be missing)"
+echo "   📖 Manual upload instructions: ${PROJECT_ROOT}/gitops/stage02-model-alignment/kfp/DEPLOY.md"
+fi
 echo ""
 echo "7. Run RAG ingestion pipeline:"
 echo "   ./run-rag-ingestion.sh"
