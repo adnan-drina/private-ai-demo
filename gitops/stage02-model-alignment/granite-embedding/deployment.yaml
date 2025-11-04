@@ -39,6 +39,13 @@ spec:
     metadata:
       labels:
         app: granite-embedding
+        app.kubernetes.io/name: granite-embedding
+        app.kubernetes.io/component: embedding
+        app.kubernetes.io/part-of: private-ai-demo
+        app.openshift.io/runtime: python
+      annotations:
+        app.openshift.io/vcs-uri: "https://github.com/adnan-drina/private-ai-demo"
+        app.openshift.io/vcs-ref: "feature/stage2-implementation"
     spec:
       serviceAccountName: default
       containers:

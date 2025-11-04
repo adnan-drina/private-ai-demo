@@ -18,8 +18,15 @@ spec:
     metadata:
       labels:
         app: llama-stack-playground
+        app.kubernetes.io/name: llama-stack-playground
+        app.kubernetes.io/component: rag-ui
+        app.kubernetes.io/part-of: private-ai-demo
+        app.openshift.io/runtime: python
       annotations:
         sidecar.istio.io/inject: "false"
+        app.openshift.io/connects-to: '[{"apiVersion":"v1","kind":"Service","name":"llamastack"}]'
+        app.openshift.io/vcs-uri: "https://github.com/adnan-drina/private-ai-demo"
+        app.openshift.io/vcs-ref: "feature/stage2-implementation"
     spec:
       containers:
         - name: playground
