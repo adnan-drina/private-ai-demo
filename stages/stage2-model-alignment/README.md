@@ -39,7 +39,7 @@ Stage 2 demonstrates how to enhance LLM responses with private enterprise data u
 
 ## Deployment
 
-Stage 2 follows the same deployment pattern as Stage 1:
+Stage 2 follows the same deployment pattern as Stage 1, with **fully automated pipeline management**:
 
 ### 1. Deploy Infrastructure
 
@@ -55,19 +55,9 @@ This script will:
 - Enable Service Mesh injection
 - Deploy all GitOps resources (DSPA, Milvus, LlamaStack, Docling)
 - Compile KFP v2 pipeline → `artifacts/docling-rag-pipeline.yaml`
+- **Automatically upload pipeline to DSPA** ✨ (requires `jq`)
 
-### 2. Upload KFP Pipeline (ONE-TIME)
-
-The pipeline is compiled automatically by `deploy.sh`, but must be uploaded once via the RHOAI dashboard:
-
-1. Open RHOAI Dashboard → Data Science Projects → `private-ai-demo` → **Pipelines**
-2. Click **"Upload pipeline"** or **"Import pipeline"**
-3. Upload: `artifacts/docling-rag-pipeline.yaml`
-4. Name: `docling-rag-ingestion`
-
-📖 **Detailed instructions:** `gitops/stage02-model-alignment/kfp/DEPLOY.md`
-
-### 3. Run RAG Ingestion Pipeline
+### 2. Run RAG Ingestion Pipeline
 
 ```bash
 # Run with default sample document
@@ -78,11 +68,17 @@ The pipeline is compiled automatically by `deploy.sh`, but must be uploaded once
 ```
 
 This script will:
-- Check prerequisites (DSPA ready, services running, pipeline uploaded)
+- Check prerequisites (DSPA ready, services running)
+- Ensure pipeline is uploaded (idempotent, automatic)
 - Create pipeline run via DSPA API with OAuth authentication
 - Provide monitoring instructions
 
-### 4. Validate Deployment
+> **Note:** `jq` is required for automated pipeline management. Install with:
+> - macOS: `brew install jq`
+> - RHEL/Fedora: `sudo dnf install jq`
+> - Ubuntu: `sudo apt install jq`
+
+### 3. Validate Deployment
 
 ```bash
 ./validate.sh
