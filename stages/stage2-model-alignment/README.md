@@ -18,10 +18,13 @@ Stage 2 demonstrates how to enhance LLM responses with private enterprise data u
   - Telemetry: OpenTelemetry + Prometheus
 
 ### Document Ingestion
-- **Tekton Pipelines** - Automated document processing
-  - `redhat-document-ingestion` - Red Hat product docs
-  - `eu-ai-act-ingestion` - EU AI Act regulations
-  - `acme-policies-ingestion` - ACME manufacturing policies
+- **Kubeflow Pipelines (KFP v2)** - Automated document processing
+  - `docling-rag-ingestion` - RAG document ingestion pipeline
+    - Download documents from MinIO
+    - Process with Docling
+    - Generate embeddings with LlamaStack/Granite
+    - Store in Milvus vector database
+    - Verify ingestion (≥10 entities)
 
 ### Demo Notebooks
 - **02-rag-demo-redhat.ipynb** - Query Red Hat documentation
@@ -36,11 +39,52 @@ Stage 2 demonstrates how to enhance LLM responses with private enterprise data u
 
 ## Deployment
 
-```bash
-# Deploy all Stage 2 components
-./deploy.sh
+Stage 2 follows the same deployment pattern as Stage 1:
 
-# Validate deployment
+### 1. Deploy Infrastructure
+
+```bash
+cd stages/stage2-model-alignment
+./deploy.sh
+```
+
+This script will:
+- Create MinIO bucket for KFP artifacts
+- Create secrets (MinIO, LlamaStack)
+- Configure SCC permissions
+- Enable Service Mesh injection
+- Deploy all GitOps resources (DSPA, Milvus, LlamaStack, Docling)
+- Compile KFP v2 pipeline → `artifacts/docling-rag-pipeline.yaml`
+
+### 2. Upload KFP Pipeline (ONE-TIME)
+
+The pipeline is compiled automatically by `deploy.sh`, but must be uploaded once via the RHOAI dashboard:
+
+1. Open RHOAI Dashboard → Data Science Projects → `private-ai-demo` → **Pipelines**
+2. Click **"Upload pipeline"** or **"Import pipeline"**
+3. Upload: `artifacts/docling-rag-pipeline.yaml`
+4. Name: `docling-rag-ingestion`
+
+📖 **Detailed instructions:** `gitops/stage02-model-alignment/kfp/DEPLOY.md`
+
+### 3. Run RAG Ingestion Pipeline
+
+```bash
+# Run with default sample document
+./run-rag-ingestion.sh
+
+# Run with custom document
+./run-rag-ingestion.sh s3://llama-files/docs/my-document.pdf
+```
+
+This script will:
+- Check prerequisites (DSPA ready, services running, pipeline uploaded)
+- Create pipeline run via DSPA API with OAuth authentication
+- Provide monitoring instructions
+
+### 4. Validate Deployment
+
+```bash
 ./validate.sh
 ```
 
@@ -53,15 +97,23 @@ Monitor deployment:
 oc get deployment milvus-standalone -n private-ai-demo
 
 # Check Llama Stack
-oc get llamastackdistribution -n private-ai-demo
-oc get deployment llama-stack -n private-ai-demo
+oc get llamastackdistribution llama-stack -n private-ai-demo
+oc get pods -l app=llama-stack -n private-ai-demo
 
-# Check Tekton pipelines
-tkn pipeline list -n private-ai-demo
+# Check Docling
+oc get deployment docling -n private-ai-demo
 
-# Monitor pipeline runs
-tkn pr list -n private-ai-demo
-tkn pr logs -f <pipelinerun-name> -n private-ai-demo
+# Check DSPA (Data Science Pipelines)
+oc get dspa dspa -n private-ai-demo
+
+# List uploaded pipelines (programmatically)
+./gitops/stage02-model-alignment/kfp/programmatic-access.sh
+
+# Monitor pipeline runs via RHOAI Dashboard
+# Or check run status via API:
+DSPA_ROUTE=$(oc get route ds-pipeline-dspa -n private-ai-demo -o jsonpath='{.spec.host}')
+curl -sk -H "Authorization: Bearer $(oc whoami -t)" \
+  "https://$DSPA_ROUTE/apis/v2beta1/runs" | jq '.runs[] | {name: .display_name, status: .state}'
 
 # Check ingested documents in Milvus
 oc exec -it deployment/milvus-standalone -n private-ai-demo -- \
@@ -70,11 +122,22 @@ oc exec -it deployment/milvus-standalone -n private-ai-demo -- \
 
 ## Document Ingestion
 
-The Tekton pipelines automatically:
-1. Read documents from PVC/ConfigMaps
+The KFP v2 pipeline (`docling-rag-ingestion`) automatically:
+1. Download documents from MinIO S3 storage (`s3://llama-files/`)
 2. Process and chunk documents using Docling
-3. Generate embeddings using Granite model
+3. Generate embeddings using LlamaStack/Granite model
 4. Store vectors in Milvus with metadata
+5. Verify ingestion (≥10 entities threshold)
+
+### Running the Pipeline
+
+```bash
+# Run with default sample document
+./run-rag-ingestion.sh
+
+# Run with custom document from MinIO
+./run-rag-ingestion.sh s3://llama-files/docs/my-document.pdf
+```
 
 ### Use Cases
 
@@ -152,15 +215,30 @@ curl -k https://${LLAMA_STACK_URL}/v1/chat/completions \
 - Adjust chunk size/overlap in pipeline parameters
 - Use more powerful embedding model
 
-## GitOps Structure
+## Project Structure
 
 ```
-gitops-new/stage02-model-alignment/
-├── milvus/            # Vector database
-├── llama-stack/       # Orchestrator + LlamaStackDistribution CR
-├── docling/           # Document processing
-├── pipelines/         # Tekton Tasks, Pipelines, PipelineRuns
-└── notebooks/         # RAG demo notebooks (3)
+stages/stage2-model-alignment/
+├── deploy.sh              # Main deployment script
+├── run-rag-ingestion.sh   # Run RAG pipeline
+├── validate.sh            # Validation script
+├── kfp/
+│   └── pipeline.py        # KFP v2 pipeline definition
+└── README.md             # This file
+
+gitops/stage02-model-alignment/
+├── milvus/               # Vector database deployment
+├── llama-stack/          # LlamaStack orchestrator + CR
+├── docling/              # Document processing service
+├── kfp/                  # KFP v2 (DSPA) configuration
+│   ├── dspa.yaml         # DataSciencePipelinesApplication
+│   ├── DEPLOY.md         # Pipeline deployment guide
+│   ├── programmatic-access.sh  # OAuth API examples
+│   └── example-run-config.json # Run template
+└── kustomization.yaml    # Kustomize root
+
+artifacts/
+└── docling-rag-pipeline.yaml  # Compiled KFP pipeline (not in git)
 ```
 
 ## Next Steps
