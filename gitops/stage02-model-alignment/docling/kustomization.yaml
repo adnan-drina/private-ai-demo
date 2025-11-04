@@ -8,44 +8,55 @@ metadata:
     config.kubernetes.io/local-config: "true"
 
 resources:
-  - deployment.yaml
+  - doclingserve.yaml
+  # - deployment.yaml  # OLD: Manual deployment (replaced by operator)
 
 # Docling Document Processing Service
 #
-# Aligned with RHOAI 2.25 Documentation:
-# https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/2.25/html-single/working_with_llama_stack/index
-# Section 3.10: Preparing documents with Docling for Llama Stack retrieval
+# Deployment Strategy: OPERATOR-BASED (Updated 2025-11-04)
+#   Using: docling-operator (https://github.com/docling-project/docling-operator)
+#   CR: DoclingServe (docling.github.io/v1alpha1)
 #
-# Deployment Strategy:
-#   Standard Kubernetes Deployment (not operator-based)
-#   Reason: docling-operator not available in OperatorHub
+# Why Operator vs Direct Deployment:
+#   ✅ Official docling-serve image with standard v1 API
+#   ✅ Pre-built images (no runtime pip install, no missing system libs)
+#   ✅ Native KFP integration for distributed conversion
+#   ✅ Standard API endpoints (/v1/convert/file/async)
+#   ✅ Production-ready and maintained by docling-project
 #
-# Architecture:
-#   - ServiceAccount: docling-sa
-#   - Deployment: docling (REST API wrapper around Docling Python library)
-#   - Service: docling (ClusterIP, port 8080)
-#   - Route: docling (HTTPS, edge termination)
+# Architecture (Managed by Operator):
+#   - DoclingServe CR → Operator creates:
+#     - Deployment: docling-serve (quay.io/docling-project/docling-serve)
+#     - Service: docling
+#     - Route: docling (if enabled)
+#     - KFP Jobs: distributed conversion via docling-jobkit
 #
 # Features:
-#   ✅ REST API for document conversion (PDF, DOCX, etc.)
+#   ✅ Standard v1 REST API for document conversion
+#   ✅ Async endpoint: POST /v1/convert/file/async (with polling)
+#   ✅ Sync endpoint: POST /v1/convert/file/sync
+#   ✅ KFP engine: distributed conversion for large documents
 #   ✅ Multiple export formats (Markdown, JSON, HTML)
-#   ✅ Integration with Llama Stack RAG workflows
-#   ✅ Compatible with KFP pipelines
-#   ✅ OpenShift native (Route, SecurityContext)
 #
 # Usage:
 #   - Internal: http://docling.private-ai-demo.svc:8080
 #   - External: https://docling-private-ai-demo.apps.<cluster-domain>
 #
-# API Endpoints:
-#   GET  /health           - Health check
-#   POST /convert?format=  - Convert document (format: markdown|json|html)
+# API Endpoints (v1):
+#   POST /v1/convert/file/async  - Submit conversion task (returns task_id)
+#   GET  /v1/result/{task_id}    - Poll for completion
+#   POST /v1/convert/file/sync   - Synchronous conversion
 #
-# Integration with LlamaStack:
-#   Set DOCLING_URL environment variable in LlamaStackDistribution:
-#   - name: DOCLING_URL
-#     value: "http://docling.private-ai-demo.svc:8080"
+# Integration with KFP Pipelines:
+#   Pipeline component uses /v1/convert/file/async with polling
+#   See: stages/stage2-model-alignment/kfp/pipeline.py
+#
+# Operator Installation:
+#   1. CRD: oc apply -f config/crd/bases/
+#   2. Operator: oc apply -k config/default
+#   3. CR: oc apply -f doclingserve.yaml
 #
 # Reference:
-#   - Docling project: https://github.com/docling-project/docling
-#   - RHOAI 2.25 Llama Stack: https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/2.25/html-single/working_with_llama_stack/index
+#   - Operator: https://github.com/docling-project/docling-operator
+#   - Docling: https://github.com/docling-project/docling
+#   - RHOAI 2.25: https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/2.25/html-single/working_with_llama_stack/index
