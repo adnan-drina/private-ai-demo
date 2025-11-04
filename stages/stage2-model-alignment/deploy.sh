@@ -187,7 +187,50 @@ echo ""
 echo "✅ Deployment complete!"
 echo ""
 
-# Step 6: Verification instructions
+# Step 6: Compile KFP Pipeline
+echo "──────────────────────────────────────────────────────────────────"
+echo "Step 6: Compile KFP v2 Pipeline"
+echo "──────────────────────────────────────────────────────────────────"
+echo ""
+
+PIPELINE_SOURCE="${SCRIPT_DIR}/kfp/pipeline.py"
+PIPELINE_OUTPUT="${PROJECT_ROOT}/artifacts/docling-rag-pipeline.yaml"
+VENV_PATH="${PROJECT_ROOT}/.venv-kfp"
+
+if [ -f "$PIPELINE_SOURCE" ]; then
+    echo "📦 Compiling RAG ingestion pipeline..."
+    
+    # Create/activate virtual environment
+    if [ ! -d "$VENV_PATH" ]; then
+        echo "   Creating Python virtual environment..."
+        python3 -m venv "$VENV_PATH"
+    fi
+    
+    echo "   Installing KFP SDK..."
+    "$VENV_PATH/bin/pip" install -q --upgrade pip
+    "$VENV_PATH/bin/pip" install -q kfp
+    
+    # Create artifacts directory
+    mkdir -p "${PROJECT_ROOT}/artifacts"
+    
+    echo "   Compiling pipeline..."
+    "$VENV_PATH/bin/python3" "$PIPELINE_SOURCE"
+    
+    if [ -f "$PIPELINE_OUTPUT" ]; then
+        PIPELINE_SIZE=$(du -h "$PIPELINE_OUTPUT" | cut -f1)
+        echo "✅ Pipeline compiled: $PIPELINE_OUTPUT ($PIPELINE_SIZE)"
+    else
+        echo "⚠️  Pipeline compilation may have failed"
+        echo "   Check: $PIPELINE_SOURCE"
+    fi
+else
+    echo "⚠️  Pipeline source not found: $PIPELINE_SOURCE"
+    echo "   Skipping pipeline compilation"
+fi
+
+echo ""
+
+# Step 7: Verification instructions
 echo "══════════════════════════════════════════════════════════════════"
 echo "📋 Verification & Next Steps"
 echo "══════════════════════════════════════════════════════════════════"
@@ -212,14 +255,32 @@ echo ""
 echo "5. Monitor Docling startup (takes ~10 minutes for first start):"
 echo "   oc get pods -l app=docling -n $PROJECT_NAME -w"
 echo ""
-echo "6. Run validation:"
+echo "6. Upload KFP Pipeline (ONE-TIME MANUAL STEP):"
+echo "   📖 See: ${PROJECT_ROOT}/gitops/stage02-model-alignment/kfp/DEPLOY.md"
+echo ""
+echo "   Quick steps:"
+echo "   a) Open RHOAI Dashboard:"
+echo "      https://rhods-dashboard-redhat-ods-applications.apps.$(oc get dns cluster -o jsonpath='{.spec.baseDomain}' 2>/dev/null || echo '<cluster-domain>')"
+echo ""
+echo "   b) Navigate: Data Science Projects → $PROJECT_NAME → Pipelines"
+echo ""
+echo "   c) Upload: ${PROJECT_ROOT}/artifacts/docling-rag-pipeline.yaml"
+echo "      Name: docling-rag-ingestion"
+echo ""
+echo "7. Run RAG ingestion pipeline:"
+echo "   ./run-rag-ingestion.sh"
+echo "   # Or with custom document:"
+echo "   ./run-rag-ingestion.sh s3://llama-files/docs/my-doc.pdf"
+echo ""
+echo "8. Run validation:"
 echo "   ./validate.sh"
 echo ""
 echo "══════════════════════════════════════════════════════════════════"
 echo "📚 Documentation"
 echo "══════════════════════════════════════════════════════════════════"
 echo ""
-echo "• LlamaStack status: ../../docs/02-STAGES/STAGE-2-LLAMASTACK-STATUS.md"
-echo "• RHOAI 2.25 docs: https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/2.25/html-single/working_with_llama_stack/index"
+echo "• KFP Pipeline Guide: ${PROJECT_ROOT}/gitops/stage02-model-alignment/kfp/DEPLOY.md"
+echo "• LlamaStack Status: ${PROJECT_ROOT}/docs/02-STAGES/STAGE-2-LLAMASTACK-STATUS.md"
+echo "• RHOAI 2.25 Docs: https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/2.25/html-single/working_with_llama_stack/index"
 echo ""
 echo "══════════════════════════════════════════════════════════════════"
