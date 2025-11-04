@@ -55,7 +55,7 @@ def download_from_s3(
     s3_client.download_file(bucket, key, output_path)
     
     file_size = os.path.getsize(output_path)
-    print(f"✅ Downloaded: {file_size} bytes → {output_path}")
+    print(f"[OK] Downloaded: {file_size} bytes to {output_path}")
 
 
 @dsl.component(
@@ -92,7 +92,7 @@ def process_with_docling(
     with open(output_markdown.path, "w") as f:
         f.write(markdown_content)
     
-    print(f"✅ Extracted {len(markdown_content)} characters of markdown")
+    print(f"[OK] Extracted {len(markdown_content)} characters of markdown")
 
 
 @dsl.component(
@@ -146,7 +146,7 @@ def generate_embeddings(
     with open(output_embeddings.path, "w") as f:
         json.dump(embeddings, f)
     
-    print(f"✅ Generated {len(embeddings)} embeddings")
+    print(f"[OK] Generated {len(embeddings)} embeddings")
 
 
 @dsl.component(
@@ -208,7 +208,7 @@ def store_in_milvus(
     collection.insert([texts, sources, chunk_ids, embeddings])
     collection.flush()
     
-    print(f"✅ Inserted {len(embeddings_data)} entities into {milvus_collection}")
+    print(f"[OK] Inserted {len(embeddings_data)} entities into {milvus_collection}")
     
     return {
         "collection": milvus_collection,
@@ -249,9 +249,9 @@ def verify_ingestion(
     success = num_entities >= min_entities
     
     if success:
-        print(f"✅ Verification PASSED: {num_entities} >= {min_entities}")
+        print(f"[OK] Verification PASSED: {num_entities} >= {min_entities}")
     else:
-        print(f"❌ Verification FAILED: {num_entities} < {min_entities}")
+        print(f"[FAIL] Verification FAILED: {num_entities} < {min_entities}")
     
     return {
         "success": success,
@@ -328,9 +328,13 @@ def docling_rag_pipeline(
 
 if __name__ == "__main__":
     # Compile pipeline
-    # Calculate path relative to project root (3 levels up from this script)
-    script_dir = Path(__file__).parent.resolve()
-    project_root = script_dir.parent.parent
+    # Calculate path relative to project root
+    # This script is at: stages/stage2-model-alignment/kfp/pipeline.py
+    # We need to go up 3 levels to reach project root
+    script_dir = Path(__file__).parent.resolve()  # .../kfp/
+    stage_dir = script_dir.parent  # .../stage2-model-alignment/
+    stages_dir = stage_dir.parent  # .../stages/
+    project_root = stages_dir.parent  # project root
     artifacts_dir = project_root / "artifacts"
     
     # Ensure artifacts directory exists
@@ -342,4 +346,4 @@ if __name__ == "__main__":
         pipeline_func=docling_rag_pipeline,
         package_path=str(output_path)
     )
-    print(f"✅ Pipeline compiled: {output_path}")
+    print(f"Pipeline compiled: {output_path}")
