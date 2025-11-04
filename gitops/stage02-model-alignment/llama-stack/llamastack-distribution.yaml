@@ -38,8 +38,7 @@ spec:
           value: "/opt/app-root/run.yaml"
         - name: LLAMA_STACK_HOME
           value: "/data/.llama"
-        - name: HF_HOME
-          value: "/data/hf_home"
+        # Note: HF_HOME is automatically set by the operator, don't override
 
         # vLLM endpoint (external HTTPS Route)
         - name: VLLM_URL
