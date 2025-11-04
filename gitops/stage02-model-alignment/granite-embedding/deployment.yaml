@@ -1,0 +1,140 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: granite-embedding
+  namespace: private-ai-demo
+  labels:
+    app: granite-embedding
+    app.kubernetes.io/name: granite-embedding
+    app.kubernetes.io/component: embeddings
+    app.kubernetes.io/part-of: private-ai-demo
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+      protocol: TCP
+  selector:
+    app: granite-embedding
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: granite-embedding
+  namespace: private-ai-demo
+  labels:
+    app: granite-embedding
+    app.kubernetes.io/name: granite-embedding
+    app.kubernetes.io/component: embeddings
+    app.kubernetes.io/part-of: private-ai-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: granite-embedding
+  template:
+    metadata:
+      labels:
+        app: granite-embedding
+    spec:
+      serviceAccountName: default
+      containers:
+        - name: embedding-server
+          image: registry.access.redhat.com/ubi9/python-311:latest
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              echo "Installing dependencies..."
+              pip install --quiet fastapi uvicorn sentence-transformers torch
+              
+              echo "Starting embedding server..."
+              python3 << 'PYEOF'
+              from fastapi import FastAPI, HTTPException
+              from sentence_transformers import SentenceTransformer
+              from typing import List, Union
+              import uvicorn
+              import logging
+
+              logging.basicConfig(level=logging.INFO)
+              logger = logging.getLogger(__name__)
+
+              app = FastAPI(title="Granite Embedding API", version="1.0.0")
+
+              # Load model at startup
+              MODEL_NAME = "ibm-granite/granite-embedding-125m-english"
+              logger.info(f"Loading model: {MODEL_NAME}")
+              model = SentenceTransformer(MODEL_NAME)
+              logger.info(f"Model loaded successfully")
+
+              @app.get("/health")
+              def health():
+                  return {"status": "healthy"}
+
+              from pydantic import BaseModel
+
+              class EmbeddingRequest(BaseModel):
+                  input: Union[str, List[str]]
+                  model: str = MODEL_NAME
+
+              @app.post("/v1/embeddings")
+              async def create_embeddings(request: EmbeddingRequest):
+                  """OpenAI-compatible embeddings endpoint"""
+                  try:
+                      # Normalize input to list
+                      texts = [request.input] if isinstance(request.input, str) else request.input
+                      
+                      logger.info(f"Generating embeddings for {len(texts)} text(s)")
+                      embeddings = model.encode(texts, show_progress_bar=False)
+                      
+                      # Return OpenAI-compatible format
+                      return {
+                          "object": "list",
+                          "data": [
+                              {
+                                  "object": "embedding",
+                                  "index": i,
+                                  "embedding": emb.tolist()
+                              }
+                              for i, emb in enumerate(embeddings)
+                          ],
+                          "model": request.model,
+                          "usage": {
+                              "prompt_tokens": sum(len(t.split()) for t in texts),
+                              "total_tokens": sum(len(t.split()) for t in texts)
+                          }
+                      }
+                  except Exception as e:
+                      logger.error(f"Error generating embeddings: {e}")
+                      raise HTTPException(status_code=500, detail=str(e))
+
+              if __name__ == "__main__":
+                  uvicorn.run(app, host="0.0.0.0", port=8080, log_level="info")
+              PYEOF
+          resources:
+            requests:
+              memory: "2Gi"
+              cpu: "500m"
+            limits:
+              memory: "4Gi"
+              cpu: "2"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 120
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 120
+            periodSeconds: 10
+
