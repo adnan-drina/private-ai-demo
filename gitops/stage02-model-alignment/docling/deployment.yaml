@@ -74,44 +74,64 @@ spec:
             #!/bin/bash
             set -euo pipefail
             
-            echo "Installing Docling..."
-            pip install --no-cache-dir docling
+            echo "Installing Docling (this takes 3-5 minutes)..."
+            pip install --upgrade pip setuptools wheel
+            pip install --prefer-binary docling fastapi uvicorn[standard] python-multipart
             
             echo "Starting Docling REST API wrapper..."
             python3 -c "
-            from fastapi import FastAPI, UploadFile, File
+            from fastapi import FastAPI, UploadFile, File, HTTPException
             from docling.document_converter import DocumentConverter
             import uvicorn
             import tempfile
             import os
+            import logging
+            
+            logging.basicConfig(level=logging.INFO)
+            logger = logging.getLogger(__name__)
             
             app = FastAPI(title='Docling Document Processor', version='1.0.0')
             
+            # Initialize converter at startup
+            logger.info('Initializing Docling converter...')
+            converter = DocumentConverter()
+            logger.info('Docling ready!')
+            
             @app.get('/health')
             def health():
-                return {'status': 'healthy'}
+                return {'status': 'healthy', 'service': 'docling'}
+            
+            @app.get('/ready')
+            def ready():
+                return {'status': 'ready', 'service': 'docling'}
             
             @app.post('/convert')
             async def convert_document(file: UploadFile = File(...), format: str = 'markdown'):
                 '''Convert document to specified format (markdown, json, html)'''
-                with tempfile.NamedTemporaryFile(delete=False) as tmp:
+                logger.info(f'Converting: {file.filename} to {format}')
+                
+                suffix = os.path.splitext(file.filename)[1]
+                with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
                     tmp.write(await file.read())
                     tmp_path = tmp.name
                 
                 try:
-                    converter = DocumentConverter()
                     result = converter.convert(tmp_path)
                     
                     if format == 'markdown':
-                        return {'content': result.document.export_to_markdown()}
+                        return {'format': 'markdown', 'filename': file.filename, 'content': result.document.export_to_markdown()}
                     elif format == 'json':
-                        return result.document.export_to_dict()
+                        return {'format': 'json', 'filename': file.filename, 'data': result.document.export_to_dict()}
                     elif format == 'html':
-                        return {'content': result.document.export_to_html()}
+                        return {'format': 'html', 'filename': file.filename, 'content': result.document.export_to_html()}
                     else:
-                        return {'error': f'Unsupported format: {format}'}
+                        raise HTTPException(status_code=400, detail=f'Unsupported format: {format}')
+                except Exception as e:
+                    logger.error(f'Error: {str(e)}')
+                    raise HTTPException(status_code=500, detail=str(e))
                 finally:
-                    os.unlink(tmp_path)
+                    if os.path.exists(tmp_path):
+                        os.unlink(tmp_path)
             
             if __name__ == '__main__':
                 uvicorn.run(app, host='0.0.0.0', port=8080, log_level='info')
@@ -140,18 +160,18 @@ spec:
           httpGet:
             path: /health
             port: 8080
-          initialDelaySeconds: 30
-          periodSeconds: 10
-          timeoutSeconds: 5
+          initialDelaySeconds: 360
+          periodSeconds: 30
+          timeoutSeconds: 10
           failureThreshold: 3
         
         readinessProbe:
           httpGet:
             path: /health
             port: 8080
-          initialDelaySeconds: 10
-          periodSeconds: 5
-          timeoutSeconds: 3
+          initialDelaySeconds: 300
+          periodSeconds: 10
+          timeoutSeconds: 5
           failureThreshold: 3
 
 ---
