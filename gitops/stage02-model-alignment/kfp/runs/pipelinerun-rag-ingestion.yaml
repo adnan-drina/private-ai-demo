@@ -1,0 +1,46 @@
+---
+apiVersion: custom.tekton.dev/v1beta1
+kind: PipelineRun
+metadata:
+  generateName: docling-rag-ingestion-
+  namespace: private-ai-demo
+  labels:
+    app: kfp
+    pipeline: docling-rag-ingestion
+    stage: "02"
+  annotations:
+    description: "RAG ingestion pipeline: Docling → Embeddings → Milvus"
+spec:
+  # Reference to the compiled KFP pipeline
+  # Note: In KFP v2, pipelines are typically uploaded via SDK or UI,
+  # but we can trigger runs programmatically once uploaded
+  pipelineSpec:
+    # This will be populated from the compiled YAML
+    # For now, we'll use a direct approach with parameters
+  params:
+    - name: input_uri
+      value: "s3://llama-files/sample/rag-mini.pdf"
+    - name: docling_url
+      value: "http://docling.private-ai-demo.svc:8080"
+    - name: embedding_url
+      value: "http://llamastack.private-ai-demo.svc:8321/v1"
+    - name: embedding_model
+      value: "ibm-granite/granite-embedding-125m-english"
+    - name: milvus_uri
+      value: "tcp://milvus-standalone.private-ai-demo.svc.cluster.local:19530"
+    - name: milvus_collection
+      value: "rag_documents"
+    - name: embedding_dimension
+      value: "768"
+    - name: chunk_size
+      value: "512"
+    - name: minio_endpoint
+      value: "minio.model-storage.svc:9000"
+    - name: aws_access_key_id
+      value: "admin"
+    - name: aws_secret_access_key
+      value: "OkgdHTwJijf2oWo8Qz9JV2AWobj1rqTF"
+    - name: min_entities
+      value: "10"
+  timeouts:
+    pipeline: "2h"
