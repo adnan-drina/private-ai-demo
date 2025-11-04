@@ -33,12 +33,15 @@ spec:
           image: quay.io/rh-aiservices-bu/llama-stack-playground:latest
           imagePullPolicy: IfNotPresent
           env:
-            # Point the UI to your LlamaStack instance (in-cluster Service)
+            # Python client reads LLAMA_STACK_BASE_URL (server-side)
+            - name: LLAMA_STACK_BASE_URL
+              value: "http://llama-stack-service.private-ai-demo.svc:8321"
+            # Keep LLAMA_STACK_URL for compatibility
             - name: LLAMA_STACK_URL
-              value: "http://llamastack.private-ai-demo.svc:8321"
-            # Some builds use NEXT_PUBLIC_ prefix; keep both for compatibility
+              value: "http://llama-stack-service.private-ai-demo.svc:8321"
+            # NEXT_PUBLIC_ prefix for browser-side calls (if UI makes direct calls)
             - name: NEXT_PUBLIC_LLAMA_STACK_URL
-              value: "http://llamastack.private-ai-demo.svc:8321"
+              value: "http://llama-stack-service.private-ai-demo.svc:8321"
           ports:
             - name: http
               containerPort: 8501
