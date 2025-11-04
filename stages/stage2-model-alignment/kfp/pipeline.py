@@ -67,10 +67,9 @@ def process_with_docling(
     docling_url: str,
     output_markdown: Output[Dataset]
 ):
-    """Process document with Docling to extract markdown"""
+    """Process document with Docling to extract markdown (synchronous)"""
     import requests
     import json
-    import time
     import os
     
     print(f"Processing document with Docling: {docling_url}")
@@ -80,63 +79,44 @@ def process_with_docling(
     if not filename.endswith('.pdf'):
         filename = 'document.pdf'
     
-    # Submit conversion task (async endpoint)
+    print(f"Converting document synchronously: {filename}")
+    
+    # Use synchronous endpoint for quick validation
     with open(input_file.path, "rb") as f:
         files = {"files": (filename, f, "application/pdf")}
         
-        print(f"Submitting to /v1/convert/file/async...")
+        print(f"Calling /v1/convert/file (sync)...")
         response = requests.post(
-            f"{docling_url}/v1/convert/file/async",
+            f"{docling_url}/v1/convert/file",
             files=files,
             params={"format": "markdown"},
-            timeout=30
+            timeout=300  # 5 minutes for sync conversion
         )
         response.raise_for_status()
     
+    # Parse response
     result = response.json()
-    task_id = result.get("task_id")
     
-    if not task_id:
-        raise ValueError(f"No task_id in response: {result}")
+    # Extract markdown content from response
+    # The sync endpoint returns the result directly
+    if "markdown" in result:
+        markdown_content = result["markdown"]
+    elif "documents" in result and len(result["documents"]) > 0:
+        # Some versions return documents array
+        markdown_content = result["documents"][0].get("markdown", "")
+    elif "content" in result:
+        markdown_content = result["content"]
+    else:
+        # Fallback: try to get any text content
+        markdown_content = str(result)
+        print(f"Warning: Unexpected response format: {list(result.keys())}")
     
-    print(f"Task ID: {task_id}")
+    # Write markdown output
+    with open(output_markdown.path, "w") as f:
+        f.write(markdown_content)
     
-    # Poll for completion
-    max_wait = 300  # 5 minutes
-    poll_interval = 2
-    elapsed = 0
-    
-    while elapsed < max_wait:
-        poll_response = requests.get(
-            f"{docling_url}/v1/result/{task_id}",
-            timeout=10
-        )
-        poll_response.raise_for_status()
-        
-        poll_result = poll_response.json()
-        status = poll_result.get("status", "")
-        
-        print(f"Status: {status} (elapsed: {elapsed}s)")
-        
-        if status == "success":
-            # Extract markdown content
-            markdown_content = poll_result.get("markdown", "")
-            
-            # Write markdown output
-            with open(output_markdown.path, "w") as f:
-                f.write(markdown_content)
-            
-            print(f"[OK] Extracted {len(markdown_content)} characters of markdown")
-            return
-        elif status == "failed":
-            error = poll_result.get("error", "Unknown error")
-            raise RuntimeError(f"Docling conversion failed: {error}")
-        
-        # Continue polling
-        time.sleep(poll_interval)
-        elapsed += poll_interval
-    
-    raise TimeoutError(f"Docling task {task_id} did not complete within {max_wait}s")
+    print(f"[OK] Extracted {len(markdown_content)} characters of markdown")
+    print(f"Preview: {markdown_content[:200]}...")
 
 
 @dsl.component(
