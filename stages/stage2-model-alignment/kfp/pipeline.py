@@ -6,6 +6,8 @@ Processes documents through Docling, generates embeddings, and stores in Milvus
 from kfp import dsl, compiler
 from kfp.dsl import Dataset, Output, Input
 import sys
+import os
+from pathlib import Path
 
 # Base container images
 BASE_PYTHON_IMAGE = "registry.access.redhat.com/ubi9/python-311:latest"
@@ -326,8 +328,18 @@ def docling_rag_pipeline(
 
 if __name__ == "__main__":
     # Compile pipeline
+    # Calculate path relative to project root (3 levels up from this script)
+    script_dir = Path(__file__).parent.resolve()
+    project_root = script_dir.parent.parent
+    artifacts_dir = project_root / "artifacts"
+    
+    # Ensure artifacts directory exists
+    artifacts_dir.mkdir(exist_ok=True)
+    
+    output_path = artifacts_dir / "docling-rag-pipeline.yaml"
+    
     compiler.Compiler().compile(
         pipeline_func=docling_rag_pipeline,
-        package_path="artifacts/docling-rag-pipeline.yaml"
+        package_path=str(output_path)
     )
-    print("✅ Pipeline compiled: artifacts/docling-rag-pipeline.yaml")
+    print(f"✅ Pipeline compiled: {output_path}")
