@@ -1,0 +1,93 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llama-stack-playground
+  namespace: private-ai-demo
+  labels:
+    app: llama-stack-playground
+    app.kubernetes.io/name: llama-stack-playground
+    app.kubernetes.io/component: ui
+    app.kubernetes.io/part-of: private-ai-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: llama-stack-playground
+  template:
+    metadata:
+      labels:
+        app: llama-stack-playground
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      containers:
+        - name: playground
+          image: quay.io/redhat-et/llama-stack-playground:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            # Point the UI to your LlamaStack instance (in-cluster Service)
+            - name: LLAMA_STACK_URL
+              value: "http://llamastack.private-ai-demo.svc:8321"
+            # Some builds use NEXT_PUBLIC_ prefix; keep both for compatibility
+            - name: NEXT_PUBLIC_LLAMA_STACK_URL
+              value: "http://llamastack.private-ai-demo.svc:8321"
+          ports:
+            - name: http
+              containerPort: 8080
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llama-stack-playground
+  namespace: private-ai-demo
+  labels:
+    app: llama-stack-playground
+    app.kubernetes.io/name: llama-stack-playground
+spec:
+  selector:
+    app: llama-stack-playground
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: llama-stack-playground
+  namespace: private-ai-demo
+  labels:
+    app: llama-stack-playground
+    app.kubernetes.io/name: llama-stack-playground
+spec:
+  to:
+    kind: Service
+    name: llama-stack-playground
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+
