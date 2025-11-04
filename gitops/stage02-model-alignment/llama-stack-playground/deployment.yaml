@@ -33,11 +33,11 @@ spec:
           image: quay.io/rh-aiservices-bu/llama-stack-playground:latest
           imagePullPolicy: IfNotPresent
           env:
-            # Python client reads LLAMA_STACK_BASE_URL (server-side)
-            - name: LLAMA_STACK_BASE_URL
+            # Primary: Python client reads LLAMA_STACK_ENDPOINT (verified in api.py)
+            - name: LLAMA_STACK_ENDPOINT
               value: "http://llama-stack-service.private-ai-demo.svc:8321"
-            # Keep LLAMA_STACK_URL for compatibility
-            - name: LLAMA_STACK_URL
+            # Keep LLAMA_STACK_BASE_URL for potential other clients
+            - name: LLAMA_STACK_BASE_URL
               value: "http://llama-stack-service.private-ai-demo.svc:8321"
             # NEXT_PUBLIC_ prefix for browser-side calls (if UI makes direct calls)
             - name: NEXT_PUBLIC_LLAMA_STACK_URL
