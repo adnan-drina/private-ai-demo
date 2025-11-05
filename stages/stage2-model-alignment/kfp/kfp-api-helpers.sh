@@ -1,157 +1,189 @@
 #!/bin/bash
-# KFP API Helpers - Idempotent pipeline upload and management
+# KFP API Helpers - Red Hat-aligned solution for DSPA
 # 
-# These functions provide programmatic access to KFP v2 (DSPA) API
-# using OAuth authentication, making pipeline management fully reproducible.
+# Uses v2beta1 APIs for pipeline/version management and v1beta1 for run creation
+# to bypass the parameter validation bug in v2beta1 runs API.
 #
-# Fixed to properly handle pipeline versions per Red Hat best practices:
-# - If pipeline doesn't exist: use pipelines/upload (creates pipeline + first version)
-# - If pipeline exists: use pipeline_versions/upload (creates new version)
-# - Always tie runs to pipeline_version_id
+# This approach is aligned with Red Hat guidance until the server-side
+# type validation bug is fixed in newer DSPA versions.
 
 # Common: resolve DSPA host + OAuth token
 get_kfp_host_and_token() {
   KFP_HOST="https://$(oc -n private-ai-demo get route ds-pipeline-dspa -o jsonpath='{.spec.host}')"
   KFP_TOKEN="$(oc whoami -t)"
+  KFP_BASE="$KFP_HOST/apis"
   : "${KFP_HOST:?missing DSPA route}"; : "${KFP_TOKEN:?oc auth missing}"
+  export KFP_HOST KFP_TOKEN KFP_BASE
 }
 
-# Check if a pipeline by name exists; echo pipeline_id or empty
-kfp_get_pipeline_id_by_name() {
+# Get or create experiment (v1beta1)
+ensure_experiment() {
+  local exp_name="${1:-rag-experiment}"
+  local exp_desc="${2:-RAG ingestion pipeline runs}"
+  
+  get_kfp_host_and_token
+  
+  # Try to create experiment
+  local response
+  response=$(curl -sk -H "Authorization: Bearer $KFP_TOKEN" \
+    -H "Content-Type: application/json" \
+    -X POST "$KFP_BASE/v1beta1/experiments" \
+    -d "{\"name\":\"$exp_name\",\"description\":\"$exp_desc\"}" 2>/dev/null)
+  
+  # If already exists, fetch it
+  if echo "$response" | grep -q "already exists"; then
+    response=$(curl -sk -H "Authorization: Bearer $KFP_TOKEN" \
+      "$KFP_BASE/v1beta1/experiments" 2>/dev/null)
+    EXPERIMENT_ID=$(echo "$response" | python3 -c "
+import json, sys
+try:
+    data = json.load(sys.stdin)
+    for exp in data.get('experiments', []):
+        if exp['name'] == '$exp_name':
+            print(exp['id'])
+            break
+except: pass
+" 2>/dev/null)
+  else
+    EXPERIMENT_ID=$(echo "$response" | jq -r '.id' 2>/dev/null)
+  fi
+  
+  export EXPERIMENT_ID
+  echo "$EXPERIMENT_ID"
+}
+
+# Create pipeline (v2beta1)
+create_pipeline() {
   local name="$1"
-  curl -sk -H "Authorization: Bearer $KFP_TOKEN" \
-    "$KFP_HOST/apis/v2beta1/pipelines?page_size=100" \
-    | jq -r --arg n "$name" '.pipelines[]? | select(.display_name==$n) | .pipeline_id' | head -1
-}
-
-# Upload a NEW pipeline (creates pipeline + first version)
-# Returns: pipeline_id pipeline_version_id
-kfp_upload_pipeline() {
-  local file="$1" name="$2"
+  
+  get_kfp_host_and_token
+  
   local response
   response=$(curl -sk -H "Authorization: Bearer $KFP_TOKEN" \
-    -F "uploadfile=@${file};filename=${name}.yaml;type=application/x-yaml" \
-    "$KFP_HOST/apis/v2beta1/pipelines/upload?name=$(printf %s "$name" | jq -s -R -r @uri)")
+    -H "Content-Type: application/json" \
+    -X POST "$KFP_BASE/v2beta1/pipelines" \
+    -d "{\"display_name\":\"$name\"}" 2>/dev/null)
   
-  local pid vid
-  pid=$(echo "$response" | jq -r '.pipeline_id // empty')
-  vid=$(echo "$response" | jq -r '.default_version.pipeline_version_id // empty')
-  
-  # If version ID not in response, query for it
-  if [ -n "$pid" ] && [ -z "$vid" ]; then
-    local versions_response
-    versions_response=$(curl -sk -H "Authorization: Bearer $KFP_TOKEN" \
-      "$KFP_HOST/apis/v2beta1/pipelines/$pid/versions")
-    vid=$(echo "$versions_response" | python3 -c "import json, sys; data=json.load(sys.stdin); print(data['pipeline_versions'][0]['pipeline_version_id'])" 2>/dev/null || echo "")
-  fi
-  
-  echo "$pid $vid"
+  echo "$response" | jq -r '.pipeline_id'
 }
 
-# Upload a new VERSION to an existing pipeline
-# Note: pipeline_versions/upload endpoint may not be available in all KFP versions
-# Returns: pipeline_version_id or error message
-kfp_upload_pipeline_version() {
+# Upload pipeline version (v2beta1)
+upload_pipeline_version() {
   local file="$1" pipeline_id="$2" version_name="$3"
-  local response
-  response=$(curl -sk -H "Authorization: Bearer $KFP_TOKEN" \
+  
+  get_kfp_host_and_token
+  
+  curl -sk -H "Authorization: Bearer $KFP_TOKEN" \
+    -X POST "$KFP_BASE/v2beta1/pipeline_versions/upload?pipeline_id=$pipeline_id&name=$version_name" \
     -F "uploadfile=@${file};filename=pipeline.yaml;type=application/x-yaml" \
-    "$KFP_HOST/apis/v2beta1/pipeline_versions/upload?pipeline_id=$pipeline_id&name=$(printf %s "$version_name" | jq -s -R -r @uri)")
+    2>/dev/null > /dev/null
   
-  # Check if response is valid JSON
-  if echo "$response" | jq -e . >/dev/null 2>&1; then
-    echo "$response" | jq -r '.pipeline_version_id // empty'
-  else
-    # Not JSON - likely "Not Found" or other error
-    echo ""
-  fi
+  # Query for version ID
+  sleep 2
+  local versions
+  versions=$(curl -sk -H "Authorization: Bearer $KFP_TOKEN" \
+    "$KFP_BASE/v2beta1/pipelines/$pipeline_id/versions" 2>/dev/null)
+  
+  echo "$versions" | python3 -c "
+import json, sys
+try:
+    data = json.load(sys.stdin)
+    print(data['pipeline_versions'][0]['pipeline_version_id'])
+except: pass
+" 2>/dev/null
 }
 
-# Ensure pipeline exists (create if missing); exports PIPELINE_ID, PIPELINE_VERSION_ID
-# If versioning is not supported, creates a new timestamped pipeline
-ensure_pipeline_imported() {
-  local file="${1:-artifacts/docling-rag-pipeline.yaml}" 
-  local name="${2:-docling-rag-pipeline}"
-  local version_name="${3:-$(date +%Y%m%d-%H%M%S)}"
-  
-  get_kfp_host_and_token
-  
-  local pid; pid="$(kfp_get_pipeline_id_by_name "$name" || true)"
-  
-  if [ -z "$pid" ]; then
-    # Pipeline doesn't exist - create it
-    read PIPELINE_ID PIPELINE_VERSION_ID < <(kfp_upload_pipeline "$file" "$name")
-    [ -n "$PIPELINE_ID" ] || { echo "❌ Upload failed"; return 1; }
-    echo "✅ Created pipeline '$name' (id=$PIPELINE_ID, version=$PIPELINE_VERSION_ID)"
-  else
-    # Pipeline exists - try to upload new version
-    PIPELINE_ID="$pid"
-    PIPELINE_VERSION_ID="$(kfp_upload_pipeline_version "$file" "$PIPELINE_ID" "$version_name")"
-    
-    if [ -z "$PIPELINE_VERSION_ID" ]; then
-      # Versioning not supported - create new timestamped pipeline
-      echo "⚠️  Versioning not supported, creating timestamped pipeline..."
-      local timestamped_name="${name}-${version_name}"
-      read PIPELINE_ID PIPELINE_VERSION_ID < <(kfp_upload_pipeline "$file" "$timestamped_name")
-      [ -n "$PIPELINE_ID" ] || { echo "❌ Upload failed"; return 1; }
-      echo "✅ Created pipeline '$timestamped_name' (id=$PIPELINE_ID, version=$PIPELINE_VERSION_ID)"
-    else
-      echo "✅ Uploaded version '$version_name' to pipeline '$name' (id=$PIPELINE_ID, version=$PIPELINE_VERSION_ID)"
-    fi
-  fi
-  
-  export PIPELINE_ID PIPELINE_VERSION_ID
-}
-
-# Create a pipeline run tied to a specific version
-# Converts simple parameter JSON to KFP v2 API format with type descriptors
-kfp_create_run() {
+# Create run (v1beta1) - Red Hat-aligned solution
+# All parameters must be strings!
+kfp_create_run_v1() {
   local run_name="$1"
-  local pipeline_version_id="$2"
-  local params_json="$3"
+  local experiment_id="$2"
+  local pipeline_id="$3"
+  local pipeline_version_id="$4"
+  local params_json="$5"
   
   get_kfp_host_and_token
   
-  [ -n "$pipeline_version_id" ] || { echo "❌ pipeline_version_id required"; return 1; }
+  # Convert simple params JSON to v1beta1 format (array of name/value pairs, all strings)
+  local params_array
+  params_array=$(echo "$params_json" | python3 -c "
+import json, sys
+params = json.load(sys.stdin)
+result = []
+for key, value in params.items():
+    result.append({'name': key, 'value': str(value)})
+print(json.dumps(result))
+")
   
-  # Convert params to KFP v2 format with type descriptors
-  # Strings get {string_value: "..."}, numbers get {int_value: N} or {double_value: N}
-  local formatted_params
-  formatted_params=$(echo "$params_json" | jq 'to_entries | map({
-    key: .key,
-    value: (
-      . as $entry |
-      if ($entry.value | type) == "string" then
-        {string_value: $entry.value}
-      elif ($entry.value | type) == "number" then
-        if ($entry.value | floor) == $entry.value then
-          {int_value: $entry.value}
-        else
-          {double_value: $entry.value}
-        end
-      else
-        {string_value: ($entry.value | tostring)}
-      end
-    )
-  }) | from_entries')
-  
+  # Build v1beta1 run request
   local run_request
   run_request=$(jq -n \
     --arg name "$run_name" \
-    --arg pvid "$pipeline_version_id" \
-    --argjson params "$formatted_params" \
+    --arg exp_id "$experiment_id" \
+    --arg pipe_id "$pipeline_id" \
+    --arg pipe_ver_id "$pipeline_version_id" \
+    --argjson params "$params_array" \
     '{
-      display_name: $name,
-      pipeline_version_reference: {
-        pipeline_version_id: $pvid
+      name: $name,
+      pipeline_spec: {
+        pipeline_id: $pipe_id,
+        pipeline_version_id: $pipe_ver_id
       },
-      runtime_config: {
-        parameters: $params
-      }
+      resource_references: [
+        { key: { type: "EXPERIMENT", id: $exp_id }, relationship: "OWNER" }
+      ],
+      parameters: $params
     }')
   
   curl -sk -H "Authorization: Bearer $KFP_TOKEN" \
     -H "Content-Type: application/json" \
-    -d "$run_request" \
-    "$KFP_HOST/apis/v2beta1/runs"
+    -X POST "$KFP_BASE/v1beta1/runs" \
+    -d "$run_request" 2>/dev/null
+}
+
+# High-level: ensure pipeline is uploaded and create a run
+# Exports: EXPERIMENT_ID, PIPELINE_ID, PIPELINE_VERSION_ID
+ensure_pipeline_and_create_run() {
+  local file="${1:-artifacts/docling-rag-pipeline-ascii.yaml}"
+  local pipeline_name="${2:-docling-rag-llamastack}"
+  local run_name="${3:-rag-run-$(date +%s)}"
+  local params_json="$4"
+  
+  get_kfp_host_and_token
+  
+  # 1. Ensure experiment
+  echo "1️⃣ Ensuring experiment..."
+  EXPERIMENT_ID=$(ensure_experiment)
+  echo "   ✅ Experiment ID: $EXPERIMENT_ID"
+  
+  # 2. Create pipeline with timestamp
+  echo "2️⃣ Creating pipeline..."
+  local timestamped_name="${pipeline_name}-$(date +%Y%m%d-%H%M%S)"
+  PIPELINE_ID=$(create_pipeline "$timestamped_name")
+  echo "   ✅ Pipeline ID: $PIPELINE_ID"
+  
+  # 3. Upload version
+  echo "3️⃣ Uploading pipeline version..."
+  local version_name="v$(date +%Y%m%d-%H%M%S)"
+  PIPELINE_VERSION_ID=$(upload_pipeline_version "$file" "$PIPELINE_ID" "$version_name")
+  echo "   ✅ Pipeline Version ID: $PIPELINE_VERSION_ID"
+  
+  # 4. Create run
+  echo "4️⃣ Creating run via v1beta1 API..."
+  local response
+  response=$(kfp_create_run_v1 "$run_name" "$EXPERIMENT_ID" "$PIPELINE_ID" "$PIPELINE_VERSION_ID" "$params_json")
+  
+  local run_id
+  run_id=$(echo "$response" | jq -r '.run.id' 2>/dev/null)
+  
+  if [ -n "$run_id" ] && [ "$run_id" != "null" ]; then
+    echo "   ✅ Run ID: $run_id"
+    export RUN_ID="$run_id"
+  else
+    echo "   ❌ Run creation failed"
+    echo "$response" | jq '.' 2>/dev/null || echo "$response"
+    return 1
+  fi
+  
+  export EXPERIMENT_ID PIPELINE_ID PIPELINE_VERSION_ID RUN_ID
 }
