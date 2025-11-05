@@ -522,11 +522,15 @@ def verify_ingestion(
     if success:
         print(f"[OK] Verification PASSED")
         
-        # Print sample chunk
+        # Print sample chunk with score (improved verification per recommendations)
         if result.get("chunks"):
-            sample_chunk = result["chunks"][0]
-            print(f"Sample retrieved chunk (first 100 chars):")
-            print(f"  {sample_chunk[:100]}...")
+            sample = result["chunks"][0]
+            # Extract content from chunk (LlamaStack returns content + metadata + score)
+            content = sample.get("content", sample.get("text", str(sample)))
+            score = sample.get("score", "N/A")
+            
+            print(f"Sample retrieved chunk (top result, score={score}):")
+            print(f"  {content[:200]}...")
     else:
         print(f"[FAIL] Verification FAILED")
     
