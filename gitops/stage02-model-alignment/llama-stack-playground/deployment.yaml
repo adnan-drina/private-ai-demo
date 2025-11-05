@@ -33,15 +33,19 @@ spec:
           image: quay.io/rh-aiservices-bu/llama-stack-playground:latest
           imagePullPolicy: IfNotPresent
           env:
-            # Primary: Python client reads LLAMA_STACK_ENDPOINT (verified in api.py)
-            - name: LLAMA_STACK_ENDPOINT
-              value: "http://llama-stack-service.private-ai-demo.svc:8321"
-            # Keep LLAMA_STACK_BASE_URL for potential other clients
+            # Server-side Python client environment variables
             - name: LLAMA_STACK_BASE_URL
               value: "http://llama-stack-service.private-ai-demo.svc:8321"
-            # NEXT_PUBLIC_ prefix for browser-side calls (if UI makes direct calls)
-            - name: NEXT_PUBLIC_LLAMA_STACK_URL
+            - name: LLAMA_STACK_URL
               value: "http://llama-stack-service.private-ai-demo.svc:8321"
+            - name: LLAMA_STACK_ENDPOINT
+              value: "http://llama-stack-service.private-ai-demo.svc:8321"
+            # Browser-side calls use external HTTPS Route
+            - name: NEXT_PUBLIC_LLAMA_STACK_URL
+              value: "https://llamastack-private-ai-demo.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com"
+            # Default vector DB for RAG queries
+            - name: RAG_DEFAULT_VECTOR_DB_ID
+              value: "acme_corporate"
           ports:
             - name: http
               containerPort: 8501
