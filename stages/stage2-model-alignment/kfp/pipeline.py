@@ -244,9 +244,71 @@ def generate_embeddings(
     with open(markdown_file.path, "r") as f:
         content = f.read()
     
-    # Simple chunking by paragraphs
-    chunks = [c.strip() for c in content.split("\n\n") if c.strip() and len(c.strip()) > 20]
-    print(f"Created {len(chunks)} chunks")
+    # Smart chunking with size limit (Milvus dynamic field limit is 65536 chars)
+    # Use chunk_size parameter but enforce Milvus limit
+    MAX_CHUNK_SIZE = 60000  # Leave buffer for Milvus limit
+    effective_chunk_size = min(chunk_size, MAX_CHUNK_SIZE)
+    
+    print(f"Chunking with max size: {effective_chunk_size} chars")
+    
+    # Split by paragraphs first
+    paragraphs = [p.strip() for p in content.split("\n\n") if p.strip()]
+    
+    # Combine paragraphs into chunks respecting size limit
+    chunks = []
+    current_chunk = []
+    current_length = 0
+    
+    for para in paragraphs:
+        para_len = len(para)
+        
+        # If single paragraph exceeds limit, split it
+        if para_len > effective_chunk_size:
+            # Add current chunk if any
+            if current_chunk:
+                chunks.append("\n\n".join(current_chunk))
+                current_chunk = []
+                current_length = 0
+            
+            # Split large paragraph by sentences
+            sentences = para.split(". ")
+            temp_chunk = []
+            temp_len = 0
+            
+            for sent in sentences:
+                sent_len = len(sent) + 2  # +2 for ". "
+                if temp_len + sent_len > effective_chunk_size:
+                    if temp_chunk:
+                        chunks.append(". ".join(temp_chunk) + ".")
+                    temp_chunk = [sent]
+                    temp_len = sent_len
+                else:
+                    temp_chunk.append(sent)
+                    temp_len += sent_len
+            
+            if temp_chunk:
+                chunks.append(". ".join(temp_chunk) + ".")
+        
+        # Normal paragraph fits or can be added
+        elif current_length + para_len + 2 > effective_chunk_size:
+            # Current chunk is full, start new one
+            if current_chunk:
+                chunks.append("\n\n".join(current_chunk))
+            current_chunk = [para]
+            current_length = para_len
+        else:
+            # Add to current chunk
+            current_chunk.append(para)
+            current_length += para_len + 2  # +2 for \n\n
+    
+    # Add final chunk
+    if current_chunk:
+        chunks.append("\n\n".join(current_chunk))
+    
+    # Filter out very short chunks
+    chunks = [c for c in chunks if len(c) > 50]
+    
+    print(f"Created {len(chunks)} chunks (max length: {max(len(c) for c in chunks)} chars)")
     
     # Generate embeddings (with retry logic for transient failures)
     embeddings = []
@@ -349,7 +411,7 @@ def insert_via_llamastack(
             "chunks": llamastack_chunks
         },
         headers={"Content-Type": "application/json"},
-        timeout=300  # 5 minutes for large batches
+        timeout=600  # 10 minutes for large batches
     )
     
     # Check response
