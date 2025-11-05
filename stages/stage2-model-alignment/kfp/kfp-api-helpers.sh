@@ -142,7 +142,9 @@ kfp_create_run() {
     --argjson params "$formatted_params" \
     '{
       display_name: $name,
-      pipeline_version_id: $pvid,
+      pipeline_version_reference: {
+        pipeline_version_id: $pvid
+      },
       runtime_config: {
         parameters: $params
       }
