@@ -2,13 +2,15 @@
 #
 # Compile Pipeline and Run Three Validation Pipelines
 #
-# Uses base64-encoded credentials parameter (works within KFP v2 limitations)
+# Fixes:
+# 1. Creates proper pipeline version (so runs show version in dashboard)
+# 2. Uses base64-encoded credentials (works within KFP v2 limitations)
 #
 
 set -e
 
 echo "════════════════════════════════════════════════════════════════════════════════"
-echo "🔧 COMPILING & RUNNING RAG PIPELINES"
+echo "🔧 COMPILING & RUNNING RAG PIPELINES (WITH PIPELINE VERSION)"
 echo "════════════════════════════════════════════════════════════════════════════════"
 echo ""
 
@@ -35,10 +37,10 @@ echo "Credentials: $MINIO_KEY / ${MINIO_SECRET:0:10}..."
 echo "Base64 param: ${CREDS_B64:0:20}..."
 echo ""
 
-echo "Step 3: Upload pipeline and create 3 runs..."
+echo "Step 3: Upload pipeline with version and create 3 runs..."
 
-# Create Python script for upload and run
-cat > /tmp/run-pipelines.py <<PYTHON_EOF
+# Create Python script for proper version handling
+cat > /tmp/run-pipelines-with-version.py <<PYTHON_EOF
 #!/usr/bin/env python3
 import subprocess
 import sys
@@ -69,24 +71,43 @@ client = kfp.Client(host=f"https://{host}", existing_token=token)
 print("✅ Connected to KFP")
 print("")
 
-# Upload pipeline
+# Upload pipeline and create version
 pipeline_file = "../../artifacts/docling-rag-pipeline.yaml"
 timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
 pipeline_name = f"docling-rag-b64creds-{timestamp}"
 
 print(f"Uploading pipeline: {pipeline_name}")
 try:
+    # Upload creates both pipeline and first version
     pipeline = client.upload_pipeline(
         pipeline_package_path=pipeline_file,
         pipeline_name=pipeline_name
     )
-    print(f"✅ Pipeline uploaded: {pipeline.pipeline_id}")
+    pipeline_id = pipeline.pipeline_id
+    print(f"✅ Pipeline uploaded: {pipeline_id}")
     print("")
 except Exception as e:
     print(f"❌ Upload failed: {e}")
     sys.exit(1)
 
-# Create 3 runs
+# Get the pipeline version that was just created
+print("Getting pipeline version...")
+try:
+    versions = client.list_pipeline_versions(pipeline_id, page_size=1)
+    if versions.pipeline_versions:
+        version_id = versions.pipeline_versions[0].pipeline_version_id
+        version_name = versions.pipeline_versions[0].display_name
+        print(f"✅ Pipeline version: {version_name} ({version_id})")
+    else:
+        print("⚠️  No version found, will create run without version")
+        version_id = None
+except Exception as e:
+    print(f"⚠️  Could not get version: {e}")
+    version_id = None
+
+print("")
+
+# Create 3 runs with proper version reference
 params = {
     "input_uri": "s3://llama-files/sample/rag-mini.pdf",
     "docling_url": f"http://docling-service.{namespace}.svc:5001",
@@ -115,14 +136,28 @@ for i in range(1, 4):
     print(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     
     try:
-        run = client.create_run_from_pipeline_package(
-            pipeline_file=pipeline_file,
-            arguments=params,
-            run_name=run_name,
-            experiment_name=experiment_name
-        )
-        run_ids.append(run.run_id)
-        print(f"✅ Run {i} created: {run.run_id}")
+        if version_id:
+            # Create run with version reference (proper way)
+            run = client.run_pipeline(
+                experiment_id=None,
+                job_name=run_name,
+                pipeline_id=pipeline_id,
+                version_id=version_id,
+                params=params
+            )
+            run_id = run.id if hasattr(run, 'id') else run.run_id
+        else:
+            # Fallback: create from package
+            run = client.create_run_from_pipeline_package(
+                pipeline_file=pipeline_file,
+                arguments=params,
+                run_name=run_name,
+                experiment_name=experiment_name
+            )
+            run_id = run.run_id
+        
+        run_ids.append(run_id)
+        print(f"✅ Run {i} created: {run_id}")
         print("")
     except Exception as e:
         print(f"❌ Run {i} failed: {e}")
@@ -130,7 +165,7 @@ for i in range(1, 4):
 
 if run_ids:
     print("════════════════════════════════════════════════════════════════════════════════")
-    print("✅ ALL RUNS CREATED")
+    print("✅ ALL RUNS CREATED WITH PIPELINE VERSION")
     print("════════════════════════════════════════════════════════════════════════════════")
     print("")
     print(f"Monitor at: https://{host}")
@@ -139,17 +174,19 @@ if run_ids:
     for i, run_id in enumerate(run_ids, 1):
         print(f"  {i}. {run_id}")
     print("")
+    print("Pipeline Version: {}")
+    print("")
 else:
     print("❌ No runs created")
     sys.exit(1)
 PYTHON_EOF
 
-python3 /tmp/run-pipelines.py
-rm /tmp/run-pipelines.py
+python3 /tmp/run-pipelines-with-version.py
+rm /tmp/run-pipelines-with-version.py
 
 echo ""
 echo "════════════════════════════════════════════════════════════════════════════════"
-echo "✅ PIPELINES RUNNING"
+echo "✅ PIPELINES RUNNING (WITH VERSION TRACKING)"
 echo "════════════════════════════════════════════════════════════════════════════════"
 echo ""
 
