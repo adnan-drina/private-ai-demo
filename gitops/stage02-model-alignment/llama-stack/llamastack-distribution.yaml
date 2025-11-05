@@ -23,7 +23,7 @@ spec:
     # Use Red Hat Emerging Technologies image (publicly available, working)
     # This image supports all RAG APIs with inline::sentence-transformers
     distribution:
-      image: "quay.io/redhat-et/llama:vllm-0.2.7"
+      image: "quay.io/redhat-et/llama:vllm-milvus-0.2.8"
     
     containerSpec:
       name: llamastack
