@@ -37,11 +37,20 @@ kfp_upload_pipeline() {
   pid=$(echo "$response" | jq -r '.pipeline_id // empty')
   vid=$(echo "$response" | jq -r '.default_version.pipeline_version_id // empty')
   
+  # If version ID not in response, query for it
+  if [ -n "$pid" ] && [ -z "$vid" ]; then
+    local versions_response
+    versions_response=$(curl -sk -H "Authorization: Bearer $KFP_TOKEN" \
+      "$KFP_HOST/apis/v2beta1/pipelines/$pid/versions")
+    vid=$(echo "$versions_response" | python3 -c "import json, sys; data=json.load(sys.stdin); print(data['pipeline_versions'][0]['pipeline_version_id'])" 2>/dev/null || echo "")
+  fi
+  
   echo "$pid $vid"
 }
 
 # Upload a new VERSION to an existing pipeline
-# Returns: pipeline_version_id
+# Note: pipeline_versions/upload endpoint may not be available in all KFP versions
+# Returns: pipeline_version_id or error message
 kfp_upload_pipeline_version() {
   local file="$1" pipeline_id="$2" version_name="$3"
   local response
@@ -49,11 +58,17 @@ kfp_upload_pipeline_version() {
     -F "uploadfile=@${file};filename=pipeline.yaml;type=application/x-yaml" \
     "$KFP_HOST/apis/v2beta1/pipeline_versions/upload?pipeline_id=$pipeline_id&name=$(printf %s "$version_name" | jq -s -R -r @uri)")
   
-  echo "$response" | jq -r '.pipeline_version_id // empty'
+  # Check if response is valid JSON
+  if echo "$response" | jq -e . >/dev/null 2>&1; then
+    echo "$response" | jq -r '.pipeline_version_id // empty'
+  else
+    # Not JSON - likely "Not Found" or other error
+    echo ""
+  fi
 }
 
 # Ensure pipeline exists (create if missing); exports PIPELINE_ID, PIPELINE_VERSION_ID
-# Always uploads a new version to keep pipeline in sync with source
+# If versioning is not supported, creates a new timestamped pipeline
 ensure_pipeline_imported() {
   local file="${1:-artifacts/docling-rag-pipeline.yaml}" 
   local name="${2:-docling-rag-pipeline}"
@@ -69,11 +84,20 @@ ensure_pipeline_imported() {
     [ -n "$PIPELINE_ID" ] || { echo "❌ Upload failed"; return 1; }
     echo "✅ Created pipeline '$name' (id=$PIPELINE_ID, version=$PIPELINE_VERSION_ID)"
   else
-    # Pipeline exists - upload new version
+    # Pipeline exists - try to upload new version
     PIPELINE_ID="$pid"
     PIPELINE_VERSION_ID="$(kfp_upload_pipeline_version "$file" "$PIPELINE_ID" "$version_name")"
-    [ -n "$PIPELINE_VERSION_ID" ] || { echo "❌ Version upload failed"; return 1; }
-    echo "✅ Uploaded version '$version_name' to pipeline '$name' (id=$PIPELINE_ID, version=$PIPELINE_VERSION_ID)"
+    
+    if [ -z "$PIPELINE_VERSION_ID" ]; then
+      # Versioning not supported - create new timestamped pipeline
+      echo "⚠️  Versioning not supported, creating timestamped pipeline..."
+      local timestamped_name="${name}-${version_name}"
+      read PIPELINE_ID PIPELINE_VERSION_ID < <(kfp_upload_pipeline "$file" "$timestamped_name")
+      [ -n "$PIPELINE_ID" ] || { echo "❌ Upload failed"; return 1; }
+      echo "✅ Created pipeline '$timestamped_name' (id=$PIPELINE_ID, version=$PIPELINE_VERSION_ID)"
+    else
+      echo "✅ Uploaded version '$version_name' to pipeline '$name' (id=$PIPELINE_ID, version=$PIPELINE_VERSION_ID)"
+    fi
   fi
   
   export PIPELINE_ID PIPELINE_VERSION_ID
