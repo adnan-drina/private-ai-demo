@@ -427,8 +427,15 @@ def insert_via_llamastack(
                     print(f"  Response: {response.text}")
                     response.raise_for_status()
                 
-                result = response.json()
-                batch_inserted = result.get("num_inserted", len(batch))
+                # Parse response - handle empty/null JSON
+                try:
+                    result = response.json()
+                except Exception as e:
+                    print(f"  WARNING: Could not parse JSON response: {e}")
+                    result = None
+                
+                # If no result or no num_inserted field, assume all chunks inserted
+                batch_inserted = result.get("num_inserted", len(batch)) if result else len(batch)
                 total_inserted += batch_inserted
                 print(f"  [OK] Batch {batch_num}: {batch_inserted} chunks inserted")
                 break  # Success
@@ -557,8 +564,8 @@ def verify_ingestion(
 
 
 @dsl.pipeline(
-    name="docling-rag-ingestion",
-    description="RAG ingestion: Docling to Chunking to LlamaStack Vector IO (server-side embeddings)"
+    name="data-processing-and-insertion",
+    description="Document processing and vector insertion: Docling to Chunking to LlamaStack Vector IO (optimized)"
 )
 def docling_rag_pipeline(
     input_uri: str = "s3://llama-files/sample/rag-mini.pdf",

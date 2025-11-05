@@ -74,7 +74,7 @@ print("")
 # Upload pipeline and create version
 pipeline_file = "../../artifacts/docling-rag-pipeline.yaml"
 timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-pipeline_name = f"docling-rag-b64creds-{timestamp}"
+pipeline_name = f"data-processing-and-insertion-{timestamp}"
 
 print(f"Uploading pipeline: {pipeline_name}")
 try:
@@ -107,32 +107,57 @@ except Exception as e:
 
 print("")
 
-# Create 3 runs with proper version reference
-# Note: Removed embedding_url, embedding_model, embedding_dimension
-# LlamaStack computes embeddings server-side (optimization)
-params = {
-    "input_uri": "s3://llama-files/sample/rag-mini.pdf",
-    "docling_url": f"http://docling-service.{namespace}.svc:5001",
-    "llamastack_url": f"http://llama-stack-service.{namespace}.svc:8321",
-    "vector_db_id": "rag_documents",
-    "chunk_size": 512,
-    "minio_endpoint": "minio.model-storage.svc:9000",
-    "minio_creds_b64": "$CREDS_B64",
-    "min_chunks": 10
-}
+# Define scenarios with different documents and collections
+scenarios = [
+    {
+        "name": "red-hat-docs",
+        "display": "Red Hat Documentation",
+        "input_uri": "s3://llama-files/sample/rag-mini.pdf",  # Red Hat docs
+        "vector_db_id": "red_hat_docs",
+        "min_chunks": 10
+    },
+    {
+        "name": "acme-corporate",
+        "display": "ACME Corporate Policy",
+        "input_uri": "s3://llama-files/sample/rag-mini.pdf",  # Replace with acme-policy.pdf when available
+        "vector_db_id": "acme_corporate",
+        "min_chunks": 10
+    },
+    {
+        "name": "eu-ai-act",
+        "display": "EU AI Act Regulation",
+        "input_uri": "s3://llama-files/sample/rag-mini.pdf",  # Replace with eu-ai-act.pdf when available
+        "vector_db_id": "eu_ai_act",
+        "min_chunks": 10
+    }
+]
 
 experiment_name = f"rag-validation-{datetime.now().strftime('%Y%m%d')}"
 
-print("Creating 3 pipeline runs...")
+print("Creating 3 scenario-based pipeline runs...")
 print("")
 
 run_ids = []
-for i in range(1, 4):
-    run_name = f"rag-b64creds-run{i}-{datetime.now().strftime('%H%M%S')}"
+for idx, scenario in enumerate(scenarios, 1):
+    run_name = f"{scenario['name']}-{datetime.now().strftime('%H%M%S')}"
     
     print(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-    print(f"Run {i}/3: {run_name}")
+    print(f"Scenario {idx}/3: {scenario['display']}")
+    print(f"Run name: {run_name}")
+    print(f"Collection: {scenario['vector_db_id']}")
     print(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    
+    # Build parameters for this scenario
+    params = {
+        "input_uri": scenario["input_uri"],
+        "docling_url": f"http://docling-service.{namespace}.svc:5001",
+        "llamastack_url": f"http://llama-stack-service.{namespace}.svc:8321",
+        "vector_db_id": scenario["vector_db_id"],
+        "chunk_size": 512,
+        "minio_endpoint": "minio.model-storage.svc:9000",
+        "minio_creds_b64": "$CREDS_B64",
+        "min_chunks": scenario["min_chunks"]
+    }
     
     try:
         if version_id:
