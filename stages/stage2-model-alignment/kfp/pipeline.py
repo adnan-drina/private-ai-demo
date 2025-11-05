@@ -390,38 +390,72 @@ def insert_via_llamastack(
         }
         llamastack_chunks.append(chunk)
     
-    # Insert via LlamaStack Vector IO API
-    print(f"Calling POST {llamastack_url}/v1/vector-io/insert...")
+    # Insert via LlamaStack Vector IO API (with batching and retry)
+    print(f"Inserting {len(llamastack_chunks)} chunks via LlamaStack...")
     
-    # Calculate reasonable timeout based on batch size
-    # ~1-2 seconds per chunk for embedding + Milvus insert
-    # Add 60s base overhead for network/processing
-    timeout_seconds = max(120, len(llamastack_chunks) * 2 + 60)
+    # Batch insertion to avoid long single-call timeouts
+    BATCH_SIZE = 100  # Process 100 chunks at a time
+    total_inserted = 0
+    batches = [llamastack_chunks[i:i + BATCH_SIZE] for i in range(0, len(llamastack_chunks), BATCH_SIZE)]
     
-    print(f"Inserting {len(llamastack_chunks)} chunks (timeout: {timeout_seconds}s)...")
+    print(f"Split into {len(batches)} batches of up to {BATCH_SIZE} chunks")
     
-    response = requests.post(
-        f"{llamastack_url}/v1/vector-io/insert",
-        json={
-            "vector_db_id": vector_db_id,
-            "chunks": llamastack_chunks
-        },
-        headers={"Content-Type": "application/json"},
-        timeout=timeout_seconds  # Dynamic timeout based on batch size
-    )
+    import time
+    for batch_idx, batch in enumerate(batches):
+        batch_num = batch_idx + 1
+        print(f"Processing batch {batch_num}/{len(batches)} ({len(batch)} chunks)...")
+        
+        # Retry logic with exponential backoff
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                # Timeout: ~2 sec/chunk + 60s overhead, max 300s
+                timeout = min(300, len(batch) * 2 + 60)
+                
+                response = requests.post(
+                    f"{llamastack_url}/v1/vector-io/insert",
+                    json={
+                        "vector_db_id": vector_db_id,
+                        "chunks": batch
+                    },
+                    headers={"Content-Type": "application/json"},
+                    timeout=timeout
+                )
+                
+                if response.status_code != 200:
+                    print(f"  ERROR: Batch {batch_num} returned {response.status_code}")
+                    print(f"  Response: {response.text}")
+                    response.raise_for_status()
+                
+                result = response.json()
+                batch_inserted = result.get("num_inserted", len(batch))
+                total_inserted += batch_inserted
+                print(f"  [OK] Batch {batch_num}: {batch_inserted} chunks inserted")
+                break  # Success
+                
+            except requests.exceptions.Timeout as e:
+                if attempt < max_retries - 1:
+                    wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s, 4s
+                    print(f"  Timeout on batch {batch_num}, retry {attempt + 1}/{max_retries} after {wait_time}s...")
+                    time.sleep(wait_time)
+                else:
+                    print(f"  FAILED: Batch {batch_num} timed out after {max_retries} attempts")
+                    raise
+            except requests.exceptions.RequestException as e:
+                if attempt < max_retries - 1 and response.status_code >= 500:
+                    wait_time = 2 ** attempt
+                    print(f"  Server error on batch {batch_num} ({response.status_code}), retry {attempt + 1}/{max_retries} after {wait_time}s...")
+                    time.sleep(wait_time)
+                else:
+                    print(f"  FAILED: Batch {batch_num} error: {e}")
+                    raise
     
-    # Check response
-    if response.status_code != 200:
-        print(f"ERROR: LlamaStack returned {response.status_code}")
-        print(f"Response: {response.text}")
-        response.raise_for_status()
-    
-    print(f"[OK] Successfully inserted {len(llamastack_chunks)} chunks into {vector_db_id}")
+    print(f"[OK] Successfully inserted {total_inserted}/{len(llamastack_chunks)} chunks across {len(batches)} batches")
     print(f"Sample document_id: {llamastack_chunks[0]['metadata']['document_id']}")
     
     return {
         "vector_db_id": vector_db_id,
-        "num_chunks": len(llamastack_chunks),
+        "num_chunks": total_inserted,
         "source": input_uri,
         "status": "success"
     }
@@ -448,8 +482,18 @@ def verify_ingestion(
     print(f"Verifying ingestion in vector DB: {vector_db_id}")
     print(f"Insert result: {insert_result}")
     
-    # Test query to verify chunks are retrievable
-    test_query = "test document content"
+    # Use a meaningful query derived from the document source
+    # Better than generic "test document content" - provides real signal
+    source_uri = insert_result.get("source", "")
+    if "rag-mini" in source_uri.lower():
+        test_query = "Red Hat OpenShift AI platform"
+    elif "acme" in source_uri.lower():
+        test_query = "corporate policy"
+    elif "ai" in source_uri.lower() and "act" in source_uri.lower():
+        test_query = "artificial intelligence regulation"
+    else:
+        # Generic fallback
+        test_query = "document information"
     
     print(f"Testing retrieval with query: '{test_query}'")
     
@@ -490,15 +534,16 @@ def verify_ingestion(
     if success:
         print(f"[OK] Verification PASSED")
         
-        # Print sample chunk with score (improved verification per recommendations)
+        # Print top results with scores (better signal than single chunk)
         if result.get("chunks"):
-            sample = result["chunks"][0]
-            # Extract content from chunk (LlamaStack returns content + metadata + score)
-            content = sample.get("content", sample.get("text", str(sample)))
-            score = sample.get("score", "N/A")
-            
-            print(f"Sample retrieved chunk (top result, score={score}):")
-            print(f"  {content[:200]}...")
+            print(f"Top {min(3, chunks_returned)} results with scores:")
+            for idx, chunk in enumerate(result["chunks"][:3]):
+                content = chunk.get("content", chunk.get("text", str(chunk)))
+                score = chunk.get("score", "N/A")
+                doc_id = chunk.get("metadata", {}).get("document_id", "unknown")
+                
+                print(f"  {idx + 1}. Score={score}, doc_id={doc_id}")
+                print(f"     Content: {content[:150]}...")
     else:
         print(f"[FAIL] Verification FAILED")
     
