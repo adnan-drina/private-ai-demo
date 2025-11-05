@@ -14,7 +14,7 @@ data:
     
     # RAG-enabled APIs - Following OpenDataHub pattern
     # Files API disabled: no provider available in quay.io/redhat-et/llama:vllm-0.2.7
-    # Note: Embeddings are provided through the inference API with sentence-transformers provider
+    # Note: embeddings accessed through inference API (not standalone)
     apis:
       - inference
       - agents
@@ -23,6 +23,7 @@ data:
       - tool_runtime
       - vector_io
       # - files  # DISABLED: No provider available in Red Hat ET image
+      # - embeddings  # NOT SUPPORTED in this image (quay.io/redhat-et/llama:vllm-0.2.7)
     
     providers:
       inference:
@@ -46,7 +47,7 @@ data:
             tls_verify: false
         
         # Sentence Transformers for embeddings (inline, no external dependencies)
-        # Using inline provider to avoid litellm dependency issue
+        # RAG runtime uses this provider via inference API for query embeddings
         - provider_id: sentence-transformers
           provider_type: inline::sentence-transformers
           config: {}
@@ -59,6 +60,7 @@ data:
           config:
             uri: "tcp://milvus-standalone.private-ai-demo.svc.cluster.local:19530"
             embedding_field: "embedding"              # matches Milvus schema
+            text_field: "text"                        # field containing markdown content
             id_field: "id"                            # primary key field
             metric_type: "L2"                         # matches IVF_FLAT index
             embedding_dimension: 768                  # IBM Granite embedding size
