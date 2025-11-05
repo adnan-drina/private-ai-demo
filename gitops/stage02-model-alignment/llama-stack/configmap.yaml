@@ -112,7 +112,7 @@ data:
         - provider_id: rag-runtime
           provider_type: inline::rag-runtime
           config:
-            default_vector_db_id: acme_corporate     # default corpus for RAG
+            default_vector_db_id: rag_documents      # default corpus for RAG
             top_k: 5                                  # retrieve top 5 chunks
             similarity_threshold: 0.0                # no filtering (start permissive)
         
@@ -184,6 +184,18 @@ data:
       # Register vector databases created by KFP ingestion pipelines
       # All use IBM Granite embeddings (768 dimensions)
       # CRITICAL FIX: Added provider_vector_db_id to map to actual Milvus collections
+      
+      # KFP default collection used by store_in_milvus step
+      - vector_db_id: rag_documents
+        provider_id: milvus-shared
+        provider_vector_db_id: rag_documents
+        embedding_model: ibm-granite/granite-embedding-125m-english
+        embedding_dimension: 768
+        provider_vector_db_config:
+          collection_name: rag_documents
+          metric_type: L2
+          search_params: { metric_type: L2, params: { nprobe: 16 } }
+          output_fields: [id, text, source]
       
       # ACME Corporate collection (default for RAG queries)
       - vector_db_id: acme_corporate
