@@ -31,89 +31,93 @@ fi
 echo "✅ Base pipeline compiled"
 echo ""
 
-echo "Step 2: Inject Secret references..."
+echo "Step 2: Inject Secret volume mounts (avoiding KFP v2 env stripping)..."
 
-# Use Python to inject env vars with proper text manipulation
-python3 <<'PYTHON_EOF'
-import sys
+# Use sed to inject volumes and volumeMounts
+# This avoids KFP v2's secretKeyRef stripping in env vars
 
-yaml_file = "../../artifacts/docling-rag-pipeline.yaml"
+# Find the exec-download-from-s3 section and inject volume mount + volume definition
+cat > /tmp/inject-volume-mounts.sh <<'INJECT_SCRIPT'
+#!/bin/bash
 
-with open(yaml_file, 'r') as f:
-    content = f.read()
+YAML_FILE="$1"
 
-# Find the download-from-s3 executor container block
-# Look for: "exec-download-from-s3:" then find its "container:" section
-# Inject env vars right after "image:" line
+# Find line number of exec-download-from-s3 container
+EXEC_LINE=$(grep -n "exec-download-from-s3:" "$YAML_FILE" | head -1 | cut -d: -f1)
 
-lines = content.split('\n')
-output_lines = []
-injected = False
+if [ -z "$EXEC_LINE" ]; then
+  echo "❌ Could not find exec-download-from-s3"
+  exit 1
+fi
 
-for i, line in enumerate(lines):
-    output_lines.append(line)
-    
-    # Look for "comp-download-from-s3" in the executors section
-    if 'comp-download-from-s3' in line and i + 5 < len(lines):
-        # Find the container image line within next 20 lines
-        for j in range(i, min(i + 30, len(lines))):
-            if '        image:' in lines[j] and not injected:
-                # Found the image line, inject env block
-                output_lines = output_lines[:len(output_lines)]
-                # Find position after image line
-                insert_pos = len(output_lines)
-                
-                # Add env block
-                env_block = [
-                    '        env:',
-                    '        - name: AWS_ACCESS_KEY_ID',
-                    '          valueFrom:',
-                    '            secretKeyRef:',
-                    '              key: accesskey',
-                    '              name: minio-storage-credentials',
-                    '        - name: AWS_SECRET_ACCESS_KEY',
-                    '          valueFrom:',
-                    '            secretKeyRef:',
-                    '              key: secretkey',
-                    '              name: minio-storage-credentials'
-                ]
-                
-                # Continue adding remaining lines but insert env after image
-                for k in range(i+1, j+1):
-                    if k < len(lines):
-                        output_lines.append(lines[k])
-                
-                # Now inject env block
-                output_lines.extend(env_block)
-                injected = True
-                
-                # Skip the lines we already added
-                for k in range(j+1, len(lines)):
-                    output_lines.append(lines[k])
-                
-                print(f"✅ Injected env vars at line {j+1}")
-                break
-        
-        if injected:
-            break
+echo "Found exec-download-from-s3 at line $EXEC_LINE"
 
-if injected:
-    with open(yaml_file, 'w') as f:
-        f.write('\n'.join(output_lines))
-    print("✅ YAML patched successfully")
-else:
-    print("⚠️  Could not find injection point, keeping original")
+# Find the container: line after exec-download-from-s3
+CONTAINER_LINE=$(awk -v start=$EXEC_LINE 'NR > start && /^      container:/ {print NR; exit}' "$YAML_FILE")
 
-PYTHON_EOF
+if [ -z "$CONTAINER_LINE" ]; then
+  echo "❌ Could not find container section"
+  exit 1
+fi
+
+echo "Found container at line $CONTAINER_LINE"
+
+# Inject volumeMounts right after container: line
+sed -i.bak "${CONTAINER_LINE}a\\
+        volumeMounts:\\
+        - name: minio-cred\\
+          mountPath: /var/secrets/minio\\
+          readOnly: true
+" "$YAML_FILE"
+
+echo "✅ Injected volumeMounts"
+
+# Now find the end of the exec-download-from-s3 section (next exec- or end of executors)
+# and inject volumes definition at the podSpec level
+
+# Find the line with the next executor or deploymentSpec closing
+NEXT_EXEC_LINE=$(awk -v start=$EXEC_LINE 'NR > start && /^    exec-[a-z]/ {print NR; exit}' "$YAML_FILE")
+
+if [ -z "$NEXT_EXEC_LINE" ]; then
+  # If no next executor, find the end of deploymentSpec.executors
+  NEXT_EXEC_LINE=$(awk -v start=$EXEC_LINE 'NR > start && /^  [a-z]/ {print NR; exit}' "$YAML_FILE")
+fi
+
+if [ -z "$NEXT_EXEC_LINE" ]; then
+  echo "⚠️  Could not find injection point for volumes, skipping"
+else
+  # Inject volumes definition before the next section
+  INSERT_LINE=$((NEXT_EXEC_LINE - 1))
+  sed -i.bak2 "${INSERT_LINE}a\\
+      volumes:\\
+      - name: minio-cred\\
+        secret:\\
+          secretName: dspa-minio-credentials
+" "$YAML_FILE"
+  
+  echo "✅ Injected volumes definition at line $INSERT_LINE"
+fi
+
+rm -f "$YAML_FILE.bak" "$YAML_FILE.bak2"
+INJECT_SCRIPT
+
+chmod +x /tmp/inject-volume-mounts.sh
+/tmp/inject-volume-mounts.sh "$PIPELINE_FILE"
+rm /tmp/inject-volume-mounts.sh
 
 echo ""
 
-echo "Step 3: Verify secret injection..."
-if grep -q "secretKeyRef" "$PIPELINE_FILE"; then
-  echo "✅ Secret references found in YAML"
-  grep -A 3 "AWS_ACCESS_KEY_ID" "$PIPELINE_FILE" | head -6
+echo "Step 3: Verify volume mount injection..."
+if grep -q "volumeMounts:" "$PIPELINE_FILE" && grep -q "minio-cred" "$PIPELINE_FILE"; then
+  echo "✅ Volume mounts found in YAML"
+  echo ""
+  echo "volumeMounts:"
+  grep -A 3 "volumeMounts:" "$PIPELINE_FILE" | head -5
+  echo ""
+  echo "volumes:"
+  grep -A 3 "volumes:" "$PIPELINE_FILE" | grep -A 3 "minio-cred" | head -5
 else
-  echo "⚠️  No secret references found - using compiled YAML as-is"
+  echo "⚠️  No volume mounts found - using compiled YAML as-is"
 fi
 
 echo ""

@@ -24,9 +24,8 @@ def download_from_s3(
     """
     Download document from MinIO/S3
     
-    Credentials are injected via Kubernetes Secret as environment variables:
-    - AWS_ACCESS_KEY_ID
-    - AWS_SECRET_ACCESS_KEY
+    Credentials are mounted as a Secret volume at /var/secrets/minio/
+    and read from files (avoiding KFP v2 env secretKeyRef stripping).
     """
     import boto3
     from botocore.client import Config
@@ -35,19 +34,25 @@ def download_from_s3(
     print(f"Downloading from: {input_uri}")
     print(f"Endpoint: {minio_endpoint}")
     
-    # Get credentials from environment variables (injected from Secret)
-    aws_access_key_id = os.getenv("AWS_ACCESS_KEY_ID")
-    aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+    # Read credentials from mounted Secret volume
+    # Secret is mounted at /var/secrets/minio/ via volume mount (injected in compiled YAML)
+    ACCESS_FILE = "/var/secrets/minio/accesskey"
+    SECRET_FILE = "/var/secrets/minio/secretkey"
     
-    # Validate credential injection
-    if not aws_access_key_id or not aws_secret_access_key:
+    try:
+        with open(ACCESS_FILE) as f:
+            aws_access_key_id = f.read().strip()
+        with open(SECRET_FILE) as f:
+            aws_secret_access_key = f.read().strip()
+        
+        print(f"[OK] Credentials loaded from mounted Secret volume")
+        print(f"   Access key: {aws_access_key_id}")
+        print(f"   Secret key present: {len(aws_secret_access_key) > 0}")
+    except FileNotFoundError as e:
         raise ValueError(
-            "MinIO credentials not found in environment! "
-            "Ensure AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are set from Secret."
-        )
-    
-    print(f"Credentials loaded: access_key={aws_access_key_id}")
-    print(f"Secret key present: {len(aws_secret_access_key) > 0}")
+            f"MinIO credentials not found at {ACCESS_FILE} or {SECRET_FILE}! "
+            "Ensure Secret 'dspa-minio-credentials' is mounted as volume."
+        ) from e
     
     # Parse S3 URI
     if input_uri.startswith("s3://"):
