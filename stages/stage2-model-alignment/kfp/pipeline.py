@@ -19,39 +19,39 @@ BASE_PYTHON_IMAGE = "registry.access.redhat.com/ubi9/python-311:latest"
 def download_from_s3(
     input_uri: str,
     minio_endpoint: str,
+    minio_creds_b64: str,
     output_file: Output[Dataset]
 ):
     """
     Download document from MinIO/S3
     
-    Credentials are mounted as a Secret volume at /var/secrets/minio/
-    and read from files (avoiding KFP v2 env secretKeyRef stripping).
+    Credentials passed as base64-encoded string parameter (format: "access_key:secret_key")
+    to work within KFP v2 limitations (strips env secretKeyRef and custom volumes).
+    
+    This follows Red Hat guidance: base64 encode structured/sensitive parameters,
+    decode in component. Keeps secrets out of plaintext parameters.
     """
     import boto3
     from botocore.client import Config
+    import base64
     import os
     
     print(f"Downloading from: {input_uri}")
     print(f"Endpoint: {minio_endpoint}")
     
-    # Read credentials from mounted Secret volume
-    # Secret is mounted at /var/secrets/minio/ via volume mount (injected in compiled YAML)
-    ACCESS_FILE = "/var/secrets/minio/accesskey"
-    SECRET_FILE = "/var/secrets/minio/secretkey"
-    
+    # Decode credentials from base64 parameter
+    # Format: "access_key:secret_key" encoded as base64
     try:
-        with open(ACCESS_FILE) as f:
-            aws_access_key_id = f.read().strip()
-        with open(SECRET_FILE) as f:
-            aws_secret_access_key = f.read().strip()
+        creds_decoded = base64.b64decode(minio_creds_b64).decode('utf-8')
+        aws_access_key_id, aws_secret_access_key = creds_decoded.split(':', 1)
         
-        print(f"[OK] Credentials loaded from mounted Secret volume")
+        print(f"[OK] Credentials decoded from parameter")
         print(f"   Access key: {aws_access_key_id}")
         print(f"   Secret key present: {len(aws_secret_access_key) > 0}")
-    except FileNotFoundError as e:
+    except Exception as e:
         raise ValueError(
-            f"MinIO credentials not found at {ACCESS_FILE} or {SECRET_FILE}! "
-            "Ensure Secret 'dspa-minio-credentials' is mounted as volume."
+            "Failed to decode MinIO credentials from minio_creds_b64 parameter. "
+            "Expected base64-encoded string in format 'access_key:secret_key'"
         ) from e
     
     # Parse S3 URI
@@ -408,6 +408,7 @@ def docling_rag_pipeline(
     embedding_dimension: int = 768,
     chunk_size: int = 512,
     minio_endpoint: str = "minio.model-storage.svc:9000",
+    minio_creds_b64: str = "YWRtaW46bWluaW9hZG1pbg==",  # Base64 default (updated at runtime)
     min_chunks: int = 10
 ):
     """
@@ -421,23 +422,19 @@ def docling_rag_pipeline(
     using LlamaStack's Vector IO API instead of direct Milvus writes.
     LlamaStack manages the schema and ensures compatibility.
     
-    MinIO credentials are injected from Kubernetes Secret 'minio-storage-credentials'
-    via environment variables (no parameters for secrets).
+    MinIO credentials passed as base64-encoded parameter (works within KFP v2 limitations).
+    Format: base64("access_key:secret_key") - decoded in component.
     
     Reference: https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/2.25/html/working_with_llama_stack/
     """
     
     # Step 1: Download from S3/MinIO
-    # Credentials injected from Secret via environment variables
+    # Credentials passed as base64-encoded parameter
     download_task = download_from_s3(
         input_uri=input_uri,
-        minio_endpoint=minio_endpoint
+        minio_endpoint=minio_endpoint,
+        minio_creds_b64=minio_creds_b64
     )
-    
-    # Inject MinIO credentials from Kubernetes Secret
-    # Note: This will be patched in the compiled YAML post-processing
-    # KFP v2 DSL doesn't have direct secret injection, so we handle it via YAML manipulation
-    download_task.set_display_name("Download from MinIO (with Secret injection)")
     
     # Step 2: Process with Docling
     docling_task = process_with_docling(
