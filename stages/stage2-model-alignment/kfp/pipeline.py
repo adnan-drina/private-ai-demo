@@ -312,7 +312,7 @@ def generate_embeddings(
         chunk_len = len(chunk)
         if chunk_len > MAX_CHUNK_SIZE:
             # Force-split by characters as last resort
-            print(f"⚠️  SAFETY: Force-splitting {chunk_len} char chunk into {MAX_CHUNK_SIZE} char pieces")
+            print(f"SAFETY: Force-splitting {chunk_len} char chunk into {MAX_CHUNK_SIZE} char pieces")
             for i in range(0, chunk_len, MAX_CHUNK_SIZE):
                 piece = chunk[i:i + MAX_CHUNK_SIZE]
                 if len(piece) > 50:  # Filter very short pieces
