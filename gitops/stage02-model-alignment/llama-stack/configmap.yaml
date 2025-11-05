@@ -53,35 +53,13 @@ data:
           config: {}
       
       vector_io:
-        # Milvus in private-ai-demo (dedicated for this demo)
-        # Fixed: Added explicit schema mapping for rag-runtime
+        # Milvus in private-ai-demo (minimal config per official docs)
+        # Reference: https://llama-stack.readthedocs.io/en/v0.2.11/providers/vector_io/milvus.html
         - provider_id: milvus-shared
           provider_type: remote::milvus
           config:
             uri: "tcp://milvus-standalone.private-ai-demo.svc.cluster.local:19530"
-            db_name: "default"
-            embedding_field: "embedding"              # matches Milvus schema
-            text_field: "text"                        # field containing markdown content
-            id_field: "id"                            # primary key field
-            metric_type: "L2"                         # matches IVF_FLAT index
-            embedding_dimension: 768                  # IBM Granite embedding size
-            search_params:
-              - metric_type: "L2"
-                params:
-                  nprobe: 16
-            output_fields:
-              - id
-              - text
-              - source
-            collections:
-              - vector_db_id: rag_documents
-                collection_name: rag_documents
-              - vector_db_id: acme_corporate
-                collection_name: acme_corporate
-              - vector_db_id: red_hat_docs
-                collection_name: red_hat_docs
-              - vector_db_id: eu_ai_act
-                collection_name: eu_ai_act
+            # NO OTHER PARAMETERS - provider will use defaults
       
       agents:
         # Inline agent provider for RAG
@@ -92,6 +70,10 @@ data:
               type: sqlite
               namespace: null
               db_path: /data/agents_store.db
+            responses_store:
+              type: sqlite
+              namespace: null
+              db_path: /data/responses_store.db
       
       safety:
         # Inline safety provider (required by agents)
@@ -122,7 +104,7 @@ data:
         - provider_id: rag-runtime
           provider_type: inline::rag-runtime
           config:
-            default_vector_db_id: rag_documents      # default corpus for RAG
+            default_vector_db_id: acme_corporate     # default corpus for RAG (has data)
             top_k: 5                                  # retrieve top 5 chunks
             similarity_threshold: 0.0                # no filtering (start permissive)
         
@@ -201,11 +183,6 @@ data:
         provider_vector_db_id: rag_documents
         embedding_model: ibm-granite/granite-embedding-125m-english
         embedding_dimension: 768
-        provider_vector_db_config:
-          collection_name: rag_documents
-          metric_type: L2
-          search_params: { metric_type: L2, params: { nprobe: 16 } }
-          output_fields: [id, text, source]
       
       # ACME Corporate collection (default for RAG queries)
       - vector_db_id: acme_corporate
@@ -213,11 +190,6 @@ data:
         provider_vector_db_id: acme_corporate          # exact Milvus collection name
         embedding_model: ibm-granite/granite-embedding-125m-english
         embedding_dimension: 768
-        provider_vector_db_config:
-          collection_name: acme_corporate
-          metric_type: L2
-          search_params: { metric_type: L2, params: { nprobe: 16 } }
-          output_fields: [id, text, source]
       
       # Red Hat Documentation collection
       - vector_db_id: red_hat_docs
@@ -225,11 +197,6 @@ data:
         provider_vector_db_id: red_hat_docs            # exact Milvus collection name
         embedding_model: ibm-granite/granite-embedding-125m-english
         embedding_dimension: 768
-        provider_vector_db_config:
-          collection_name: red_hat_docs
-          metric_type: L2
-          search_params: { metric_type: L2, params: { nprobe: 16 } }
-          output_fields: [id, text, source]
       
       # EU AI Act collection
       - vector_db_id: eu_ai_act
@@ -237,11 +204,6 @@ data:
         provider_vector_db_id: eu_ai_act               # exact Milvus collection name
         embedding_model: ibm-granite/granite-embedding-125m-english
         embedding_dimension: 768
-        provider_vector_db_config:
-          collection_name: eu_ai_act
-          metric_type: L2
-          search_params: { metric_type: L2, params: { nprobe: 16 } }
-          output_fields: [id, text, source]
     
     server:
       port: 8321
