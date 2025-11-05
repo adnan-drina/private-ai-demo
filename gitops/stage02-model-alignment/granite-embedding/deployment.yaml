@@ -127,10 +127,10 @@ spec:
               PYEOF
           resources:
             requests:
-              memory: "4Gi"
-              cpu: "1"
+              memory: "6Gi"
+              cpu: "2"
             limits:
-              memory: "8Gi"
+              memory: "12Gi"
               cpu: "4"
           startupProbe:
             httpGet:
