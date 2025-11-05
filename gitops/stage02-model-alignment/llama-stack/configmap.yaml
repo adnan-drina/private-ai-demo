@@ -165,30 +165,37 @@ data:
     vector_dbs:
       # Register vector databases created by KFP ingestion pipelines
       # All use IBM Granite embeddings (768 dimensions)
+      # Fixed: Added collection_name at vector_db level AND in provider config
       
       # Red Hat Documentation collection
       - vector_db_id: red_hat_docs
         provider_id: milvus-shared
         embedding_model: ibm-granite/granite-embedding-125m-english
         embedding_dimension: 768
+        collection_name: red_hat_docs
         provider_vector_db_config:
           collection_name: red_hat_docs
+          metric_type: L2
       
       # ACME Corporate collection
       - vector_db_id: acme_corporate
         provider_id: milvus-shared
         embedding_model: ibm-granite/granite-embedding-125m-english
         embedding_dimension: 768
+        collection_name: acme_corporate
         provider_vector_db_config:
           collection_name: acme_corporate
+          metric_type: L2
       
       # EU AI Act collection
       - vector_db_id: eu_ai_act
         provider_id: milvus-shared
         embedding_model: ibm-granite/granite-embedding-125m-english
         embedding_dimension: 768
+        collection_name: eu_ai_act
         provider_vector_db_config:
           collection_name: eu_ai_act
+          metric_type: L2
     
     server:
       port: 8321
