@@ -72,6 +72,15 @@ data:
               - id
               - text
               - source
+            collections:
+              - vector_db_id: rag_documents
+                collection_name: rag_documents
+              - vector_db_id: acme_corporate
+                collection_name: acme_corporate
+              - vector_db_id: red_hat_docs
+                collection_name: red_hat_docs
+              - vector_db_id: eu_ai_act
+                collection_name: eu_ai_act
       
       agents:
         # Inline agent provider for RAG
