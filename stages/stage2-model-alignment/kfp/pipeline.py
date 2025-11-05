@@ -67,62 +67,109 @@ def process_with_docling(
     docling_url: str,
     output_markdown: Output[Dataset]
 ):
-    """Process document with Docling to extract markdown (synchronous)"""
+    """
+    Process document with Docling to extract markdown (asynchronous)
+    
+    Uses /v1/convert/file/async endpoint for reliable processing of large PDFs.
+    Polls /v1/result/{task_id} until completion.
+    
+    Reference: https://github.com/docling-project/docling-serve
+    """
     import requests
     import json
     import os
+    import time
     
-    print(f"Processing document with Docling: {docling_url}")
+    print(f"Processing document with Docling (async): {docling_url}")
     
     # Read input file and get filename
     filename = os.path.basename(input_file.path)
     if not filename.endswith('.pdf'):
         filename = 'document.pdf'
     
-    print(f"Converting document synchronously: {filename}")
+    print(f"Converting document: {filename}")
     
-    # Use synchronous endpoint for quick validation
+    # Step 1: Submit async conversion request
     with open(input_file.path, "rb") as f:
         files = {"files": (filename, f, "application/pdf")}
         
-        print(f"Calling /v1/convert/file (sync)...")
+        print(f"Calling /v1/convert/file/async...")
         response = requests.post(
-            f"{docling_url}/v1/convert/file",
+            f"{docling_url}/v1/convert/file/async",
             files=files,
             params={"format": "markdown"},
-            timeout=300  # 5 minutes for sync conversion
+            timeout=30  # Short timeout for submission
         )
         response.raise_for_status()
     
-    # Parse response
-    result = response.json()
+    # Parse submission response
+    submit_result = response.json()
     
-    # Log response structure for debugging
+    if "task_id" not in submit_result:
+        raise ValueError(f"No task_id in response: {submit_result}")
+    
+    task_id = submit_result["task_id"]
+    print(f"Task submitted: {task_id}")
+    
+    # Step 2: Poll for result
+    max_wait = 600  # 10 minutes max
+    poll_interval = 5  # Start with 5 seconds
+    elapsed = 0
+    
+    while elapsed < max_wait:
+        print(f"Polling result... (elapsed: {elapsed}s)")
+        
+        result_response = requests.get(
+            f"{docling_url}/v1/result/{task_id}",
+            timeout=30
+        )
+        result_response.raise_for_status()
+        result = result_response.json()
+        
+        status = result.get("status", "unknown")
+        print(f"  Status: {status}")
+        
+        if status == "success":
+            print(f"[OK] Conversion completed")
+            break
+        elif status == "failed":
+            error = result.get("error", "Unknown error")
+            raise RuntimeError(f"Docling conversion failed: {error}")
+        elif status in ["pending", "processing"]:
+            # Continue polling
+            time.sleep(poll_interval)
+            elapsed += poll_interval
+            # Exponential backoff up to 30s
+            poll_interval = min(poll_interval * 1.2, 30)
+        else:
+            print(f"WARNING: Unknown status '{status}', continuing to poll")
+            time.sleep(poll_interval)
+            elapsed += poll_interval
+    
+    if elapsed >= max_wait:
+        raise TimeoutError(f"Docling conversion timed out after {max_wait}s")
+    
+    # Step 3: Extract markdown content
     print(f"Response keys: {list(result.keys())}")
     
-    # Extract markdown content from response
-    # Try different response formats Docling might return
+    # Try different response formats
     if "markdown" in result:
-        # Format 1: Direct markdown field
         markdown_content = result["markdown"]
+    elif "result" in result and isinstance(result["result"], dict) and "markdown" in result["result"]:
+        markdown_content = result["result"]["markdown"]
     elif "documents" in result and len(result["documents"]) > 0:
-        # Format 2: Documents array with markdown
         doc = result["documents"][0]
-        if isinstance(doc, dict) and "markdown" in doc:
-            markdown_content = doc["markdown"]
-        elif isinstance(doc, dict) and "md_content" in doc:
-            markdown_content = doc["md_content"]
+        if isinstance(doc, dict):
+            markdown_content = doc.get("markdown", doc.get("md_content", str(doc)))
         else:
             markdown_content = str(doc)
     elif "document" in result:
-        # Format 3: Single document object with md_content
         doc = result["document"]
         if isinstance(doc, dict):
             markdown_content = doc.get("md_content", doc.get("markdown", str(doc)))
         else:
             markdown_content = str(doc)
     elif "content" in result:
-        # Format 4: Direct content field
         markdown_content = result["content"]
     else:
         # Fallback: stringify result and warn
