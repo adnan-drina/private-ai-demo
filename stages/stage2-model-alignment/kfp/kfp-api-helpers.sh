@@ -80,6 +80,7 @@ ensure_pipeline_imported() {
 }
 
 # Create a pipeline run tied to a specific version
+# Converts simple parameter JSON to KFP v2 API format with type descriptors
 kfp_create_run() {
   local run_name="$1"
   local pipeline_version_id="$2"
@@ -89,11 +90,35 @@ kfp_create_run() {
   
   [ -n "$pipeline_version_id" ] || { echo "❌ pipeline_version_id required"; return 1; }
   
+  # Convert params to KFP v2 format with type descriptors
+  # Strings get {string_value: "..."}, numbers get {int_value: N} or {double_value: N}
+  local formatted_params
+  formatted_params=$(echo "$params_json" | jq '
+    to_entries | map(
+      {
+        key: .key,
+        value: (
+          if (.value | type) == "string" then
+            {string_value: .value}
+          elif (.value | type) == "number" then
+            if (.value | floor == .value) then
+              {int_value: (.value | tostring)}
+            else
+              {double_value: (.value | tostring)}
+            end
+          else
+            {string_value: (.value | tostring)}
+          end
+        )
+      }
+    ) | from_entries
+  ')
+  
   local run_request
   run_request=$(jq -n \
     --arg name "$run_name" \
     --arg pvid "$pipeline_version_id" \
-    --argjson params "$params_json" \
+    --argjson params "$formatted_params" \
     '{
       display_name: $name,
       pipeline_version_id: $pvid,

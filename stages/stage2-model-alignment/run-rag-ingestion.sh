@@ -193,6 +193,7 @@ fi
 RUN_NAME="rag-ingestion-$(date +%s)"
 
 # Build parameters JSON (updated for LlamaStack Vector IO API)
+# Note: kfp_create_run helper wraps these in the correct API format
 PARAMS_JSON=$(jq -n \
   --arg input_uri "$DOCUMENT_URI" \
   --arg docling_url "http://docling-service.$NAMESPACE.svc:5001" \
@@ -207,18 +208,18 @@ PARAMS_JSON=$(jq -n \
   --arg minio_secret "$MINIO_SECRET" \
   --argjson min_chunks 10 \
   '{
-    input_uri: {string_value: $input_uri},
-    docling_url: {string_value: $docling_url},
-    embedding_url: {string_value: $embedding_url},
-    embedding_model: {string_value: $embedding_model},
-    llamastack_url: {string_value: $llamastack_url},
-    vector_db_id: {string_value: $vector_db_id},
-    embedding_dimension: {int_value: $embedding_dimension},
-    chunk_size: {int_value: $chunk_size},
-    minio_endpoint: {string_value: $minio_endpoint},
-    aws_access_key_id: {string_value: $minio_key},
-    aws_secret_access_key: {string_value: $minio_secret},
-    min_chunks: {int_value: $min_chunks}
+    input_uri: $input_uri,
+    docling_url: $docling_url,
+    embedding_url: $embedding_url,
+    embedding_model: $embedding_model,
+    llamastack_url: $llamastack_url,
+    vector_db_id: $vector_db_id,
+    embedding_dimension: $embedding_dimension,
+    chunk_size: $chunk_size,
+    minio_endpoint: $minio_endpoint,
+    aws_access_key_id: $minio_key,
+    aws_secret_access_key: $minio_secret,
+    min_chunks: $min_chunks
   }')
 
 # Create the run using helper function
