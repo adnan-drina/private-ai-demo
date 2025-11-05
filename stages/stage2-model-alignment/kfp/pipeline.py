@@ -355,7 +355,7 @@ def verify_ingestion(
 
 @dsl.pipeline(
     name="docling-rag-ingestion",
-    description="RAG ingestion pipeline: Docling → Embeddings → LlamaStack Vector IO"
+    description="RAG ingestion pipeline: Docling to Embeddings to LlamaStack Vector IO"
 )
 def docling_rag_pipeline(
     input_uri: str = "s3://llama-files/sample/rag-mini.pdf",

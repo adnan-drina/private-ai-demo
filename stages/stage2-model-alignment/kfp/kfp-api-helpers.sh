@@ -93,26 +93,23 @@ kfp_create_run() {
   # Convert params to KFP v2 format with type descriptors
   # Strings get {string_value: "..."}, numbers get {int_value: N} or {double_value: N}
   local formatted_params
-  formatted_params=$(echo "$params_json" | jq '
-    to_entries | map(
-      {
-        key: .key,
-        value: (
-          if (.value | type) == "string" then
-            {string_value: .value}
-          elif (.value | type) == "number" then
-            if (.value | floor == .value) then
-              {int_value: (.value | tostring)}
-            else
-              {double_value: (.value | tostring)}
-            end
-          else
-            {string_value: (.value | tostring)}
-          end
-        )
-      }
-    ) | from_entries
-  ')
+  formatted_params=$(echo "$params_json" | jq 'to_entries | map({
+    key: .key,
+    value: (
+      . as $entry |
+      if ($entry.value | type) == "string" then
+        {string_value: $entry.value}
+      elif ($entry.value | type) == "number" then
+        if ($entry.value | floor) == $entry.value then
+          {int_value: $entry.value}
+        else
+          {double_value: $entry.value}
+        end
+      else
+        {string_value: ($entry.value | tostring)}
+      end
+    )
+  }) | from_entries')
   
   local run_request
   run_request=$(jq -n \
