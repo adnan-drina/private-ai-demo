@@ -85,21 +85,41 @@ echo -e "${GREEN}✅ DSPA ready${NC}"
 echo ""
 echo -e "${YELLOW}⏳ Verifying Stage 2 services...${NC}"
 
-SERVICES=("docling" "milvus-standalone")
-for service in "${SERVICES[@]}"; do
-  if oc get deployment "$service" -n "$NAMESPACE" &>/dev/null; then
-    REPLICAS=$(oc get deployment "$service" -n "$NAMESPACE" -o jsonpath='{.status.readyReplicas}')
-    if [ "$REPLICAS" -gt 0 ]; then
-      echo -e "${GREEN}✅ $service running${NC}"
-    else
-      echo -e "${RED}❌ $service not ready (0 replicas)${NC}"
-      exit 1
-    fi
+# Check Docling (can be either 'docling' or 'docling-deployment')
+if oc get deployment docling-deployment -n "$NAMESPACE" &>/dev/null; then
+  REPLICAS=$(oc get deployment docling-deployment -n "$NAMESPACE" -o jsonpath='{.status.readyReplicas}')
+  if [ "$REPLICAS" -gt 0 ]; then
+    echo -e "${GREEN}✅ docling running${NC}"
   else
-    echo -e "${RED}❌ $service deployment not found${NC}"
+    echo -e "${RED}❌ docling not ready (0 replicas)${NC}"
     exit 1
   fi
-done
+elif oc get deployment docling -n "$NAMESPACE" &>/dev/null; then
+  REPLICAS=$(oc get deployment docling -n "$NAMESPACE" -o jsonpath='{.status.readyReplicas}')
+  if [ "$REPLICAS" -gt 0 ]; then
+    echo -e "${GREEN}✅ docling running${NC}"
+  else
+    echo -e "${RED}❌ docling not ready (0 replicas)${NC}"
+    exit 1
+  fi
+else
+  echo -e "${RED}❌ docling deployment not found${NC}"
+  exit 1
+fi
+
+# Check Milvus
+if oc get deployment milvus-standalone -n "$NAMESPACE" &>/dev/null; then
+  REPLICAS=$(oc get deployment milvus-standalone -n "$NAMESPACE" -o jsonpath='{.status.readyReplicas}')
+  if [ "$REPLICAS" -gt 0 ]; then
+    echo -e "${GREEN}✅ milvus-standalone running${NC}"
+  else
+    echo -e "${RED}❌ milvus-standalone not ready (0 replicas)${NC}"
+    exit 1
+  fi
+else
+  echo -e "${RED}❌ milvus-standalone deployment not found${NC}"
+  exit 1
+fi
 
 # 3. Check if LlamaStack is running
 if oc get llamastackdistribution llama-stack -n "$NAMESPACE" &>/dev/null; then
