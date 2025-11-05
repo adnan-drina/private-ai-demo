@@ -181,22 +181,23 @@ for idx, scenario in enumerate(scenarios, 1):
             run_id = run.run_id
         
         run_ids.append(run_id)
-        print(f"✅ Run {i} created: {run_id}")
+        print(f"✅ Run {idx} created: {run_id}")
         print("")
     except Exception as e:
-        print(f"❌ Run {i} failed: {e}")
+        print(f"❌ Run {idx} failed: {e}")
         print("")
 
 if run_ids:
     print("════════════════════════════════════════════════════════════════════════════════")
-    print("✅ ALL RUNS CREATED WITH PIPELINE VERSION")
+    print("✅ ALL SCENARIO RUNS CREATED WITH PIPELINE VERSION")
     print("════════════════════════════════════════════════════════════════════════════════")
     print("")
     print(f"Monitor at: https://{host}")
     print("")
-    print("Run IDs:")
-    for i, run_id in enumerate(run_ids, 1):
-        print(f"  {i}. {run_id}")
+    print("Scenario Runs:")
+    for idx, (scenario, run_id) in enumerate(zip(scenarios, run_ids), 1):
+        print(f"  {idx}. {scenario['display']}: {run_id}")
+        print(f"     Collection: {scenario['vector_db_id']}")
     print("")
     print("Pipeline Version: {}")
     print("")
