@@ -236,6 +236,7 @@ def generate_embeddings(
     import requests
     import json
     import numpy as np
+    import time
     
     print(f"Generating embeddings with model: {embedding_model}")
     
@@ -247,23 +248,36 @@ def generate_embeddings(
     chunks = [c.strip() for c in content.split("\n\n") if c.strip() and len(c.strip()) > 20]
     print(f"Created {len(chunks)} chunks")
     
-    # Generate embeddings
+    # Generate embeddings (with retry logic for transient failures)
     embeddings = []
     for i, chunk in enumerate(chunks):
-        response = requests.post(
-            f"{embedding_url}/embeddings",
-            json={"input": chunk, "model": embedding_model},
-            timeout=60
-        )
-        response.raise_for_status()
-        
-        result = response.json()
-        embedding = result["data"][0]["embedding"]
-        embeddings.append({
-            "chunk_id": i,
-            "text": chunk,
-            "embedding": embedding
-        })
+        # Retry up to 3 times for transient network issues
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                response = requests.post(
+                    f"{embedding_url}/embeddings",
+                    json={"input": chunk, "model": embedding_model},
+                    timeout=60
+                )
+                response.raise_for_status()
+                
+                result = response.json()
+                embedding = result["data"][0]["embedding"]
+                embeddings.append({
+                    "chunk_id": i,
+                    "text": chunk,
+                    "embedding": embedding
+                })
+                break  # Success
+                
+            except requests.exceptions.RequestException as e:
+                if attempt < max_retries - 1:
+                    print(f"  Chunk {i}: Retry {attempt + 1}/{max_retries} after error: {e}")
+                    time.sleep(5)
+                else:
+                    print(f"  Chunk {i}: Failed after {max_retries} attempts")
+                    raise
         
         if (i + 1) % 10 == 0:
             print(f"Generated embeddings for {i + 1}/{len(chunks)} chunks")
