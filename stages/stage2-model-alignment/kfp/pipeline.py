@@ -65,111 +65,81 @@ def download_from_s3(
 def process_with_docling(
     input_file: Input[Dataset],
     docling_url: str,
-    output_markdown: Output[Dataset]
+    output_markdown: Output[Dataset],
+    timeout: int = 600  # 10 minutes default
 ):
     """
-    Process document with Docling to extract markdown (asynchronous)
+    Process document with Docling to extract markdown (synchronous with extended timeout)
     
-    Uses /v1/convert/file/async endpoint for reliable processing of large PDFs.
-    Polls /v1/result/{task_id} until completion.
+    Uses /v1/convert/file endpoint with appropriate timeout for large PDFs.
+    Increased timeout allows processing of complex/large documents without async complexity.
+    
+    Note: Async pattern (/v1/convert/file/async) is not fully supported by current
+    Docling operator deployment (missing result retrieval endpoints).
+    See docs/02-PIPELINES/DOCLING-ASYNC-INVESTIGATION.md for details.
     
     Reference: https://github.com/docling-project/docling-serve
     """
     import requests
-    import json
     import os
-    import time
     
-    print(f"Processing document with Docling (async): {docling_url}")
+    print(f"Processing document with Docling: {docling_url}")
+    print(f"Timeout: {timeout}s ({timeout/60:.1f} minutes)")
     
     # Read input file and get filename
     filename = os.path.basename(input_file.path)
     if not filename.endswith('.pdf'):
         filename = 'document.pdf'
     
-    print(f"Converting document: {filename}")
+    file_size = os.path.getsize(input_file.path)
+    print(f"Converting document: {filename} ({file_size / 1024 / 1024:.2f} MB)")
     
-    # Step 1: Submit async conversion request
+    # Call Docling sync endpoint with extended timeout
     with open(input_file.path, "rb") as f:
         files = {"files": (filename, f, "application/pdf")}
         
-        print(f"Calling /v1/convert/file/async...")
+        print(f"Calling /v1/convert/file (sync with {timeout}s timeout)...")
+        print(f"Processing started...")
+        
         response = requests.post(
-            f"{docling_url}/v1/convert/file/async",
+            f"{docling_url}/v1/convert/file",
             files=files,
             params={"format": "markdown"},
-            timeout=30  # Short timeout for submission
+            timeout=timeout
         )
         response.raise_for_status()
     
-    # Parse submission response
-    submit_result = response.json()
+    print(f"[OK] Docling processing completed")
     
-    if "task_id" not in submit_result:
-        raise ValueError(f"No task_id in response: {submit_result}")
+    # Parse response
+    result = response.json()
     
-    task_id = submit_result["task_id"]
-    print(f"Task submitted: {task_id}")
-    
-    # Step 2: Poll for result
-    max_wait = 600  # 10 minutes max
-    poll_interval = 5  # Start with 5 seconds
-    elapsed = 0
-    
-    while elapsed < max_wait:
-        print(f"Polling result... (elapsed: {elapsed}s)")
-        
-        result_response = requests.get(
-            f"{docling_url}/v1/result/{task_id}",
-            timeout=30
-        )
-        result_response.raise_for_status()
-        result = result_response.json()
-        
-        status = result.get("status", "unknown")
-        print(f"  Status: {status}")
-        
-        if status == "success":
-            print(f"[OK] Conversion completed")
-            break
-        elif status == "failed":
-            error = result.get("error", "Unknown error")
-            raise RuntimeError(f"Docling conversion failed: {error}")
-        elif status in ["pending", "processing"]:
-            # Continue polling
-            time.sleep(poll_interval)
-            elapsed += poll_interval
-            # Exponential backoff up to 30s
-            poll_interval = min(poll_interval * 1.2, 30)
-        else:
-            print(f"WARNING: Unknown status '{status}', continuing to poll")
-            time.sleep(poll_interval)
-            elapsed += poll_interval
-    
-    if elapsed >= max_wait:
-        raise TimeoutError(f"Docling conversion timed out after {max_wait}s")
-    
-    # Step 3: Extract markdown content
+    # Log response structure for debugging
     print(f"Response keys: {list(result.keys())}")
     
-    # Try different response formats
+    # Extract markdown content from response
+    # Try different response formats Docling might return
     if "markdown" in result:
+        # Format 1: Direct markdown field
         markdown_content = result["markdown"]
-    elif "result" in result and isinstance(result["result"], dict) and "markdown" in result["result"]:
-        markdown_content = result["result"]["markdown"]
     elif "documents" in result and len(result["documents"]) > 0:
+        # Format 2: Documents array with markdown
         doc = result["documents"][0]
-        if isinstance(doc, dict):
-            markdown_content = doc.get("markdown", doc.get("md_content", str(doc)))
+        if isinstance(doc, dict) and "markdown" in doc:
+            markdown_content = doc["markdown"]
+        elif isinstance(doc, dict) and "md_content" in doc:
+            markdown_content = doc["md_content"]
         else:
             markdown_content = str(doc)
     elif "document" in result:
+        # Format 3: Single document object with md_content
         doc = result["document"]
         if isinstance(doc, dict):
             markdown_content = doc.get("md_content", doc.get("markdown", str(doc)))
         else:
             markdown_content = str(doc)
     elif "content" in result:
+        # Format 4: Direct content field
         markdown_content = result["content"]
     else:
         # Fallback: stringify result and warn
