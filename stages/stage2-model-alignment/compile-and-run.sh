@@ -108,14 +108,13 @@ except Exception as e:
 print("")
 
 # Create 3 runs with proper version reference
+# Note: Removed embedding_url, embedding_model, embedding_dimension
+# LlamaStack computes embeddings server-side (optimization)
 params = {
     "input_uri": "s3://llama-files/sample/rag-mini.pdf",
     "docling_url": f"http://docling-service.{namespace}.svc:5001",
-    "embedding_url": f"http://granite-embedding.{namespace}.svc/v1",
-    "embedding_model": "ibm-granite/granite-embedding-125m-english",
     "llamastack_url": f"http://llama-stack-service.{namespace}.svc:8321",
     "vector_db_id": "rag_documents",
-    "embedding_dimension": 768,
     "chunk_size": 512,
     "minio_endpoint": "minio.model-storage.svc:9000",
     "minio_creds_b64": "$CREDS_B64",
