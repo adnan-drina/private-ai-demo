@@ -132,16 +132,23 @@ spec:
             limits:
               memory: "4Gi"
               cpu: "2"
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 30  # 30 * 10s = 5 minutes for startup
           livenessProbe:
             httpGet:
               path: /health
               port: 8080
-            initialDelaySeconds: 120
             periodSeconds: 30
+            timeoutSeconds: 5
           readinessProbe:
             httpGet:
               path: /health
               port: 8080
-            initialDelaySeconds: 120
             periodSeconds: 10
+            timeoutSeconds: 5
 
