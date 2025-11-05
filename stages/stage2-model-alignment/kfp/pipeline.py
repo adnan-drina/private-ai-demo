@@ -222,23 +222,22 @@ def process_with_docling(
 
 
 @dsl.component(
-    base_image=BASE_PYTHON_IMAGE,
-    packages_to_install=["requests", "numpy"]
+    base_image=BASE_PYTHON_IMAGE
 )
-def generate_embeddings(
+def chunk_markdown(
     markdown_file: Input[Dataset],
-    embedding_url: str,
-    embedding_model: str,
     chunk_size: int,
-    output_embeddings: Output[Dataset]
+    output_chunks: Output[Dataset]
 ):
-    """Generate embeddings for document chunks"""
-    import requests
-    import json
-    import numpy as np
-    import time
+    """
+    Chunk markdown document for RAG ingestion
     
-    print(f"Generating embeddings with model: {embedding_model}")
+    NOTE: Embeddings are computed server-side by LlamaStack, not by this step.
+    This is purely chunking - no HTTP calls, faster and cheaper.
+    """
+    import json
+    
+    print(f"Chunking markdown document...")
     
     # Read markdown
     with open(markdown_file.path, "r") as f:
@@ -331,45 +330,14 @@ def generate_embeddings(
     else:
         print("No chunks created (document too short)")
     
-    # Generate embeddings (with retry logic for transient failures)
-    embeddings = []
-    for i, chunk in enumerate(chunks):
-        # Retry up to 3 times for transient network issues
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                response = requests.post(
-                    f"{embedding_url}/embeddings",
-                    json={"input": chunk, "model": embedding_model},
-                    timeout=60
-                )
-                response.raise_for_status()
-                
-                result = response.json()
-                embedding = result["data"][0]["embedding"]
-                embeddings.append({
-                    "chunk_id": i,
-                    "text": chunk,
-                    "embedding": embedding
-                })
-                break  # Success
-                
-            except requests.exceptions.RequestException as e:
-                if attempt < max_retries - 1:
-                    print(f"  Chunk {i}: Retry {attempt + 1}/{max_retries} after error: {e}")
-                    time.sleep(5)
-                else:
-                    print(f"  Chunk {i}: Failed after {max_retries} attempts")
-                    raise
-        
-        if (i + 1) % 10 == 0:
-            print(f"Generated embeddings for {i + 1}/{len(chunks)} chunks")
+    # Save chunks as simple JSON array of text strings
+    # LlamaStack will compute embeddings server-side
+    chunk_data = [{"chunk_id": i, "text": text} for i, text in enumerate(chunks)]
     
-    # Save as JSON
-    with open(output_embeddings.path, "w") as f:
-        json.dump(embeddings, f)
+    with open(output_chunks.path, "w") as f:
+        json.dump(chunk_data, f)
     
-    print(f"[OK] Generated {len(embeddings)} embeddings")
+    print(f"[OK] Created {len(chunks)} chunks (embeddings will be computed by LlamaStack)")
 
 
 @dsl.component(
@@ -377,7 +345,7 @@ def generate_embeddings(
     packages_to_install=["requests"]
 )
 def insert_via_llamastack(
-    embeddings_file: Input[Dataset],
+    chunks_file: Input[Dataset],
     llamastack_url: str,
     vector_db_id: str,
     input_uri: str  # For metadata
@@ -385,9 +353,8 @@ def insert_via_llamastack(
     """
     Insert chunks via LlamaStack /v1/vector-io/insert API
     
-    This follows Red Hat RHOAI 2.25 best practices by using LlamaStack's
-    Vector IO API instead of direct Milvus writes. LlamaStack manages
-    the schema and ensures compatibility.
+    LlamaStack computes embeddings server-side - we only send content + metadata.
+    This is faster and more efficient than pre-computing embeddings.
     
     Reference: https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/2.25/html/working_with_llama_stack/
     """
@@ -398,19 +365,20 @@ def insert_via_llamastack(
     print(f"Inserting chunks via LlamaStack: {llamastack_url}")
     print(f"Target vector DB: {vector_db_id}")
     
-    # Load embeddings data
-    with open(embeddings_file.path, "r") as f:
-        embeddings_data = json.load(f)
+    # Load chunks (just text, no embeddings - LlamaStack computes them server-side)
+    with open(chunks_file.path, "r") as f:
+        chunks_data = json.load(f)
     
-    print(f"Loaded {len(embeddings_data)} chunks from pipeline")
+    print(f"Loaded {len(chunks_data)} chunks (embeddings computed server-side)")
     
     # Extract source filename from input_uri for better document IDs
     source_name = os.path.basename(input_uri).replace(".pdf", "").replace("s3://", "").replace("/", "-")
     
     # Format chunks for LlamaStack API
     # LlamaStack expects: content (str) + metadata (dict with document_id)
+    # Embeddings will be computed server-side by LlamaStack
     llamastack_chunks = []
-    for i, item in enumerate(embeddings_data):
+    for i, item in enumerate(chunks_data):
         chunk = {
             "content": item.get("text", item.get("content", "")),
             "metadata": {
@@ -545,40 +513,38 @@ def verify_ingestion(
 
 @dsl.pipeline(
     name="docling-rag-ingestion",
-    description="RAG ingestion pipeline: Docling to Embeddings to LlamaStack Vector IO"
+    description="RAG ingestion: Docling to Chunking to LlamaStack Vector IO (server-side embeddings)"
 )
 def docling_rag_pipeline(
     input_uri: str = "s3://llama-files/sample/rag-mini.pdf",
     docling_url: str = "http://docling-service.private-ai-demo.svc:5001",
-    embedding_url: str = "http://granite-embedding.private-ai-demo.svc/v1",
-    embedding_model: str = "ibm-granite/granite-embedding-125m-english",
     llamastack_url: str = "http://llama-stack-service.private-ai-demo.svc:8321",
     vector_db_id: str = "rag_documents",
-    embedding_dimension: int = 768,
     chunk_size: int = 512,
     minio_endpoint: str = "minio.model-storage.svc:9000",
     minio_creds_b64: str = "YWRtaW46bWluaW9hZG1pbg==",  # Base64 default (updated at runtime)
     min_chunks: int = 10
 ):
     """
-    RAG Ingestion Pipeline (LlamaStack Vector IO)
+    RAG Ingestion Pipeline (LlamaStack Vector IO - Optimized)
     
-    Downloads document from MinIO, processes with Docling,
-    generates embeddings, inserts via LlamaStack /v1/vector-io/insert,
-    and verifies retrieval.
+    Downloads document from MinIO, processes with Docling, chunks markdown,
+    and inserts via LlamaStack /v1/vector-io/insert (which computes embeddings server-side).
     
-    This implementation follows Red Hat RHOAI 2.25 best practices by
-    using LlamaStack's Vector IO API instead of direct Milvus writes.
-    LlamaStack manages the schema and ensures compatibility.
+    OPTIMIZATION: Removed redundant client-side embedding generation.
+    LlamaStack computes embeddings server-side, saving ~2-5x ingestion time.
     
-    MinIO credentials passed as base64-encoded parameter (works within KFP v2 limitations).
-    Format: base64("access_key:secret_key") - decoded in component.
+    Pipeline steps:
+    1. Download from MinIO (s3://)
+    2. Process with Docling async API (PDF to Markdown)
+    3. Chunk markdown (respecting Milvus 65K limit)
+    4. Insert via LlamaStack (embeddings computed server-side)
+    5. Verify ingestion (query test)
     
     Reference: https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/2.25/html/working_with_llama_stack/
     """
     
     # Step 1: Download from S3/MinIO
-    # Credentials passed as base64-encoded parameter
     download_task = download_from_s3(
         input_uri=input_uri,
         minio_endpoint=minio_endpoint,
@@ -591,17 +557,15 @@ def docling_rag_pipeline(
         docling_url=docling_url
     )
     
-    # Step 3: Generate embeddings
-    embedding_task = generate_embeddings(
+    # Step 3: Chunk markdown (no embeddings - computed server-side by LlamaStack)
+    chunking_task = chunk_markdown(
         markdown_file=docling_task.outputs["output_markdown"],
-        embedding_url=embedding_url,
-        embedding_model=embedding_model,
         chunk_size=chunk_size
     )
     
-    # Step 4: Insert via LlamaStack Vector IO API
+    # Step 4: Insert via LlamaStack Vector IO API (embeddings computed server-side)
     insert_task = insert_via_llamastack(
-        embeddings_file=embedding_task.outputs["output_embeddings"],
+        chunks_file=chunking_task.outputs["output_chunks"],
         llamastack_url=llamastack_url,
         vector_db_id=vector_db_id,
         input_uri=input_uri
