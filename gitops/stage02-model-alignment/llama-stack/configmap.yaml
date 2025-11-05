@@ -53,11 +53,15 @@ data:
       
       vector_io:
         # Milvus in private-ai-demo (dedicated for this demo)
-        # Base provider without collection_name (specified per vector_db)
+        # Fixed: Added explicit schema mapping for rag-runtime
         - provider_id: milvus-shared
           provider_type: remote::milvus
           config:
             uri: "tcp://milvus-standalone.private-ai-demo.svc.cluster.local:19530"
+            embedding_field: "embedding"              # matches Milvus schema
+            id_field: "id"                            # primary key field
+            metric_type: "L2"                         # matches IVF_FLAT index
+            embedding_dimension: 768                  # IBM Granite embedding size
       
       agents:
         # Inline agent provider for RAG
@@ -94,9 +98,13 @@ data:
       
       tool_runtime:
         # RAG runtime tool provider (required for agent RAG)
+        # Fixed: Added defaults for vector DB queries
         - provider_id: rag-runtime
           provider_type: inline::rag-runtime
-          config: {}
+          config:
+            default_vector_db_id: acme_corporate     # default corpus for RAG
+            top_k: 5                                  # retrieve top 5 chunks
+            similarity_threshold: 0.0                # no filtering (start permissive)
         
         # Model Context Protocol provider for external tools
         - provider_id: model-context-protocol
@@ -165,37 +173,28 @@ data:
     vector_dbs:
       # Register vector databases created by KFP ingestion pipelines
       # All use IBM Granite embeddings (768 dimensions)
-      # Fixed: Added collection_name at vector_db level AND in provider config
+      # CRITICAL FIX: Added provider_vector_db_id to map to actual Milvus collections
+      
+      # ACME Corporate collection (default for RAG queries)
+      - vector_db_id: acme_corporate
+        provider_id: milvus-shared
+        provider_vector_db_id: acme_corporate          # exact Milvus collection name
+        embedding_model: ibm-granite/granite-embedding-125m-english
+        embedding_dimension: 768
       
       # Red Hat Documentation collection
       - vector_db_id: red_hat_docs
         provider_id: milvus-shared
+        provider_vector_db_id: red_hat_docs            # exact Milvus collection name
         embedding_model: ibm-granite/granite-embedding-125m-english
         embedding_dimension: 768
-        collection_name: red_hat_docs
-        provider_vector_db_config:
-          collection_name: red_hat_docs
-          metric_type: L2
-      
-      # ACME Corporate collection
-      - vector_db_id: acme_corporate
-        provider_id: milvus-shared
-        embedding_model: ibm-granite/granite-embedding-125m-english
-        embedding_dimension: 768
-        collection_name: acme_corporate
-        provider_vector_db_config:
-          collection_name: acme_corporate
-          metric_type: L2
       
       # EU AI Act collection
       - vector_db_id: eu_ai_act
         provider_id: milvus-shared
+        provider_vector_db_id: eu_ai_act               # exact Milvus collection name
         embedding_model: ibm-granite/granite-embedding-125m-english
         embedding_dimension: 768
-        collection_name: eu_ai_act
-        provider_vector_db_config:
-          collection_name: eu_ai_act
-          metric_type: L2
     
     server:
       port: 8321
