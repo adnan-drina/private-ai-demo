@@ -19,16 +19,35 @@ BASE_PYTHON_IMAGE = "registry.access.redhat.com/ubi9/python-311:latest"
 def download_from_s3(
     input_uri: str,
     minio_endpoint: str,
-    aws_access_key_id: str,
-    aws_secret_access_key: str,
     output_file: Output[Dataset]
 ):
-    """Download document from MinIO/S3"""
+    """
+    Download document from MinIO/S3
+    
+    Credentials are injected via Kubernetes Secret as environment variables:
+    - AWS_ACCESS_KEY_ID
+    - AWS_SECRET_ACCESS_KEY
+    """
     import boto3
     from botocore.client import Config
     import os
     
     print(f"Downloading from: {input_uri}")
+    print(f"Endpoint: {minio_endpoint}")
+    
+    # Get credentials from environment variables (injected from Secret)
+    aws_access_key_id = os.getenv("AWS_ACCESS_KEY_ID")
+    aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+    
+    # Validate credential injection
+    if not aws_access_key_id or not aws_secret_access_key:
+        raise ValueError(
+            "MinIO credentials not found in environment! "
+            "Ensure AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are set from Secret."
+        )
+    
+    print(f"Credentials loaded: access_key={aws_access_key_id}")
+    print(f"Secret key present: {len(aws_secret_access_key) > 0}")
     
     # Parse S3 URI
     if input_uri.startswith("s3://"):
@@ -384,8 +403,6 @@ def docling_rag_pipeline(
     embedding_dimension: int = 768,
     chunk_size: int = 512,
     minio_endpoint: str = "minio.model-storage.svc:9000",
-    aws_access_key_id: str = "admin",
-    aws_secret_access_key: str = "minioadmin",
     min_chunks: int = 10
 ):
     """
@@ -399,16 +416,23 @@ def docling_rag_pipeline(
     using LlamaStack's Vector IO API instead of direct Milvus writes.
     LlamaStack manages the schema and ensures compatibility.
     
+    MinIO credentials are injected from Kubernetes Secret 'minio-storage-credentials'
+    via environment variables (no parameters for secrets).
+    
     Reference: https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/2.25/html/working_with_llama_stack/
     """
     
     # Step 1: Download from S3/MinIO
+    # Credentials injected from Secret via environment variables
     download_task = download_from_s3(
         input_uri=input_uri,
-        minio_endpoint=minio_endpoint,
-        aws_access_key_id=aws_access_key_id,
-        aws_secret_access_key=aws_secret_access_key
+        minio_endpoint=minio_endpoint
     )
+    
+    # Inject MinIO credentials from Kubernetes Secret
+    # Note: This will be patched in the compiled YAML post-processing
+    # KFP v2 DSL doesn't have direct secret injection, so we handle it via YAML manipulation
+    download_task.set_display_name("Download from MinIO (with Secret injection)")
     
     # Step 2: Process with Docling
     docling_task = process_with_docling(
