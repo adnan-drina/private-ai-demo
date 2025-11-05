@@ -108,27 +108,28 @@ except Exception as e:
 print("")
 
 # Define scenarios with different documents and collections
+# All PDFs now uploaded to MinIO with proper organization
 scenarios = [
     {
         "name": "red-hat-docs",
         "display": "Red Hat Documentation",
-        "input_uri": "s3://llama-files/sample/rag-mini.pdf",  # Red Hat docs
+        "input_uri": "s3://llama-files/scenario1-red-hat/rhoai-rag-guide.pdf",
         "vector_db_id": "red_hat_docs",
         "min_chunks": 10
     },
     {
         "name": "acme-corporate",
         "display": "ACME Corporate Policy",
-        "input_uri": "s3://llama-files/sample/rag-mini.pdf",  # Replace with acme-policy.pdf when available
+        "input_uri": "s3://llama-files/scenario2-acme/ACME_06_Reliability_Summary_Q3_FY25.pdf",
         "vector_db_id": "acme_corporate",
-        "min_chunks": 10
+        "min_chunks": 5  # Smaller file
     },
     {
         "name": "eu-ai-act",
         "display": "EU AI Act Regulation",
-        "input_uri": "s3://llama-files/sample/rag-mini.pdf",  # Replace with eu-ai-act.pdf when available
+        "input_uri": "s3://llama-files/scenario3-eu-ai-act/eu-ai-act-official-journal.pdf",
         "vector_db_id": "eu_ai_act",
-        "min_chunks": 10
+        "min_chunks": 50  # Large official document
     }
 ]
 
