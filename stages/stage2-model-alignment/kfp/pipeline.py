@@ -89,26 +89,27 @@ def download_from_s3(
 def process_with_docling(
     input_file: Input[Dataset],
     docling_url: str,
-    output_markdown: Output[Dataset],
-    timeout: int = 1200  # 20 minutes default (increased for large PDFs)
+    output_markdown: Output[Dataset]
 ):
     """
-    Process document with Docling to extract markdown (synchronous with extended timeout)
+    Process document with Docling to extract markdown (asynchronous API)
     
-    Uses /v1/convert/file endpoint with appropriate timeout for large PDFs.
-    Increased timeout allows processing of complex/large documents without async complexity.
+    Uses /v1/convert/file/async endpoint for robust long-running conversions.
+    This avoids server-side timeout issues (DOCLING_SERVE_MAX_SYNC_WAIT default 120s).
     
-    Note: Async pattern (/v1/convert/file/async) is not fully supported by current
-    Docling operator deployment (missing result retrieval endpoints).
-    See docs/02-PIPELINES/DOCLING-ASYNC-INVESTIGATION.md for details.
+    Workflow:
+    1. Submit job to /v1/convert/file/async
+    2. Poll /v1/status/poll/{task_id} until completion
+    3. Fetch result from /v1/result/{task_id}
     
-    Reference: https://github.com/docling-project/docling-serve
+    Reference: https://github.com/docling-project/docling-serve/blob/main/docs/usage.md
+    Reference: https://github.com/docling-project/docling-serve/blob/main/docs/configuration.md
     """
     import requests
+    import time
     import os
     
-    print(f"Processing document with Docling: {docling_url}")
-    print(f"Timeout: {timeout}s ({timeout/60:.1f} minutes)")
+    print(f"Processing document with Docling (async): {docling_url}")
     
     # Read input file and get filename
     filename = os.path.basename(input_file.path)
@@ -118,22 +119,62 @@ def process_with_docling(
     file_size = os.path.getsize(input_file.path)
     print(f"Converting document: {filename} ({file_size / 1024 / 1024:.2f} MB)")
     
-    # Call Docling sync endpoint with extended timeout
+    # Step 1: Submit async job
+    print(f"Submitting to /v1/convert/file/async...")
+    
     with open(input_file.path, "rb") as f:
         files = {"files": (filename, f, "application/pdf")}
         
-        print(f"Calling /v1/convert/file (sync with {timeout}s timeout)...")
-        print(f"Processing started...")
-        
         response = requests.post(
-            f"{docling_url}/v1/convert/file",
+            f"{docling_url}/v1/convert/file/async",
             files=files,
-            params={"format": "markdown"},
-            timeout=timeout
+            data={"to_formats": "md"},
+            timeout=30  # Short timeout for submission only
         )
         response.raise_for_status()
     
-    print(f"[OK] Docling processing completed")
+    task = response.json()
+    task_id = task["task_id"]
+    print(f"[OK] Task submitted: {task_id}")
+    print(f"    Initial status: {task.get('task_status', 'unknown')}")
+    
+    # Step 2: Poll for completion
+    print(f"Polling for completion...")
+    poll_count = 0
+    max_polls = 360  # 30 minutes with 5s intervals
+    
+    while task.get("task_status") not in ("success", "failure"):
+        time.sleep(5)
+        poll_count += 1
+        
+        response = requests.get(
+            f"{docling_url}/v1/status/poll/{task_id}",
+            timeout=10
+        )
+        response.raise_for_status()
+        task = response.json()
+        
+        if poll_count % 12 == 0:  # Log every minute
+            print(f"  Check {poll_count}: {task.get('task_status')} (position: {task.get('task_position', 'N/A')})")
+        
+        if poll_count >= max_polls:
+            raise TimeoutError(f"Task {task_id} did not complete within 30 minutes")
+    
+    final_status = task.get("task_status")
+    print(f"[OK] Task completed with status: {final_status}")
+    
+    if final_status != "success":
+        raise RuntimeError(f"Docling task failed: {task}")
+    
+    # Step 3: Fetch result
+    print(f"Fetching result from /v1/result/{task_id}...")
+    response = requests.get(
+        f"{docling_url}/v1/result/{task_id}",
+        timeout=30
+    )
+    response.raise_for_status()
+    
+    print(f"[OK] Result fetched")
     
     # Parse response
     result = response.json()
