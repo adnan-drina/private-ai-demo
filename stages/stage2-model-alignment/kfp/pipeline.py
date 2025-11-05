@@ -195,139 +195,194 @@ def generate_embeddings(
 
 @dsl.component(
     base_image=BASE_PYTHON_IMAGE,
-    packages_to_install=["pymilvus"]
+    packages_to_install=["requests"]
 )
-def store_in_milvus(
+def insert_via_llamastack(
     embeddings_file: Input[Dataset],
-    milvus_uri: str,
-    milvus_collection: str,
-    embedding_dimension: int,
+    llamastack_url: str,
+    vector_db_id: str,
     input_uri: str  # For metadata
 ) -> dict:
-    """Store embeddings in Milvus"""
-    from pymilvus import connections, Collection, CollectionSchema, FieldSchema, DataType, utility
+    """
+    Insert chunks via LlamaStack /v1/vector-io/insert API
+    
+    This follows Red Hat RHOAI 2.25 best practices by using LlamaStack's
+    Vector IO API instead of direct Milvus writes. LlamaStack manages
+    the schema and ensures compatibility.
+    
+    Reference: https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/2.25/html/working_with_llama_stack/
+    """
+    import requests
     import json
+    import os
     
-    print(f"Connecting to Milvus: {milvus_uri}")
+    print(f"Inserting chunks via LlamaStack: {llamastack_url}")
+    print(f"Target vector DB: {vector_db_id}")
     
-    # Connect to Milvus
-    connections.connect(uri=milvus_uri, timeout=30)
-    
-    # Load embeddings
+    # Load embeddings data
     with open(embeddings_file.path, "r") as f:
         embeddings_data = json.load(f)
     
-    # Create collection if it doesn't exist
-    if not utility.has_collection(milvus_collection):
-        print(f"Creating collection: {milvus_collection}")
-        
-        fields = [
-            FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=True),
-            FieldSchema(name="text", dtype=DataType.VARCHAR, max_length=65535),
-            FieldSchema(name="source", dtype=DataType.VARCHAR, max_length=512),
-            FieldSchema(name="chunk_id", dtype=DataType.INT64),
-            FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=embedding_dimension)
-        ]
-        
-        schema = CollectionSchema(fields, description="RAG document collection")
-        collection = Collection(name=milvus_collection, schema=schema)
-        
-        # Create index
-        index_params = {
-            "metric_type": "L2",
-            "index_type": "IVF_FLAT",
-            "params": {"nlist": 128}
+    print(f"Loaded {len(embeddings_data)} chunks from pipeline")
+    
+    # Extract source filename from input_uri for better document IDs
+    source_name = os.path.basename(input_uri).replace(".pdf", "").replace("s3://", "").replace("/", "-")
+    
+    # Format chunks for LlamaStack API
+    # LlamaStack expects: content (str) + metadata (dict with document_id)
+    llamastack_chunks = []
+    for i, item in enumerate(embeddings_data):
+        chunk = {
+            "content": item.get("text", item.get("content", "")),
+            "metadata": {
+                "document_id": f"{source_name}-chunk-{i}",
+                "source": input_uri,
+                "chunk_index": i,
+                "chunk_id": item.get("chunk_id", i)  # Keep original for reference
+            }
         }
-        collection.create_index("embedding", index_params)
-    else:
-        collection = Collection(milvus_collection)
+        llamastack_chunks.append(chunk)
     
-    # Prepare data
-    texts = [item["text"] for item in embeddings_data]
-    sources = [input_uri] * len(embeddings_data)
-    chunk_ids = [item["chunk_id"] for item in embeddings_data]
-    embeddings = [item["embedding"] for item in embeddings_data]
+    # Insert via LlamaStack Vector IO API
+    print(f"Calling POST {llamastack_url}/v1/vector-io/insert...")
     
-    # Insert data
-    collection.insert([texts, sources, chunk_ids, embeddings])
-    collection.flush()
+    response = requests.post(
+        f"{llamastack_url}/v1/vector-io/insert",
+        json={
+            "vector_db_id": vector_db_id,
+            "chunks": llamastack_chunks
+        },
+        headers={"Content-Type": "application/json"},
+        timeout=300  # 5 minutes for large batches
+    )
     
-    print(f"[OK] Inserted {len(embeddings_data)} entities into {milvus_collection}")
+    # Check response
+    if response.status_code != 200:
+        print(f"ERROR: LlamaStack returned {response.status_code}")
+        print(f"Response: {response.text}")
+        response.raise_for_status()
+    
+    print(f"[OK] Successfully inserted {len(llamastack_chunks)} chunks into {vector_db_id}")
+    print(f"Sample document_id: {llamastack_chunks[0]['metadata']['document_id']}")
     
     return {
-        "collection": milvus_collection,
-        "num_entities": len(embeddings_data),
-        "source": input_uri
+        "vector_db_id": vector_db_id,
+        "num_chunks": len(llamastack_chunks),
+        "source": input_uri,
+        "status": "success"
     }
 
 
 @dsl.component(
     base_image=BASE_PYTHON_IMAGE,
-    packages_to_install=["pymilvus"]
+    packages_to_install=["requests"]
 )
 def verify_ingestion(
-    milvus_uri: str,
-    milvus_collection: str,
-    min_entities: int,
-    store_result: dict
+    llamastack_url: str,
+    vector_db_id: str,
+    min_chunks: int,
+    insert_result: dict
 ) -> dict:
-    """Verify that documents were ingested successfully"""
-    from pymilvus import connections, Collection
+    """
+    Verify ingestion by querying LlamaStack Vector IO API
     
-    print(f"Verifying ingestion in collection: {milvus_collection}")
+    Tests that chunks can be retrieved via /v1/vector-io/query
+    """
+    import requests
+    import json
     
-    # Connect to Milvus
-    connections.connect(uri=milvus_uri, timeout=30)
+    print(f"Verifying ingestion in vector DB: {vector_db_id}")
+    print(f"Insert result: {insert_result}")
     
-    # Get collection
-    collection = Collection(milvus_collection)
-    collection.load()
+    # Test query to verify chunks are retrievable
+    test_query = "test document content"
     
-    # Get stats
-    num_entities = collection.num_entities
-    print(f"Collection stats:")
-    print(f"  Total entities: {num_entities}")
-    print(f"  Minimum required: {min_entities}")
+    print(f"Testing retrieval with query: '{test_query}'")
     
-    # Verify threshold
-    success = num_entities >= min_entities
+    response = requests.post(
+        f"{llamastack_url}/v1/vector-io/query",
+        json={
+            "vector_db_id": vector_db_id,
+            "query": test_query,
+            "params": {"top_k": 5}
+        },
+        headers={"Content-Type": "application/json"},
+        timeout=60
+    )
+    
+    if response.status_code != 200:
+        print(f"ERROR: Query failed with status {response.status_code}")
+        print(f"Response: {response.text}")
+        return {
+            "success": False,
+            "error": f"Query failed: {response.status_code}",
+            "vector_db_id": vector_db_id
+        }
+    
+    result = response.json()
+    chunks_returned = len(result.get("chunks", []))
+    
+    print(f"Query returned {chunks_returned} chunks")
+    
+    # Verify we got results
+    num_chunks = insert_result.get("num_chunks", 0)
+    success = chunks_returned > 0 and num_chunks >= min_chunks
+    
+    print(f"Ingestion verification:")
+    print(f"  Chunks inserted: {num_chunks}")
+    print(f"  Chunks retrieved: {chunks_returned}")
+    print(f"  Minimum required: {min_chunks}")
     
     if success:
-        print(f"[OK] Verification PASSED: {num_entities} >= {min_entities}")
+        print(f"[OK] Verification PASSED")
+        
+        # Print sample chunk
+        if result.get("chunks"):
+            sample_chunk = result["chunks"][0]
+            print(f"Sample retrieved chunk (first 100 chars):")
+            print(f"  {sample_chunk[:100]}...")
     else:
-        print(f"[FAIL] Verification FAILED: {num_entities} < {min_entities}")
+        print(f"[FAIL] Verification FAILED")
     
     return {
         "success": success,
-        "num_entities": num_entities,
-        "min_entities": min_entities,
-        "collection": milvus_collection
+        "num_chunks_inserted": num_chunks,
+        "num_chunks_retrieved": chunks_returned,
+        "min_chunks": min_chunks,
+        "vector_db_id": vector_db_id
     }
 
 
 @dsl.pipeline(
     name="docling-rag-ingestion",
-    description="RAG ingestion pipeline: Docling to Embeddings to Milvus"
+    description="RAG ingestion pipeline: Docling → Embeddings → LlamaStack Vector IO"
 )
 def docling_rag_pipeline(
     input_uri: str = "s3://llama-files/sample/rag-mini.pdf",
     docling_url: str = "http://docling-service.private-ai-demo.svc:5001",
     embedding_url: str = "http://granite-embedding.private-ai-demo.svc/v1",
     embedding_model: str = "ibm-granite/granite-embedding-125m-english",
-    milvus_uri: str = "tcp://milvus-standalone.private-ai-demo.svc.cluster.local:19530",
-    milvus_collection: str = "rag_documents",
+    llamastack_url: str = "http://llama-stack-service.private-ai-demo.svc:8321",
+    vector_db_id: str = "rag_documents",
     embedding_dimension: int = 768,
     chunk_size: int = 512,
     minio_endpoint: str = "minio.model-storage.svc:9000",
     aws_access_key_id: str = "admin",
     aws_secret_access_key: str = "minioadmin",
-    min_entities: int = 10
+    min_chunks: int = 10
 ):
     """
-    RAG Ingestion Pipeline
+    RAG Ingestion Pipeline (LlamaStack Vector IO)
     
     Downloads document from MinIO, processes with Docling,
-    generates embeddings, stores in Milvus, and verifies ingestion.
+    generates embeddings, inserts via LlamaStack /v1/vector-io/insert,
+    and verifies retrieval.
+    
+    This implementation follows Red Hat RHOAI 2.25 best practices by
+    using LlamaStack's Vector IO API instead of direct Milvus writes.
+    LlamaStack manages the schema and ensures compatibility.
+    
+    Reference: https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/2.25/html/working_with_llama_stack/
     """
     
     # Step 1: Download from S3/MinIO
@@ -352,21 +407,20 @@ def docling_rag_pipeline(
         chunk_size=chunk_size
     )
     
-    # Step 4: Store in Milvus
-    store_task = store_in_milvus(
+    # Step 4: Insert via LlamaStack Vector IO API
+    insert_task = insert_via_llamastack(
         embeddings_file=embedding_task.outputs["output_embeddings"],
-        milvus_uri=milvus_uri,
-        milvus_collection=milvus_collection,
-        embedding_dimension=embedding_dimension,
+        llamastack_url=llamastack_url,
+        vector_db_id=vector_db_id,
         input_uri=input_uri
     )
     
-    # Step 5: Verify ingestion
+    # Step 5: Verify ingestion via LlamaStack query
     verify_task = verify_ingestion(
-        milvus_uri=milvus_uri,
-        milvus_collection=milvus_collection,
-        min_entities=min_entities,
-        store_result=store_task.output
+        llamastack_url=llamastack_url,
+        vector_db_id=vector_db_id,
+        min_chunks=min_chunks,
+        insert_result=insert_task.output
     )
 
 

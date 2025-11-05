@@ -153,10 +153,11 @@ echo -e "${YELLOW}⏳ Creating pipeline run...${NC}"
 echo ""
 echo "Parameters:"
 echo "  • Document: $DOCUMENT_URI"
-echo "  • Docling URL: http://docling.$NAMESPACE.svc:8080"
-echo "  • Embedding URL: http://llamastack.$NAMESPACE.svc:8321/v1"
-echo "  • Milvus URI: tcp://milvus-standalone.$NAMESPACE.svc.cluster.local:19530"
-echo "  • Collection: rag_documents"
+echo "  • Docling URL: http://docling-service.$NAMESPACE.svc:5001"
+echo "  • Embedding URL: http://granite-embedding.$NAMESPACE.svc/v1"
+echo "  • LlamaStack URL: http://llama-stack-service.$NAMESPACE.svc:8321"
+echo "  • Vector DB ID: rag_documents"
+echo "  • Method: LlamaStack /v1/vector-io/insert (aligned with RHOAI 2.25)"
 echo ""
 
 # Get MinIO credentials for the run
@@ -171,33 +172,33 @@ fi
 # Create run name
 RUN_NAME="rag-ingestion-$(date +%s)"
 
-# Build parameters JSON
+# Build parameters JSON (updated for LlamaStack Vector IO API)
 PARAMS_JSON=$(jq -n \
   --arg input_uri "$DOCUMENT_URI" \
-  --arg docling_url "http://docling.$NAMESPACE.svc:8080" \
-  --arg embedding_url "http://llamastack.$NAMESPACE.svc:8321/v1" \
+  --arg docling_url "http://docling-service.$NAMESPACE.svc:5001" \
+  --arg embedding_url "http://granite-embedding.$NAMESPACE.svc/v1" \
   --arg embedding_model "ibm-granite/granite-embedding-125m-english" \
-  --arg milvus_uri "tcp://milvus-standalone.$NAMESPACE.svc.cluster.local:19530" \
-  --arg milvus_collection "rag_documents" \
+  --arg llamastack_url "http://llama-stack-service.$NAMESPACE.svc:8321" \
+  --arg vector_db_id "rag_documents" \
   --argjson embedding_dimension 768 \
   --argjson chunk_size 512 \
   --arg minio_endpoint "minio.model-storage.svc:9000" \
   --arg minio_key "$MINIO_KEY" \
   --arg minio_secret "$MINIO_SECRET" \
-  --argjson min_entities 10 \
+  --argjson min_chunks 10 \
   '{
     input_uri: {string_value: $input_uri},
     docling_url: {string_value: $docling_url},
     embedding_url: {string_value: $embedding_url},
     embedding_model: {string_value: $embedding_model},
-    milvus_uri: {string_value: $milvus_uri},
-    milvus_collection: {string_value: $milvus_collection},
+    llamastack_url: {string_value: $llamastack_url},
+    vector_db_id: {string_value: $vector_db_id},
     embedding_dimension: {int_value: $embedding_dimension},
     chunk_size: {int_value: $chunk_size},
     minio_endpoint: {string_value: $minio_endpoint},
     aws_access_key_id: {string_value: $minio_key},
     aws_secret_access_key: {string_value: $minio_secret},
-    min_entities: {int_value: $min_entities}
+    min_chunks: {int_value: $min_chunks}
   }')
 
 # Create the run using helper function
