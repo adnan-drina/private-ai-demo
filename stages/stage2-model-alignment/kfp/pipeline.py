@@ -411,7 +411,7 @@ def insert_via_llamastack(
             "chunks": llamastack_chunks
         },
         headers={"Content-Type": "application/json"},
-        timeout=600  # 10 minutes for large batches
+        timeout=120  # 2 minutes - reasonable for properly sized chunks
     )
     
     # Check response
