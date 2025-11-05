@@ -425,6 +425,13 @@ def insert_via_llamastack(
     # Insert via LlamaStack Vector IO API
     print(f"Calling POST {llamastack_url}/v1/vector-io/insert...")
     
+    # Calculate reasonable timeout based on batch size
+    # ~1-2 seconds per chunk for embedding + Milvus insert
+    # Add 60s base overhead for network/processing
+    timeout_seconds = max(120, len(llamastack_chunks) * 2 + 60)
+    
+    print(f"Inserting {len(llamastack_chunks)} chunks (timeout: {timeout_seconds}s)...")
+    
     response = requests.post(
         f"{llamastack_url}/v1/vector-io/insert",
         json={
@@ -432,7 +439,7 @@ def insert_via_llamastack(
             "chunks": llamastack_chunks
         },
         headers={"Content-Type": "application/json"},
-        timeout=120  # 2 minutes - reasonable for properly sized chunks
+        timeout=timeout_seconds  # Dynamic timeout based on batch size
     )
     
     # Check response
