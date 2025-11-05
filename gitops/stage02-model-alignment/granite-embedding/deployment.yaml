@@ -127,11 +127,11 @@ spec:
               PYEOF
           resources:
             requests:
-              memory: "2Gi"
-              cpu: "500m"
-            limits:
               memory: "4Gi"
-              cpu: "2"
+              cpu: "1"
+            limits:
+              memory: "8Gi"
+              cpu: "4"
           startupProbe:
             httpGet:
               path: /health
