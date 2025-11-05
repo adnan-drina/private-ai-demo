@@ -90,7 +90,7 @@ def process_with_docling(
     input_file: Input[Dataset],
     docling_url: str,
     output_markdown: Output[Dataset],
-    timeout: int = 600  # 10 minutes default
+    timeout: int = 1200  # 20 minutes default (increased for large PDFs)
 ):
     """
     Process document with Docling to extract markdown (synchronous with extended timeout)

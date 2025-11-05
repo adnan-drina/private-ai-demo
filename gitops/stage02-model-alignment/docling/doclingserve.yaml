@@ -29,13 +29,14 @@ spec:
     instances: 1
     
     # Resource requests/limits
+    # Increased for RAG pipeline PDF processing (3+ MB documents, complex layouts)
     resources:
       requests:
-        memory: "2Gi"
-        cpu: "1"
-      limits:
         memory: "4Gi"
         cpu: "2"
+      limits:
+        memory: "8Gi"
+        cpu: "4"
   
   # Engine Configuration
   engine:
@@ -43,7 +44,8 @@ spec:
     # Note: KFP requires DOCLING_SERVE_ENG_KFP_EXPERIMENTAL=true
     local:
       # Number of worker processes for parallel conversion
-      numWorkers: 2
+      # Increased from 2 to 4 for faster processing
+      numWorkers: 4
     
     # KFP engine (experimental - commented out for now)
     # kfp:
