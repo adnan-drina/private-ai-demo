@@ -244,12 +244,10 @@ def generate_embeddings(
     with open(markdown_file.path, "r") as f:
         content = f.read()
     
-    # Smart chunking with size limit (Milvus dynamic field limit is 65536 chars)
-    # Use chunk_size parameter but enforce Milvus limit
-    MAX_CHUNK_SIZE = 60000  # Leave buffer for Milvus limit
-    effective_chunk_size = min(chunk_size, MAX_CHUNK_SIZE)
+    # Smart chunking with HARD size limit (Milvus dynamic field limit is 65536 chars)
+    MAX_CHUNK_SIZE = 60000  # Leave 5K buffer for Milvus limit
     
-    print(f"Chunking with max size: {effective_chunk_size} chars")
+    print(f"Chunking with HARD limit: {MAX_CHUNK_SIZE} chars")
     
     # Split by paragraphs first
     paragraphs = [p.strip() for p in content.split("\n\n") if p.strip()]
@@ -262,35 +260,22 @@ def generate_embeddings(
     for para in paragraphs:
         para_len = len(para)
         
-        # If single paragraph exceeds limit, split it
-        if para_len > effective_chunk_size:
+        # If single paragraph exceeds limit, force-split it by character chunks
+        if para_len > MAX_CHUNK_SIZE:
             # Add current chunk if any
             if current_chunk:
                 chunks.append("\n\n".join(current_chunk))
                 current_chunk = []
                 current_length = 0
             
-            # Split large paragraph by sentences
-            sentences = para.split(". ")
-            temp_chunk = []
-            temp_len = 0
-            
-            for sent in sentences:
-                sent_len = len(sent) + 2  # +2 for ". "
-                if temp_len + sent_len > effective_chunk_size:
-                    if temp_chunk:
-                        chunks.append(". ".join(temp_chunk) + ".")
-                    temp_chunk = [sent]
-                    temp_len = sent_len
-                else:
-                    temp_chunk.append(sent)
-                    temp_len += sent_len
-            
-            if temp_chunk:
-                chunks.append(". ".join(temp_chunk) + ".")
+            # Force-split oversized paragraph into character chunks
+            for i in range(0, para_len, MAX_CHUNK_SIZE):
+                chunk_part = para[i:i + MAX_CHUNK_SIZE]
+                chunks.append(chunk_part)
+                print(f"  Force-split oversized paragraph into {len(chunk_part)} char chunk")
         
         # Normal paragraph fits or can be added
-        elif current_length + para_len + 2 > effective_chunk_size:
+        elif current_length + para_len + 2 > MAX_CHUNK_SIZE:
             # Current chunk is full, start new one
             if current_chunk:
                 chunks.append("\n\n".join(current_chunk))
@@ -305,10 +290,25 @@ def generate_embeddings(
     if current_chunk:
         chunks.append("\n\n".join(current_chunk))
     
-    # Filter out very short chunks
-    chunks = [c for c in chunks if len(c) > 50]
+    # CRITICAL SAFETY CHECK: Force-split any chunk that still exceeds limit
+    final_chunks = []
+    for chunk in chunks:
+        if len(chunk) > MAX_CHUNK_SIZE:
+            print(f"  SAFETY: Force-splitting {len(chunk)} char chunk")
+            for i in range(0, len(chunk), MAX_CHUNK_SIZE):
+                final_chunks.append(chunk[i:i + MAX_CHUNK_SIZE])
+        elif len(chunk) > 50:  # Filter out very short chunks
+            final_chunks.append(chunk)
     
-    print(f"Created {len(chunks)} chunks (max length: {max(len(c) for c in chunks)} chars)")
+    chunks = final_chunks
+    
+    # Verify NO chunk exceeds limit
+    max_chunk_len = max(len(c) for c in chunks) if chunks else 0
+    print(f"Created {len(chunks)} chunks")
+    print(f"Max chunk length: {max_chunk_len} chars (limit: {MAX_CHUNK_SIZE})")
+    
+    if max_chunk_len > MAX_CHUNK_SIZE:
+        raise ValueError(f"BUG: Chunk of {max_chunk_len} chars exceeds limit {MAX_CHUNK_SIZE}")
     
     # Generate embeddings (with retry logic for transient failures)
     embeddings = []
