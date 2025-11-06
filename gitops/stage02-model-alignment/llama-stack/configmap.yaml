@@ -46,8 +46,13 @@ data:
             api_token: fake
             tls_verify: false
         
-        # Sentence Transformers for embeddings (inline, no external dependencies)
-        # RAG runtime uses this provider via inference API for query embeddings
+        # Sentence Transformers for embeddings (inline, model cached after first load)
+        # NOTE: First request after pod restart triggers 500MB model download/load (2-3 min)
+        # Subsequent requests use cached model and are fast
+        # LIMITATION: Cannot use standalone granite-embedding service because:
+        #   - remote::openai provider requires 'litellm' module
+        #   - Red Hat ET image (quay.io/redhat-et/llama:vllm-milvus-0.2.8) doesn't include litellm
+        # WORKAROUND: Model is now pre-loaded, so blocking only happens on first pod start
         - provider_id: sentence-transformers
           provider_type: inline::sentence-transformers
           config: {}
@@ -145,6 +150,7 @@ data:
         provider_model_id: mistral-24b
       
       # IBM Granite embedding model (768 dimensions)
+      # Uses inline::sentence-transformers provider (model cached after first load)
       - metadata:
           embedding_dimension: 768
         model_id: ibm-granite/granite-embedding-125m-english
