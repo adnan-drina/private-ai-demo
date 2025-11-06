@@ -451,17 +451,28 @@ def insert_via_llamastack(
     source_name = os.path.basename(input_uri).replace(".pdf", "").replace("s3://", "").replace("/", "-")
     
     # Format chunks for LlamaStack API
-    # LlamaStack expects: content (str) + metadata (dict with document_id)
+    # LlamaStack expects: content (str) + metadata (dict with document_id AND token_count)
     # Embeddings will be computed server-side by LlamaStack
+    #
+    # CRITICAL: RAG tool requires 'token_count' in metadata to calculate context window usage
+    # Without it, RAG queries fail with KeyError: 'token_count'
     llamastack_chunks = []
     for i, item in enumerate(chunks_data):
+        content = item.get("text", item.get("content", ""))
+        
+        # Calculate token count (rough estimation: ~4 chars per token)
+        # This is used by LlamaStack RAG tool to track context window usage
+        # More accurate: use tiktoken, but simple estimation is sufficient
+        token_count = len(content) // 4
+        
         chunk = {
-            "content": item.get("text", item.get("content", "")),
+            "content": content,
             "metadata": {
                 "document_id": f"{source_name}-chunk-{i}",
                 "source": input_uri,
                 "chunk_index": i,
-                "chunk_id": item.get("chunk_id", i)  # Keep original for reference
+                "chunk_id": item.get("chunk_id", i),  # Keep original for reference
+                "token_count": token_count  # Required by RAG tool
             }
         }
         llamastack_chunks.append(chunk)
