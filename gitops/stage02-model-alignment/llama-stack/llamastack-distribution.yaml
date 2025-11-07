@@ -38,9 +38,8 @@ spec:
           value: "/opt/app-root/run.yaml"
         - name: LLAMA_STACK_HOME
           value: "/data/.llama"
-        # HuggingFace cache on PVC (for Granite embedding weights, ~500MB)
-        - name: HF_HOME
-          value: "/data/hf_home"
+        # Note: HF_HOME is set by operator to /opt/app-root/src/.llama/distributions/rh/
+        # TRANSFORMERS_CACHE for Granite embedding weights
         - name: TRANSFORMERS_CACHE
           value: "/data/hf_home"
 
@@ -81,12 +80,11 @@ spec:
       resources:
         requests:
           memory: "2Gi"
-          cpu: "2"
+          cpu: "4"  # Increased from 2 to 4 cores for faster embedding computation
           ephemeral-storage: "5Gi"
         limits:
           memory: "4Gi"
-          # CPU limit removed to allow bursting for faster embedding computation
-          # LlamaStack can now use all available CPU when processing inserts
+          cpu: "4"  # Set limit to 4 cores to handle embedding workload
           ephemeral-storage: "10Gi"
     
     # Pod-level configuration
