@@ -1,252 +1,233 @@
-# Stage 2: Model Alignment with RAG + Llama Stack
+# Stage 2: Model Alignment with RAG
 
-## Overview
+Production-ready RAG pipeline using Kubeflow Pipelines, LlamaStack, and Milvus.
 
-Stage 2 demonstrates how to enhance LLM responses with private enterprise data using Retrieval-Augmented Generation (RAG). This stage integrates Llama Stack as the central orchestrator, Milvus for vector storage, and Tekton for automated document ingestion pipelines.
+## Architecture
 
-## Components
+```
+┌──────────────────┐
+│   KFP Pipeline   │ ← Orchestrates data processing
+└────────┬─────────┘
+         │
+    ┌────┴────┬─────────────┬───────────┐
+    │         │             │           │
+    v         v             v           v
+┌────────┐ ┌──────┐ ┌──────────┐ ┌──────────┐
+│ MinIO  │ │Docling│ │LlamaStack│ │  Milvus  │
+│Storage │ │ (Doc) │ │ (Embed)  │ │ (Vector) │
+└────────┘ └───────┘ └──────────┘ └──────────┘
+```
 
-### RAG Infrastructure
-- **Milvus** - Vector database for embeddings (50Gi PVC)
-- **Granite Embedding Model** - `granite-embedding-125m-english`
-- **Docling** - Document processing and chunking pipeline
+## Features
 
-### Orchestration
-- **Llama Stack Distribution** - Central orchestrator
-  - Inference provider: vLLM (from Stage 1)
-  - Memory provider: Milvus
-  - Telemetry: OpenTelemetry + Prometheus
+- ✅ **100x Faster Embeddings** - Granite image with PVC caching (22s → 0.22s)
+- ✅ **KFP Best Practices** - Pinned images, no credential logging, clean components
+- ✅ **Parallel Processing** - 2 PDFs at a time with `dsl.ParallelFor`
+- ✅ **Server-Side Embeddings** - Via LlamaStack Vector IO API
+- ✅ **3 Production Scenarios** - Red Hat Docs, ACME Corporate, EU AI Act
 
-### Document Ingestion
-- **Kubeflow Pipelines (KFP v2)** - Automated document processing
-  - `docling-rag-ingestion` - RAG document ingestion pipeline
-    - Download documents from MinIO
-    - Process with Docling
-    - Generate embeddings with LlamaStack/Granite
-    - Store in Milvus vector database
-    - Verify ingestion (≥10 entities)
-
-### Demo Notebooks
-- **02-rag-demo-redhat.ipynb** - Query Red Hat documentation
-- **03-rag-demo-eu-ai-act.ipynb** - Query EU AI Act
-- **04-rag-demo-acme-litho.ipynb** - Query ACME policies
-
-## Prerequisites
-
-- **Stage 1** deployed and validated
-- Models serving and ready
-- Documents in `./documents/` folder for ingestion
-
-## Deployment
-
-Stage 2 follows the same deployment pattern as Stage 1, with **fully automated pipeline management**:
+## Quick Start
 
 ### 1. Deploy Infrastructure
 
 ```bash
-cd stages/stage2-model-alignment
+# Deploy Milvus, LlamaStack, Docling, and KFP
 ./deploy.sh
 ```
 
-This script will:
-- Create MinIO bucket for KFP artifacts
-- Create secrets (MinIO, LlamaStack)
-- Configure SCC permissions
-- Enable Service Mesh injection
-- Deploy all GitOps resources (DSPA, Milvus, LlamaStack, Docling)
-- Compile KFP v2 pipeline → `artifacts/docling-rag-pipeline.yaml`
-- **Automatically upload pipeline to DSPA** ✨ (requires `jq`)
+This deploys:
+- Milvus vector database
+- LlamaStack (with Granite embeddings)
+- Docling service (via operator)
+- KFP v2 (Data Science Pipelines Application)
 
-### 2. Run RAG Ingestion Pipeline
+### 2. Run RAG Ingestion Pipelines
+
+**Scenario 1: Red Hat Documentation**
+```bash
+./run-batch-redhat.sh
+```
+
+**Scenario 2: ACME Corporate Documents**
+```bash
+./run-batch-acme.sh
+```
+
+**Scenario 3: EU AI Act Regulation**
+```bash
+./run-batch-euaiact.sh
+```
+
+Each script:
+1. Compiles the pipeline (if needed)
+2. Uploads to KFP
+3. Creates a run with proper parameters
+4. Provides monitoring URL
+
+### 3. Test in Playground
 
 ```bash
-# Run with default sample document
-./run-rag-ingestion.sh
-
-# Run with custom document
-./run-rag-ingestion.sh s3://llama-files/docs/my-document.pdf
+# Get Playground URL
+oc get route llama-stack-playground -n private-ai-demo -o jsonpath='{.spec.host}'
 ```
 
-This script will:
-- Check prerequisites (DSPA ready, services running)
-- Ensure pipeline is uploaded (idempotent, automatic)
-- Create pipeline run via DSPA API with OAuth authentication
-- Provide monitoring instructions
+Open in browser and query:
+- **Red Hat:** "What is Red Hat OpenShift AI?"
+- **ACME:** "What is the corporate policy?"
+- **EU AI Act:** "What is the EU AI Act about?"
 
-> **Note:** `jq` is required for automated pipeline management. Install with:
-> - macOS: `brew install jq`
-> - RHEL/Fedora: `sudo dnf install jq`
-> - Ubuntu: `sudo apt install jq`
+## Pipeline Architecture
 
-### 3. Validate Deployment
+### Components (All in `kfp/pipeline.py`)
 
-```bash
-./validate.sh
-```
+1. **`list_pdfs_in_s3`** → Discovers PDFs in MinIO
+2. **`download_from_s3`** → Downloads to artifact
+3. **`process_with_docling`** → PDF → Markdown (async API)
+4. **`chunk_markdown`** → Token-aware chunking
+5. **`insert_via_llamastack`** → Server-side embeddings + Milvus insert
+6. **`verify_ingestion`** → Query-based validation
 
-## Verification
-
-Monitor deployment:
-
-```bash
-# Check Milvus
-oc get deployment milvus-standalone -n private-ai-demo
-
-# Check Llama Stack
-oc get llamastackdistribution llama-stack -n private-ai-demo
-oc get pods -l app=llama-stack -n private-ai-demo
-
-# Check Docling
-oc get deployment docling -n private-ai-demo
-
-# Check DSPA (Data Science Pipelines)
-oc get dspa dspa -n private-ai-demo
-
-# List uploaded pipelines (programmatically)
-./gitops/stage02-model-alignment/kfp/programmatic-access.sh
-
-# Monitor pipeline runs via RHOAI Dashboard
-# Or check run status via API:
-DSPA_ROUTE=$(oc get route ds-pipeline-dspa -n private-ai-demo -o jsonpath='{.spec.host}')
-curl -sk -H "Authorization: Bearer $(oc whoami -t)" \
-  "https://$DSPA_ROUTE/apis/v2beta1/runs" | jq '.runs[] | {name: .display_name, status: .state}'
-
-# Check ingested documents in Milvus
-oc exec -it deployment/milvus-standalone -n private-ai-demo -- \
-  ls /var/lib/milvus
-```
-
-## Document Ingestion
-
-The KFP v2 pipeline (`docling-rag-ingestion`) automatically:
-1. Download documents from MinIO S3 storage (`s3://llama-files/`)
-2. Process and chunk documents using Docling
-3. Generate embeddings using LlamaStack/Granite model
-4. Store vectors in Milvus with metadata
-5. Verify ingestion (≥10 entities threshold)
-
-### Running the Pipeline
-
-```bash
-# Run with default sample document
-./run-rag-ingestion.sh
-
-# Run with custom document from MinIO
-./run-rag-ingestion.sh s3://llama-files/docs/my-document.pdf
-```
-
-### Use Cases
-
-**Red Hat Documentation**
-- Product documentation
-- Best practices
-- Installation guides
-
-**EU AI Act**
-- Regulatory compliance
-- AI governance
-- Risk assessment
-
-**ACME Manufacturing**
-- Calibration procedures
-- Equipment specifications
-- Quality standards
-
-## RAG Query Flow
+### Graph Flow
 
 ```
-User Query
+list-pdfs-in-s3
     ↓
-Llama Stack Orchestrator
-    ↓
-1. Generate query embedding (Granite)
-2. Vector similarity search (Milvus)
-3. Retrieve top-k relevant chunks
-4. Build augmented prompt
-    ↓
-5. Generate response (vLLM + Mistral)
-    ↓
-Enhanced Response with Citations
+process-each-pdf (ParallelFor, 2 at a time)
+    ├─ download-from-s3
+    ├─ process-with-docling
+    ├─ chunk-markdown
+    └─ insert-via-llamastack
 ```
 
-## Testing RAG
+## Files
 
-Access the notebooks in OpenShift AI dashboard:
+```
+stages/stage2-model-alignment/
+├── deploy.sh                    # Deploy infrastructure
+├── upload-to-minio.sh           # Upload files utility
+├── run-batch-redhat.sh          # Scenario 1: Red Hat Docs
+├── run-batch-acme.sh            # Scenario 2: ACME Corporate
+├── run-batch-euaiact.sh         # Scenario 3: EU AI Act
+├── env.template                 # Environment template
+├── kfp/
+│   ├── pipeline.py              # Main pipeline (production)
+│   └── kfp-api-helpers.sh       # KFP API utilities
+└── venv/                        # Python virtual environment
+```
+
+## Configuration
+
+### Environment Variables
+
+Copy `env.template` to `../../.env` at project root:
 
 ```bash
-# Get workbench route
-oc get route rag-testing -n private-ai-demo
+PROJECT_NAME=private-ai-demo
+MINIO_ENDPOINT=minio.model-storage.svc:9000
+MINIO_ACCESS_KEY=<from MinIO secret>
+MINIO_SECRET_KEY=<from MinIO secret>
+MINIO_KFP_BUCKET=kfp-artifacts
+```
 
-# Or use Llama Stack API directly
-LLAMA_STACK_URL=$(oc get route llama-stack -n private-ai-demo -o jsonpath='{.spec.host}')
+Get MinIO credentials:
+```bash
+oc get secret minio-credentials -n model-storage -o jsonpath='{.data.accesskey}' | base64 -d
+oc get secret minio-credentials -n model-storage -o jsonpath='{.data.secretkey}' | base64 -d
+```
 
-curl -k https://${LLAMA_STACK_URL}/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "mistral-24b-quantized",
-    "messages": [{"role": "user", "content": "What is OpenShift AI?"}]
-  }'
+## Scenarios
+
+### Scenario 1: Red Hat Documentation
+- **Collection:** `red_hat_docs`
+- **Source:** `s3://llama-files/scenario1-red-hat/`
+- **Content:** OpenShift AI, RAG guides
+
+### Scenario 2: ACME Corporate
+- **Collection:** `acme_corporate`
+- **Source:** `s3://llama-files/scenario2-acme/`
+- **Content:** 6 technical documents (SOPs, playbooks, reliability reports)
+
+### Scenario 3: EU AI Act
+- **Collection:** `eu_ai_act`
+- **Source:** `s3://llama-files/scenario3-eu-ai-act/`
+- **Content:** Official journal, Q&A, timeline
+
+## Uploading New Documents
+
+```bash
+# Upload a PDF to MinIO
+./upload-to-minio.sh ~/my-document.pdf s3://llama-files/custom-scenario/my-document.pdf
+
+# Then run ingestion with custom parameters
+# (See kfp/pipeline.py for parameter details)
+```
+
+## Monitoring
+
+### KFP Dashboard
+```bash
+oc get route ds-pipeline-dspa -n private-ai-demo -o jsonpath='{.spec.host}'
+```
+
+### LlamaStack Playground
+```bash
+oc get route llama-stack-playground -n private-ai-demo -o jsonpath='{.spec.host}'
+```
+
+### Milvus Collections
+```python
+from pymilvus import connections, utility
+connections.connect(host="milvus-standalone.private-ai-demo.svc", port="19530")
+print(utility.list_collections())
 ```
 
 ## Troubleshooting
 
-### Milvus Not Starting
-- Check PVC: `oc get pvc milvus-data -n private-ai-demo`
-- Check logs: `oc logs deployment/milvus-standalone -n private-ai-demo`
-- Verify storage class supports RWO
+### Pipeline Fails
+- Check pod logs: `oc logs -n private-ai-demo <pod-name>`
+- Verify MinIO credentials in `.env`
+- Ensure Docling and LlamaStack are running
 
-### Pipeline Runs Failing
-- Check task logs: `tkn pr logs <pipelinerun> -n private-ai-demo`
-- Verify Docling deployment: `oc get deployment docling -n private-ai-demo`
-- Check embedding model: `oc get inferenceservice granite-embedding -n ai-infrastructure`
+### No Results in Queries
+- Check collection exists: `utility.has_collection("red_hat_docs")`
+- Verify Granite embeddings cached: Check LlamaStack pod logs
+- Re-run ingestion with caching disabled
 
-### Llama Stack Not Connecting
-- Check LlamaStackDistribution: `oc describe llamastackdistribution -n private-ai-demo`
-- Verify vLLM services: `oc get svc -n private-ai-demo | grep mistral`
-- Check Milvus service: `oc get svc milvus-standalone -n private-ai-demo`
+### Slow Embeddings
+- Ensure using Granite image: `quay.io/redhat-et/llama:vllm-milvus-granite-0.2.8`
+- Check `HF_HOME` is set to `/data/hf_home` (PVC-backed)
+- First run takes ~22s to download model, then 0.22s
 
-### Poor RAG Results
-- Verify documents were ingested: Check Milvus collection count
-- Tune similarity threshold in Llama Stack config
-- Adjust chunk size/overlap in pipeline parameters
-- Use more powerful embedding model
+## KFP Best Practices
 
-## Project Structure
+This pipeline is fully aligned with [Kubeflow Pipelines User Guides](https://www.kubeflow.org/docs/components/pipelines/user-guides/):
 
-```
-stages/stage2-model-alignment/
-├── deploy.sh              # Main deployment script
-├── run-rag-ingestion.sh   # Run RAG pipeline
-├── validate.sh            # Validation script
-├── kfp/
-│   └── pipeline.py        # KFP v2 pipeline definition
-└── README.md             # This file
-
-gitops/stage02-model-alignment/
-├── milvus/               # Vector database deployment
-├── llama-stack/          # LlamaStack orchestrator + CR
-├── docling/              # Document processing service
-├── kfp/                  # KFP v2 (DSPA) configuration
-│   ├── dspa.yaml         # DataSciencePipelinesApplication
-│   ├── DEPLOY.md         # Pipeline deployment guide
-│   ├── programmatic-access.sh  # OAuth API examples
-│   └── example-run-config.json # Run template
-└── kustomization.yaml    # Kustomize root
-
-artifacts/
-└── docling-rag-pipeline.yaml  # Compiled KFP pipeline (not in git)
-```
-
-## Next Steps
-
-Once Stage 2 is validated:
-1. Test all three RAG use cases in notebooks
-2. Verify document retrieval quality
-3. Proceed to **Stage 3: Model Monitoring with TrustyAI**
+✅ **Pinned Images** - `ubi9/python-311:1-77` (reproducible)  
+✅ **No Credential Logging** - Secure by design  
+✅ **Custom ParallelFor Names** - `process-each-pdf` (readable)  
+✅ **Type Annotations** - `List[str]`, `Input[Dataset]`, `Output[Dataset]`  
+✅ **Artifact Flow** - All data via Dataset artifacts  
+✅ **Clean Components** - Single source of truth  
 
 ## Documentation
 
-- [Llama Stack Documentation](https://llama-stack.readthedocs.io/)
-- [Milvus Documentation](https://milvus.io/docs)
-- [Red Hat Llama Stack Guide](https://developers.redhat.com/articles/2025/03/15/llama-stack-demos)
-- [Tekton Pipelines](https://tekton.dev/docs/)
+Comprehensive documentation in `../../docs/03-STAGE2-RAG/`:
+
+1. **FINAL-SESSION-SUMMARY-2025-11-07.md** - Complete session details
+2. **KFP-BEST-PRACTICES-IMPLEMENTATION.md** - Alignment guide
+3. **PARALLELFOR-TYPE-ANNOTATION-FIX.md** - Type annotation fix
+4. **PLAYGROUND-VALIDATION-GUIDE.md** - Testing guide
+5. **LLAMASTACK-EMBEDDING-PROVIDER-ANALYSIS.md** - Embedding deep-dive
+
+## References
+
+- [Kubeflow Pipelines](https://www.kubeflow.org/docs/components/pipelines/)
+- [LlamaStack Documentation](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/2.25/html/working_with_llama_stack/)
+- [Docling](https://github.com/DS4SD/docling)
+- [Milvus](https://milvus.io/docs)
+
+---
+
+**Status:** ✅ Production-ready  
+**Last Updated:** 2025-11-07  
+**Pipeline Version:** v20251107-110520-production-ready

@@ -26,8 +26,6 @@ resources:
   # 4. Kubeflow Pipelines (DSPA)
   - kfp
   
-  # 5. RAG demonstration notebooks
-  - notebooks
 
 # Configuration for all resources
 configurations:

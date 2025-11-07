@@ -105,11 +105,12 @@ data:
       
       tool_runtime:
         # RAG runtime tool provider (required for agent RAG)
-        # Fixed: Added defaults for vector DB queries
+        # RAG runtime uses vector_io provider to access Milvus
+        # NOTE: Playground explicitly selects vector_db from UI; no default needed
         - provider_id: rag-runtime
           provider_type: inline::rag-runtime
           config:
-            default_vector_db_id: acme_corporate     # default corpus for RAG (has data)
+            # default_vector_db_id: ""                # Empty - Playground selects explicitly
             top_k: 5                                  # retrieve top 5 chunks
             similarity_threshold: 0.0                # no filtering (start permissive)
         
@@ -157,6 +158,25 @@ data:
         model_type: embedding
         provider_id: sentence-transformers
         provider_model_id: ibm-granite/granite-embedding-125m-english
+    
+    vector_databases:
+      # Scenario 1: Red Hat documentation
+      - vector_db_id: red_hat_docs
+        embedding_model: ibm-granite/granite-embedding-125m-english
+        embedding_dimension: 768
+        provider_id: milvus-shared
+      
+      # Scenario 2: ACME corporate documents
+      - vector_db_id: acme_corporate
+        embedding_model: ibm-granite/granite-embedding-125m-english
+        embedding_dimension: 768
+        provider_id: milvus-shared
+      
+      # Scenario 3: EU AI Act regulation
+      - vector_db_id: eu_ai_act
+        embedding_model: ibm-granite/granite-embedding-125m-english
+        embedding_dimension: 768
+        provider_id: milvus-shared
     
     tool_groups:
       # Built-in RAG tool group (required for Agent RAG)

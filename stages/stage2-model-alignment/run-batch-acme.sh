@@ -77,6 +77,7 @@ echo ""
 
 python3 << PYEOF
 import kfp
+from kfp import client as kfp_client
 import urllib3
 import os
 
@@ -85,7 +86,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # KFP connection
 host = "https://ds-pipeline-dspa-private-ai-demo.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com"
 token = os.popen("oc whoami -t").read().strip()
-client = kfp.Client(host=host, existing_token=token, verify_ssl=False)
+client = kfp_client.Client(host=host, existing_token=token, verify_ssl=False)
 
 print(f"Connected to: {host}")
 print("")
