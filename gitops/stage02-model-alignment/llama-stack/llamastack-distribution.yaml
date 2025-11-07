@@ -81,11 +81,12 @@ spec:
       resources:
         requests:
           memory: "2Gi"
-          cpu: "1"
+          cpu: "2"
           ephemeral-storage: "5Gi"
         limits:
           memory: "4Gi"
-          cpu: "2"
+          # CPU limit removed to allow bursting for faster embedding computation
+          # LlamaStack can now use all available CPU when processing inserts
           ephemeral-storage: "10Gi"
     
     # Pod-level configuration
