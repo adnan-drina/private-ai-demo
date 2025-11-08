@@ -10,6 +10,11 @@ Architecture follows KFP best practices:
 - Control flow with dsl.ParallelFor for batch processing
 - Selective caching disabled on side-effect operations (insert)
 
+Naming & Versioning:
+- Pipeline names and versions follow conventions in docs/03-STAGE2-RAG/PIPELINE-NAMING-VERSIONING.md
+- Update VERSION in pipeline descriptions when making code changes
+- Current version: v1.0.2
+
 References:
 - KFP User Guides: https://www.kubeflow.org/docs/components/pipelines/user-guides/
 - Create Components: https://www.kubeflow.org/docs/components/pipelines/user-guides/create-components/
@@ -52,6 +57,7 @@ def _set_resources(
 @dsl.pipeline(
     name="data-processing-and-insertion-single",
     description="RAG Ingestion Pipeline v1.0.2 - Single document processing with Docling and LlamaStack Vector IO.",
+    # NOTE: Update version in description when making changes (see PIPELINE-NAMING-VERSIONING.md)
 )
 def docling_rag_pipeline(
     input_uri: str = "s3://llama-files/sample/rag-mini.pdf",
@@ -165,6 +171,7 @@ def docling_rag_pipeline(
 @dsl.pipeline(
     name="data-processing-and-insertion",
     description="RAG Ingestion Pipeline v1.0.2 - Refactored with modular components. Optimized server-side embeddings via LlamaStack Vector IO.",
+    # NOTE: Update version in description when making changes (see PIPELINE-NAMING-VERSIONING.md)
     pipeline_root="s3://kfp-artifacts/"  # Explicit root for artifacts
 )
 def batch_docling_rag_pipeline(

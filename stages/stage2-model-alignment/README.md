@@ -171,6 +171,7 @@ This utility handles document uploads to MinIO. All other operations (schema man
 
 For detailed documentation, see:
 - `docs/03-STAGE2-RAG/STAGE2-README.md` - Comprehensive Stage 2 overview
+- `docs/03-STAGE2-RAG/PIPELINE-NAMING-VERSIONING.md` - Pipeline naming & versioning conventions
 - `docs/03-STAGE2-RAG/PER-DOCUMENT-INGESTION.md` - Per-document ingestion guide
 - `docs/03-STAGE2-RAG/KFP-BEST-PRACTICES-IMPLEMENTATION.md` - KFP implementation patterns
 - `docs/03-STAGE2-RAG/FINAL-STATUS-2025-11-07.md` - Final implementation status

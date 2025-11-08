@@ -112,9 +112,16 @@ from urllib3.exceptions import MaxRetryError
 from kfp_server_api.exceptions import ApiException
 
 # Configuration
+# See docs/03-STAGE2-RAG/PIPELINE-NAMING-VERSIONING.md for conventions
 DSPA_ROUTE = os.environ.get('DSPA_ROUTE', 'https://ds-pipeline-dspa-private-ai-demo.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com')
 NAMESPACE = 'private-ai-demo'
+
+# Pipeline naming (shared across all scenarios)
 PIPELINE_NAME = "data-processing-and-insertion"
+
+# Semantic version (update when making code changes)
+# Format: v{major}.{minor}.{patch} - {description}
+# See PIPELINE-NAMING-VERSIONING.md for update guidelines
 VERSION_DESCRIPTION = "v1.0.2 - Unified ingestion for all scenarios"
 
 # Scenario-specific parameters from environment
@@ -143,7 +150,8 @@ try:
     pipeline_id = pipeline.pipeline_id
     print(f"✅ Pipeline uploaded: {pipeline_id}")
 
-    # Upload a new version
+    # Upload a new version with timestamp-based name for uniqueness
+    # Format: v{unix_timestamp}-{scenario} (e.g., v1731072345-acme)
     version_name = f"v{int(time.time())}-{SCENARIO}"
     version = kfp_client.upload_pipeline_version(
         pipeline_package_path='kfp/batch-docling-rag-pipeline.yaml',
@@ -191,7 +199,9 @@ except Exception as e:
         print(f"❌ Pipeline upload failed: {e}")
         sys.exit(1)
 
-# Create run
+# Create run with descriptive name
+# Format: {scenario}-batch-ingestion-{unix_timestamp}
+# See docs/03-STAGE2-RAG/PIPELINE-NAMING-VERSIONING.md for conventions
 print(f"🚀 Creating pipeline run for scenario: {SCENARIO}")
 run_name = f"{SCENARIO}-batch-ingestion-{int(time.time())}"
 
@@ -207,6 +217,7 @@ params = {
 }
 
 try:
+    # Experiment groups runs by scenario (e.g., rag-ingestion-acme)
     if version_id:
         run = kfp_client.run_pipeline(
             experiment_name=f"rag-ingestion-{SCENARIO}",
