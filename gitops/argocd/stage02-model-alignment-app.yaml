@@ -44,11 +44,20 @@ spec:
       kind: LlamaStackDistribution
       jsonPointers:
         - /status
-    # Ignore deployment replicas (managed by HPA/operator)
+    # Ignore deployment replicas and immutable selectors
     - group: apps
       kind: Deployment
       jsonPointers:
         - /spec/replicas
+        - /spec/selector                      # Immutable field
+        - /spec/template/metadata/labels      # Must match selector
+    # Ignore DoclingServe operator-managed fields
+    - group: docling.io
+      kind: DoclingServe
+      jsonPointers:
+        - /status
+        - /spec/replicas
+        - /metadata/resourceVersion
     # Ignore DSPA status
     - group: datasciencepipelinesapplications.opendatahub.io
       kind: DataSciencePipelinesApplication
