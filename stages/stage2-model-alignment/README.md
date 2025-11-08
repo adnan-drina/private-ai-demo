@@ -26,10 +26,7 @@ stage2-model-alignment/
 │       ├── kfp-api-helpers.sh     # KFP API interaction helpers
 │       └── programmatic-access.sh # OAuth authentication example
 └── tools/                         # Operational utilities
-    ├── upload-to-minio.sh         # Upload documents to MinIO
-    ├── launch-per-document-ingestion.py # Alternative per-document approach
-    ├── recreate-milvus-collections.sh # Recreate Milvus collections
-    └── test-milvus-insert.sh      # Test Milvus insertion
+    └── upload-to-minio.sh         # Upload documents to MinIO
 ```
 
 ## 🚀 Quick Start
@@ -147,31 +144,20 @@ The batch ingestion pipeline follows this flow:
 - **Caching Disabled**: Each run is fresh (no cached results)
 - **HNSW Indexing**: Milvus uses HNSW index for fast similarity search
 
-## 🔧 Utility Scripts
-
-### Recreate Milvus Collections
+## 🔧 Utility: Upload Documents to MinIO
 
 ```bash
-./tools/recreate-milvus-collections.sh
+# Upload a single document
+./tools/upload-to-minio.sh /path/to/document.pdf s3://llama-files/scenario2-acme/document.pdf
+
+# Upload all PDFs from a directory
+for pdf in documents/scenario2-acme/*.pdf; do
+  filename=$(basename "$pdf")
+  ./tools/upload-to-minio.sh "$pdf" "s3://llama-files/scenario2-acme/$filename"
+done
 ```
 
-Drops and recreates all three Milvus collections with the correct schema (pk, vector, dynamic fields).
-
-### Test Milvus Insertion
-
-```bash
-./tools/test-milvus-insert.sh
-```
-
-Tests direct insertion into Milvus via LlamaStack API.
-
-### Per-Document Ingestion (Alternative)
-
-```bash
-./tools/launch-per-document-ingestion.py
-```
-
-Alternative approach that creates individual pipeline runs for each document (more granular control, more runs to monitor).
+This is the only utility you need for document management. All other operations (schema management, testing, ingestion) are handled by the main scripts or through the UI.
 
 ## 📚 Documentation
 
@@ -231,9 +217,24 @@ grep "cache_buster" run-batch-ingestion.sh
 
 ### MinIO Upload Failing?
 
-Check credentials:
+Check credentials and use the upload utility:
 ```bash
+# Verify MinIO credentials
 oc get secret minio-credentials -n model-storage -o jsonpath='{.data.MINIO_ROOT_USER}' | base64 -d
+
+# Upload using the utility script
+./tools/upload-to-minio.sh /path/to/document.pdf s3://llama-files/scenario2-acme/document.pdf
+```
+
+### Need to Reset Milvus Collections?
+
+Drop and recreate collections using kubectl:
+```bash
+# Delete a collection
+oc exec -n private-ai-demo deployment/milvus-standalone -- \
+  python3 -c "from pymilvus import connections, utility; connections.connect(host='localhost', port='19530'); utility.drop_collection('acme_corporate')"
+
+# Collection will be auto-recreated by LlamaStack provider on next insert
 ```
 
 ## 📞 Support
