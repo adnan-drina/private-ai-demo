@@ -9,9 +9,9 @@ metadata:
 spec:
   project: stage02-model-alignment # Use the dedicated AppProject
   source:
-    repoURL: https://github.com/adnan-drina/private-ai-demo.git # Will be updated dynamically
-    targetRevision: feature/stage2-implementation
-    path: gitops/stage02-model-alignment # Path to Stage 02 manifests
+    repoURL: https://github.com/adnan-drina/private-ai-demo.git
+    targetRevision: main
+    path: gitops/stage02-model-alignment
   destination:
     server: https://kubernetes.default.svc
     namespace: private-ai-demo # Target namespace for deployment
@@ -33,11 +33,13 @@ spec:
         factor: 2
         maxDuration: 3m
   ignoreDifferences:
-    # Ignore HPA-managed replica counts
+    # Ignore HPA-managed replica counts and immutable selectors
     - group: apps
       kind: Deployment
       jsonPointers:
         - /spec/replicas
+        - /spec/selector                      # Immutable field
+        - /spec/template/metadata/labels      # Must match selector
     
     # Ignore Tekton PipelineRun/TaskRun status
     - group: tekton.dev
@@ -65,6 +67,14 @@ spec:
       jsonPointers:
         - /metadata/resourceVersion
         - /status
+    
+    # Ignore DoclingServe operator-managed fields
+    - group: docling.io
+      kind: DoclingServe
+      jsonPointers:
+        - /status
+        - /spec/replicas                      # If HPA-managed
+        - /metadata/resourceVersion
     
     # Ignore PVC dynamic provisioning
     - group: ""

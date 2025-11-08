@@ -44,6 +44,14 @@ spec:
     kind: Deployment
     jsonPointers:
     - /status
+  # Ignore OpenShift Route mutations (cluster-generated host, annotations)
+  - group: route.openshift.io
+    kind: Route
+    jsonPointers:
+    - /spec/host
+    - /spec/tls/insecureEdgeTerminationPolicy
+    - /status
+    - /metadata/annotations/kubectl.kubernetes.io~1last-applied-configuration
   info:
   - name: Purpose
     value: "S3-compatible object storage for LLM model weights"
