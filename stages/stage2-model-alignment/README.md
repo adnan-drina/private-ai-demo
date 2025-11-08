@@ -8,7 +8,8 @@ This directory contains the implementation of Retrieval-Augmented Generation (RA
 stage2-model-alignment/
 ├── deploy.sh                      # Main deployment script (deploys + triggers ingestion)
 ├── run-batch-ingestion.sh         # Manual ingestion script for specific scenarios
-├── documents/                     # Source documents for ingestion
+├── upload-to-minio.sh             # Upload documents to MinIO utility
+├── scenario-docs/                 # Source documents for ingestion
 │   ├── scenario1-red-hat/         # Red Hat RHOAI RAG guide (1 PDF)
 │   ├── scenario2-acme/            # ACME corporate docs (6 PDFs)
 │   └── scenario3-eu-ai-act/       # EU AI Act documents (3 PDFs)
@@ -25,8 +26,7 @@ stage2-model-alignment/
 │   └── utils/                     # KFP helper utilities
 │       ├── kfp-api-helpers.sh     # KFP API interaction helpers
 │       └── programmatic-access.sh # OAuth authentication example
-└── tools/                         # Operational utilities
-    └── upload-to-minio.sh         # Upload documents to MinIO
+└── README.md                      # This file
 ```
 
 ## 🚀 Quick Start
@@ -54,12 +54,12 @@ This script:
 
 ```bash
 # Upload a single document
-./tools/upload-to-minio.sh /path/to/document.pdf s3://llama-files/scenario2-acme/document.pdf
+./upload-to-minio.sh /path/to/document.pdf s3://llama-files/scenario2-acme/document.pdf
 
 # Or upload entire scenario
-for pdf in documents/scenario2-acme/*.pdf; do
+for pdf in scenario-docs/scenario2-acme/*.pdf; do
   filename=$(basename "$pdf")
-  ./tools/upload-to-minio.sh "$pdf" "s3://llama-files/scenario2-acme/$filename"
+  ./upload-to-minio.sh "$pdf" "s3://llama-files/scenario2-acme/$filename"
 done
 ```
 
@@ -144,20 +144,20 @@ The batch ingestion pipeline follows this flow:
 - **Caching Disabled**: Each run is fresh (no cached results)
 - **HNSW Indexing**: Milvus uses HNSW index for fast similarity search
 
-## 🔧 Utility: Upload Documents to MinIO
+## 🔧 Upload Documents to MinIO
 
 ```bash
 # Upload a single document
-./tools/upload-to-minio.sh /path/to/document.pdf s3://llama-files/scenario2-acme/document.pdf
+./upload-to-minio.sh /path/to/document.pdf s3://llama-files/scenario2-acme/document.pdf
 
 # Upload all PDFs from a directory
-for pdf in documents/scenario2-acme/*.pdf; do
+for pdf in scenario-docs/scenario2-acme/*.pdf; do
   filename=$(basename "$pdf")
-  ./tools/upload-to-minio.sh "$pdf" "s3://llama-files/scenario2-acme/$filename"
+  ./upload-to-minio.sh "$pdf" "s3://llama-files/scenario2-acme/$filename"
 done
 ```
 
-This is the only utility you need for document management. All other operations (schema management, testing, ingestion) are handled by the main scripts or through the UI.
+This utility handles document uploads to MinIO. All other operations (schema management, testing, ingestion) are handled by the main scripts or through the UI.
 
 ## 📚 Documentation
 
@@ -223,7 +223,7 @@ Check credentials and use the upload utility:
 oc get secret minio-credentials -n model-storage -o jsonpath='{.data.MINIO_ROOT_USER}' | base64 -d
 
 # Upload using the utility script
-./tools/upload-to-minio.sh /path/to/document.pdf s3://llama-files/scenario2-acme/document.pdf
+./upload-to-minio.sh /path/to/document.pdf s3://llama-files/scenario2-acme/document.pdf
 ```
 
 ### Need to Reset Milvus Collections?

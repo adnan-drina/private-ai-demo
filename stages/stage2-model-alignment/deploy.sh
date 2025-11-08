@@ -598,7 +598,7 @@ else
         echo "  ./upload-to-minio.sh <local-pdf> s3://llama-files/<scenario>/<filename>"
         echo ""
         echo "Example:"
-        echo "  ./upload-to-minio.sh ~/Documents/sample.pdf s3://llama-files/scenario1-red-hat/sample.pdf"
+        echo "  ./upload-to-minio.sh scenario-docs/scenario1-red-hat/sample.pdf s3://llama-files/scenario1-red-hat/sample.pdf"
         echo ""
         echo "After uploading documents, run ingestion pipelines:"
         echo "  ./run-batch-ingestion.sh redhat    # For scenario1-red-hat"
