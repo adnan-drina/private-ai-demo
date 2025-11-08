@@ -6,11 +6,8 @@ This directory contains the implementation of Retrieval-Augmented Generation (RA
 
 ```
 stage2-model-alignment/
-├── deploy.sh                      # Main deployment script for Stage 2
-├── run-batch-ingestion.sh         # Unified batch ingestion script (all scenarios)
-├── run-batch-acme.sh              # Wrapper for ACME scenario
-├── run-batch-redhat.sh            # Wrapper for Red Hat scenario
-├── run-batch-euaiact.sh           # Wrapper for EU AI Act scenario
+├── deploy.sh                      # Main deployment script (deploys + triggers ingestion)
+├── run-batch-ingestion.sh         # Manual ingestion script for specific scenarios
 ├── documents/                     # Source documents for ingestion
 │   ├── scenario1-red-hat/         # Red Hat RHOAI RAG guide (1 PDF)
 │   ├── scenario2-acme/            # ACME corporate docs (6 PDFs)
@@ -43,12 +40,18 @@ stage2-model-alignment/
 ./deploy.sh
 ```
 
-This script deploys:
-- Docling service (PDF processing)
-- LlamaStack (RAG orchestration)
-- LlamaStack Playground UI
-- Milvus vector database
-- KFP Data Science Pipelines
+This script:
+1. **Deploys all infrastructure:**
+   - Docling service (PDF processing)
+   - LlamaStack (RAG orchestration)
+   - LlamaStack Playground UI
+   - Milvus vector database
+   - KFP Data Science Pipelines
+
+2. **Automatically triggers ingestion** (if documents exist in MinIO):
+   - Launches batch ingestion for all 3 scenarios
+   - Creates pipeline runs in KFP
+   - Populates Milvus collections with embeddings
 
 ### 2. Upload Documents to MinIO
 
@@ -63,20 +66,31 @@ for pdf in documents/scenario2-acme/*.pdf; do
 done
 ```
 
-### 3. Run Batch Ingestion
+### 3. Manual Ingestion (Optional)
+
+If documents are already in MinIO, `deploy.sh` automatically triggers ingestion for all scenarios. 
+
+To manually re-run ingestion for a specific scenario:
 
 ```bash
-# Option A: Use unified script
-./run-batch-ingestion.sh acme
-
-# Option B: Use scenario-specific wrapper
-./run-batch-acme.sh
+./run-batch-ingestion.sh <scenario>
 ```
 
 Available scenarios:
 - `acme` - ACME Corporate lithography documentation (6 PDFs → ~32 chunks)
 - `redhat` - Red Hat OpenShift AI RAG guide (1 PDF → ~135 chunks)
 - `eu-ai-act` - EU AI Act official documents (3 PDFs → ~953 chunks)
+
+**Examples:**
+```bash
+# Re-run ingestion for ACME scenario
+./run-batch-ingestion.sh acme
+
+# Re-run ingestion for all scenarios
+for scenario in redhat acme eu-ai-act; do
+  ./run-batch-ingestion.sh $scenario
+done
+```
 
 ## 📊 Pipeline Architecture
 
@@ -171,8 +185,9 @@ For detailed documentation, see:
 
 **Production Ready** ✅
 
-- ✅ Infrastructure deployed
-- ✅ 10 PDFs ingested → 1,120 chunks
+- ✅ Infrastructure deployed via GitOps
+- ✅ Automated ingestion on first deploy
+- ✅ 10 PDFs → 1,120 chunks in Milvus
 - ✅ RAG retrieval working
 - ✅ LlamaStack Playground UI operational
 - ✅ All three scenarios validated

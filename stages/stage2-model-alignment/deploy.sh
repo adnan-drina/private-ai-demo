@@ -601,17 +601,69 @@ else
         echo "  ./upload-to-minio.sh ~/Documents/sample.pdf s3://llama-files/scenario1-red-hat/sample.pdf"
         echo ""
         echo "After uploading documents, run ingestion pipelines:"
-        echo "  ./run-batch-redhat.sh    # For scenario1-red-hat"
-        echo "  ./run-batch-acme.sh      # For scenario2-acme"
-        echo "  ./run-batch-euaiact.sh   # For scenario3-eu-ai"
+        echo "  ./run-batch-ingestion.sh redhat    # For scenario1-red-hat"
+        echo "  ./run-batch-ingestion.sh acme      # For scenario2-acme"
+        echo "  ./run-batch-ingestion.sh eu-ai-act # For scenario3-eu-ai-act"
         echo ""
     fi
+fi
+
+echo ""
+echo "══════════════════════════════════════════════════════════════════"
+echo "Step 9: Launch RAG Ingestion Pipelines"
+echo "══════════════════════════════════════════════════════════════════"
+echo ""
+
+# Wait a bit for KFP to be fully ready
+echo "⏳ Waiting for KFP Data Science Pipeline to be ready..."
+sleep 10
+
+# Check if documents exist in MinIO before running pipelines
+if [ "$BUCKET_CHECK" -gt 0 ]; then
+    echo "✅ Documents found in MinIO - launching ingestion pipelines..."
+    echo ""
+    
+    # Launch all three scenario pipelines
+    for scenario in redhat acme eu-ai-act; do
+        echo "────────────────────────────────────────────────────────────────"
+        echo "🚀 Launching ingestion for scenario: $scenario"
+        echo "────────────────────────────────────────────────────────────────"
+        
+        # Run ingestion script
+        if [ -f "./run-batch-ingestion.sh" ]; then
+            ./run-batch-ingestion.sh "$scenario" || echo "⚠️  Pipeline launch failed for $scenario (may need manual retry)"
+        else
+            echo "⚠️  run-batch-ingestion.sh not found - skipping $scenario"
+        fi
+        
+        echo ""
+        sleep 2  # Brief pause between launches
+    done
+    
+    echo "✅ All ingestion pipelines launched!"
+    echo ""
+    echo "📊 Monitor pipeline progress:"
+    echo "   https://ds-pipeline-dspa-${PROJECT_NAME}.apps.$(oc whoami --show-server | cut -d. -f2-)"
+    echo ""
+else
+    echo "ℹ️  No documents in MinIO - skipping automatic ingestion"
+    echo ""
+    echo "To run ingestion manually after uploading documents:"
+    echo "  ./run-batch-ingestion.sh redhat    # For Red Hat docs"
+    echo "  ./run-batch-ingestion.sh acme      # For ACME docs"
+    echo "  ./run-batch-ingestion.sh eu-ai-act # For EU AI Act docs"
+    echo ""
 fi
 
 echo "══════════════════════════════════════════════════════════════════"
 echo "  🎉 Stage 2 Deployment Complete!"
 echo "══════════════════════════════════════════════════════════════════"
 echo ""
-echo "Ready for RAG ingestion! 🚀"
+echo "📚 Access Points:"
+echo "  • LlamaStack Playground: https://llamastack-${PROJECT_NAME}.apps.$(oc whoami --show-server | cut -d. -f2-)"
+echo "  • KFP Pipeline UI: https://ds-pipeline-dspa-${PROJECT_NAME}.apps.$(oc whoami --show-server | cut -d. -f2-)"
+echo "  • LlamaStack API: http://llama-stack-service.${PROJECT_NAME}.svc:8321"
+echo ""
+echo "🚀 Stage 2 is ready for RAG operations!"
 echo ""
 
