@@ -37,7 +37,8 @@ stage2-model-alignment/
 ./deploy.sh
 ```
 
-This script:
+This script provides **one-click deployment**:
+
 1. **Deploys all infrastructure:**
    - Docling service (PDF processing)
    - LlamaStack (RAG orchestration)
@@ -45,18 +46,27 @@ This script:
    - Milvus vector database
    - KFP Data Science Pipelines
 
-2. **Automatically triggers ingestion** (if documents exist in MinIO):
+2. **Automatically uploads documents to MinIO:**
+   - Scans `scenario-docs/` for PDF files
+   - Uploads all documents to corresponding S3 paths
+   - Skips upload if MinIO already has content
+
+3. **Automatically triggers ingestion:**
    - Launches batch ingestion for all 3 scenarios
    - Creates pipeline runs in KFP
    - Populates Milvus collections with embeddings
 
-### 2. Upload Documents to MinIO
+**Result:** Run `./deploy.sh` once and get a fully operational RAG system with data!
+
+### 2. Re-upload Documents (Optional)
+
+The `deploy.sh` script automatically uploads documents from `scenario-docs/` to MinIO. However, if you need to upload additional documents or replace existing ones:
 
 ```bash
 # Upload a single document
 ./upload-to-minio.sh /path/to/document.pdf s3://llama-files/scenario2-acme/document.pdf
 
-# Or upload entire scenario
+# Upload entire scenario
 for pdf in scenario-docs/scenario2-acme/*.pdf; do
   filename=$(basename "$pdf")
   ./upload-to-minio.sh "$pdf" "s3://llama-files/scenario2-acme/$filename"
@@ -65,9 +75,7 @@ done
 
 ### 3. Manual Ingestion (Optional)
 
-If documents are already in MinIO, `deploy.sh` automatically triggers ingestion for all scenarios. 
-
-To manually re-run ingestion for a specific scenario:
+The `deploy.sh` script automatically uploads documents and triggers ingestion. However, if you need to manually re-run ingestion for a specific scenario:
 
 ```bash
 ./run-batch-ingestion.sh <scenario>

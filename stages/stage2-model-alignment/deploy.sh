@@ -582,29 +582,88 @@ else
         echo "   ./upload-to-minio.sh <local-file> s3://llama-files/<scenario>/<filename>"
         echo ""
     else
-        echo "ℹ️  MinIO llama-files bucket is empty or doesn't exist"
+        echo "ℹ️  MinIO llama-files bucket is empty - uploading documents..."
         echo ""
-        echo "Sample Documents Setup:"
-        echo "────────────────────────────────────────────────────────────────"
-        echo ""
-        echo "For RAG ingestion demos, you need to upload PDF documents to MinIO."
-        echo ""
-        echo "Recommended structure:"
-        echo "  • Scenario 1 (Red Hat): s3://llama-files/scenario1-red-hat/*.pdf"
-        echo "  • Scenario 2 (ACME):    s3://llama-files/scenario2-acme/*.pdf"
-        echo "  • Scenario 3 (EU AI):   s3://llama-files/scenario3-eu-ai/*.pdf"
-        echo ""
-        echo "To upload documents, use:"
-        echo "  ./upload-to-minio.sh <local-pdf> s3://llama-files/<scenario>/<filename>"
-        echo ""
-        echo "Example:"
-        echo "  ./upload-to-minio.sh scenario-docs/scenario1-red-hat/sample.pdf s3://llama-files/scenario1-red-hat/sample.pdf"
-        echo ""
-        echo "After uploading documents, run ingestion pipelines:"
-        echo "  ./run-batch-ingestion.sh redhat    # For scenario1-red-hat"
-        echo "  ./run-batch-ingestion.sh acme      # For scenario2-acme"
-        echo "  ./run-batch-ingestion.sh eu-ai-act # For scenario3-eu-ai-act"
-        echo ""
+        
+        # Check if upload-to-minio.sh exists
+        if [ ! -f "./upload-to-minio.sh" ]; then
+            echo "⚠️  WARNING: upload-to-minio.sh not found!"
+            echo "   Please upload documents manually or ensure you're in the stage2-model-alignment directory."
+            echo ""
+        else
+            # Make sure the script is executable
+            chmod +x ./upload-to-minio.sh
+            
+            UPLOAD_COUNT=0
+            UPLOAD_ERRORS=0
+            
+            # Upload documents for each scenario
+            for scenario_dir in scenario-docs/*/; do
+                if [ -d "$scenario_dir" ]; then
+                    scenario_name=$(basename "$scenario_dir")
+                    echo "📂 Processing scenario: $scenario_name"
+                    
+                    # Map local directory to S3 path
+                    case "$scenario_name" in
+                        "scenario1-red-hat")
+                            s3_path="s3://llama-files/scenario1-red-hat"
+                            ;;
+                        "scenario2-acme")
+                            s3_path="s3://llama-files/scenario2-acme"
+                            ;;
+                        "scenario3-eu-ai-act")
+                            s3_path="s3://llama-files/scenario3-eu-ai-act"
+                            ;;
+                        *)
+                            echo "   ⚠️  Unknown scenario directory: $scenario_name (skipping)"
+                            continue
+                            ;;
+                    esac
+                    
+                    # Upload all PDFs in this scenario
+                    pdf_count=0
+                    for pdf in "$scenario_dir"*.pdf; do
+                        if [ -f "$pdf" ]; then
+                            filename=$(basename "$pdf")
+                            echo "   📄 Uploading: $filename"
+                            
+                            if ./upload-to-minio.sh "$pdf" "$s3_path/$filename" 2>&1 | grep -q "✅"; then
+                                ((UPLOAD_COUNT++))
+                                ((pdf_count++))
+                            else
+                                echo "      ⚠️  Upload failed for $filename"
+                                ((UPLOAD_ERRORS++))
+                            fi
+                        fi
+                    done
+                    
+                    if [ $pdf_count -gt 0 ]; then
+                        echo "   ✅ Uploaded $pdf_count PDF(s) for $scenario_name"
+                    else
+                        echo "   ℹ️  No PDFs found in $scenario_dir"
+                    fi
+                    echo ""
+                fi
+            done
+            
+            echo "────────────────────────────────────────────────────────────────"
+            if [ $UPLOAD_COUNT -gt 0 ]; then
+                echo "✅ Upload complete: $UPLOAD_COUNT document(s) uploaded to MinIO"
+                if [ $UPLOAD_ERRORS -gt 0 ]; then
+                    echo "⚠️  Warning: $UPLOAD_ERRORS upload(s) failed"
+                fi
+                # Update bucket check for Step 9
+                BUCKET_CHECK=$UPLOAD_COUNT
+            else
+                echo "⚠️  No documents uploaded. Please check scenario-docs/ folder."
+                echo ""
+                echo "Expected structure:"
+                echo "  scenario-docs/scenario1-red-hat/*.pdf"
+                echo "  scenario-docs/scenario2-acme/*.pdf"
+                echo "  scenario-docs/scenario3-eu-ai-act/*.pdf"
+            fi
+            echo ""
+        fi
     fi
 fi
 
