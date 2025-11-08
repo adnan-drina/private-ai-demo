@@ -1,233 +1,227 @@
-# Stage 2: Model Alignment with RAG
+# Stage 2: Model Alignment - RAG Implementation
 
-Production-ready RAG pipeline using Kubeflow Pipelines, LlamaStack, and Milvus.
+This directory contains the implementation of Retrieval-Augmented Generation (RAG) for the Private AI Demo, using Docling for document processing, LlamaStack for orchestration, and Milvus for vector storage.
 
-## Architecture
+## 📁 Directory Structure
 
 ```
-┌──────────────────┐
-│   KFP Pipeline   │ ← Orchestrates data processing
-└────────┬─────────┘
-         │
-    ┌────┴────┬─────────────┬───────────┐
-    │         │             │           │
-    v         v             v           v
-┌────────┐ ┌──────┐ ┌──────────┐ ┌──────────┐
-│ MinIO  │ │Docling│ │LlamaStack│ │  Milvus  │
-│Storage │ │ (Doc) │ │ (Embed)  │ │ (Vector) │
-└────────┘ └───────┘ └──────────┘ └──────────┘
+stage2-model-alignment/
+├── deploy.sh                      # Main deployment script for Stage 2
+├── run-batch-ingestion.sh         # Unified batch ingestion script (all scenarios)
+├── run-batch-acme.sh              # Wrapper for ACME scenario
+├── run-batch-redhat.sh            # Wrapper for Red Hat scenario
+├── run-batch-euaiact.sh           # Wrapper for EU AI Act scenario
+├── documents/                     # Source documents for ingestion
+│   ├── scenario1-red-hat/         # Red Hat RHOAI RAG guide (1 PDF)
+│   ├── scenario2-acme/            # ACME corporate docs (6 PDFs)
+│   └── scenario3-eu-ai-act/       # EU AI Act documents (3 PDFs)
+├── kfp/                           # Kubeflow Pipelines definitions
+│   ├── pipeline.py                # Main pipeline definitions
+│   ├── components/                # Modular KFP components
+│   │   ├── chunk_markdown.py      # Chunking component
+│   │   ├── download_from_s3.py    # S3 download component
+│   │   ├── insert_via_llamastack.py # Milvus insertion via LlamaStack
+│   │   ├── list_pdfs_in_s3.py     # S3 listing component
+│   │   ├── process_with_docling.py # Docling processing component
+│   │   ├── split_pdf_list.py      # PDF list splitting for parallel processing
+│   │   └── verify_ingestion.py    # Ingestion verification component
+│   └── utils/                     # KFP helper utilities
+│       ├── kfp-api-helpers.sh     # KFP API interaction helpers
+│       └── programmatic-access.sh # OAuth authentication example
+└── tools/                         # Operational utilities
+    ├── upload-to-minio.sh         # Upload documents to MinIO
+    ├── launch-per-document-ingestion.py # Alternative per-document approach
+    ├── recreate-milvus-collections.sh # Recreate Milvus collections
+    └── test-milvus-insert.sh      # Test Milvus insertion
 ```
 
-## Features
+## 🚀 Quick Start
 
-- ✅ **100x Faster Embeddings** - Granite image with PVC caching (22s → 0.22s)
-- ✅ **KFP Best Practices** - Pinned images, no credential logging, clean components
-- ✅ **Parallel Processing** - 2 PDFs at a time with `dsl.ParallelFor`
-- ✅ **Server-Side Embeddings** - Via LlamaStack Vector IO API
-- ✅ **3 Production Scenarios** - Red Hat Docs, ACME Corporate, EU AI Act
-
-## Quick Start
-
-### 1. Deploy Infrastructure
+### 1. Deploy Stage 2 Infrastructure
 
 ```bash
-# Deploy Milvus, LlamaStack, Docling, and KFP
 ./deploy.sh
 ```
 
-This deploys:
+This script deploys:
+- Docling service (PDF processing)
+- LlamaStack (RAG orchestration)
+- LlamaStack Playground UI
 - Milvus vector database
-- LlamaStack (with Granite embeddings)
-- Docling service (via operator)
-- KFP v2 (Data Science Pipelines Application)
+- KFP Data Science Pipelines
 
-### 2. Run RAG Ingestion Pipelines
+### 2. Upload Documents to MinIO
 
-**Scenario 1: Red Hat Documentation**
 ```bash
-./run-batch-redhat.sh
+# Upload a single document
+./tools/upload-to-minio.sh /path/to/document.pdf s3://llama-files/scenario2-acme/document.pdf
+
+# Or upload entire scenario
+for pdf in documents/scenario2-acme/*.pdf; do
+  filename=$(basename "$pdf")
+  ./tools/upload-to-minio.sh "$pdf" "s3://llama-files/scenario2-acme/$filename"
+done
 ```
 
-**Scenario 2: ACME Corporate Documents**
+### 3. Run Batch Ingestion
+
 ```bash
+# Option A: Use unified script
+./run-batch-ingestion.sh acme
+
+# Option B: Use scenario-specific wrapper
 ./run-batch-acme.sh
 ```
 
-**Scenario 3: EU AI Act Regulation**
-```bash
-./run-batch-euaiact.sh
-```
+Available scenarios:
+- `acme` - ACME Corporate lithography documentation (6 PDFs → ~32 chunks)
+- `redhat` - Red Hat OpenShift AI RAG guide (1 PDF → ~135 chunks)
+- `eu-ai-act` - EU AI Act official documents (3 PDFs → ~953 chunks)
 
-Each script:
-1. Compiles the pipeline (if needed)
-2. Uploads to KFP
-3. Creates a run with proper parameters
-4. Provides monitoring URL
+## 📊 Pipeline Architecture
 
-### 3. Test in Playground
-
-```bash
-# Get Playground URL
-oc get route llama-stack-playground -n private-ai-demo -o jsonpath='{.spec.host}'
-```
-
-Open in browser and query:
-- **Red Hat:** "What is Red Hat OpenShift AI?"
-- **ACME:** "What is the corporate policy?"
-- **EU AI Act:** "What is the EU AI Act about?"
-
-## Pipeline Architecture
-
-### Components (All in `kfp/pipeline.py`)
-
-1. **`list_pdfs_in_s3`** → Discovers PDFs in MinIO
-2. **`download_from_s3`** → Downloads to artifact
-3. **`process_with_docling`** → PDF → Markdown (async API)
-4. **`chunk_markdown`** → Token-aware chunking
-5. **`insert_via_llamastack`** → Server-side embeddings + Milvus insert
-6. **`verify_ingestion`** → Query-based validation
-
-### Graph Flow
+The batch ingestion pipeline follows this flow:
 
 ```
-list-pdfs-in-s3
-    ↓
-process-each-pdf (ParallelFor, 2 at a time)
-    ├─ download-from-s3
-    ├─ process-with-docling
-    ├─ chunk-markdown
-    └─ insert-via-llamastack
+┌─────────────────┐
+│  List PDFs      │  List all PDFs from S3 prefix
+│  from S3        │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  Split into     │  Divide PDFs into groups for parallel processing
+│  Groups         │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  ParallelFor    │  Process each group in parallel
+│  (Groups)       │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  ParallelFor    │  Process each PDF in parallel
+│  (PDFs)         │
+└────────┬────────┘
+         │
+         ├────────────────────────────────────────┐
+         ▼                                        ▼
+┌─────────────────┐                     ┌─────────────────┐
+│  Download       │                     │  Process with   │
+│  from S3        │────────────────────▶│  Docling        │
+└─────────────────┘                     └────────┬────────┘
+                                                  │
+                                                  ▼
+                                         ┌─────────────────┐
+                                         │  Chunk          │
+                                         │  Markdown       │
+                                         └────────┬────────┘
+                                                  │
+                                                  ▼
+                                         ┌─────────────────┐
+                                         │  Insert via     │
+                                         │  LlamaStack     │
+                                         └─────────────────┘
 ```
 
-## Files
+### Key Features:
+- **Parallel Processing**: PDFs are split into groups and processed in parallel for optimal throughput
+- **Server-Side Embeddings**: LlamaStack handles embeddings using Granite model
+- **Automatic Metadata**: Document ID, source URI, chunk index, and token count automatically added
+- **Caching Disabled**: Each run is fresh (no cached results)
+- **HNSW Indexing**: Milvus uses HNSW index for fast similarity search
 
-```
-stages/stage2-model-alignment/
-├── deploy.sh                    # Deploy infrastructure
-├── upload-to-minio.sh           # Upload files utility
-├── run-batch-redhat.sh          # Scenario 1: Red Hat Docs
-├── run-batch-acme.sh            # Scenario 2: ACME Corporate
-├── run-batch-euaiact.sh         # Scenario 3: EU AI Act
-├── env.template                 # Environment template
-├── kfp/
-│   ├── pipeline.py              # Main pipeline (production)
-│   └── kfp-api-helpers.sh       # KFP API utilities
-└── venv/                        # Python virtual environment
-```
+## 🔧 Utility Scripts
 
-## Configuration
-
-### Environment Variables
-
-Copy `env.template` to `../../.env` at project root:
+### Recreate Milvus Collections
 
 ```bash
-PROJECT_NAME=private-ai-demo
-MINIO_ENDPOINT=minio.model-storage.svc:9000
-MINIO_ACCESS_KEY=<from MinIO secret>
-MINIO_SECRET_KEY=<from MinIO secret>
-MINIO_KFP_BUCKET=kfp-artifacts
+./tools/recreate-milvus-collections.sh
 ```
 
-Get MinIO credentials:
-```bash
-oc get secret minio-credentials -n model-storage -o jsonpath='{.data.accesskey}' | base64 -d
-oc get secret minio-credentials -n model-storage -o jsonpath='{.data.secretkey}' | base64 -d
-```
+Drops and recreates all three Milvus collections with the correct schema (pk, vector, dynamic fields).
 
-## Scenarios
-
-### Scenario 1: Red Hat Documentation
-- **Collection:** `red_hat_docs`
-- **Source:** `s3://llama-files/scenario1-red-hat/`
-- **Content:** OpenShift AI, RAG guides
-
-### Scenario 2: ACME Corporate
-- **Collection:** `acme_corporate`
-- **Source:** `s3://llama-files/scenario2-acme/`
-- **Content:** 6 technical documents (SOPs, playbooks, reliability reports)
-
-### Scenario 3: EU AI Act
-- **Collection:** `eu_ai_act`
-- **Source:** `s3://llama-files/scenario3-eu-ai-act/`
-- **Content:** Official journal, Q&A, timeline
-
-## Uploading New Documents
+### Test Milvus Insertion
 
 ```bash
-# Upload a PDF to MinIO
-./upload-to-minio.sh ~/my-document.pdf s3://llama-files/custom-scenario/my-document.pdf
-
-# Then run ingestion with custom parameters
-# (See kfp/pipeline.py for parameter details)
+./tools/test-milvus-insert.sh
 ```
 
-## Monitoring
+Tests direct insertion into Milvus via LlamaStack API.
 
-### KFP Dashboard
+### Per-Document Ingestion (Alternative)
+
 ```bash
-oc get route ds-pipeline-dspa -n private-ai-demo -o jsonpath='{.spec.host}'
+./tools/launch-per-document-ingestion.py
 ```
 
-### LlamaStack Playground
-```bash
-oc get route llama-stack-playground -n private-ai-demo -o jsonpath='{.spec.host}'
-```
+Alternative approach that creates individual pipeline runs for each document (more granular control, more runs to monitor).
+
+## 📚 Documentation
+
+For detailed documentation, see:
+- `docs/03-STAGE2-RAG/STAGE2-README.md` - Comprehensive Stage 2 overview
+- `docs/03-STAGE2-RAG/PER-DOCUMENT-INGESTION.md` - Per-document ingestion guide
+- `docs/03-STAGE2-RAG/KFP-BEST-PRACTICES-IMPLEMENTATION.md` - KFP implementation patterns
+- `docs/03-STAGE2-RAG/FINAL-STATUS-2025-11-07.md` - Final implementation status
+
+## 🎯 Current Status
+
+**Production Ready** ✅
+
+- ✅ Infrastructure deployed
+- ✅ 10 PDFs ingested → 1,120 chunks
+- ✅ RAG retrieval working
+- ✅ LlamaStack Playground UI operational
+- ✅ All three scenarios validated
 
 ### Milvus Collections
-```python
-from pymilvus import connections, utility
-connections.connect(host="milvus-standalone.private-ai-demo.svc", port="19530")
-print(utility.list_collections())
+
+| Collection | Documents | Chunks | Status |
+|------------|-----------|--------|--------|
+| `red_hat_docs` | 1 PDF | 135 | ✅ Ready |
+| `acme_corporate` | 6 PDFs | 32 | ✅ Ready |
+| `eu_ai_act` | 3 PDFs | 953 | ✅ Ready |
+
+### Access Points
+
+- **LlamaStack Playground**: https://llamastack-private-ai-demo.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com
+- **KFP UI**: https://ds-pipeline-dspa-private-ai-demo.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com
+- **LlamaStack API**: http://llama-stack-service.private-ai-demo.svc:8321
+
+## 🔍 Troubleshooting
+
+### Pipeline Not Running?
+
+Check caching is disabled:
+```bash
+# Verify cache_buster parameter is changing
+grep "cache_buster" run-batch-ingestion.sh
 ```
 
-## Troubleshooting
+### No Data in Milvus?
 
-### Pipeline Fails
-- Check pod logs: `oc logs -n private-ai-demo <pod-name>`
-- Verify MinIO credentials in `.env`
-- Ensure Docling and LlamaStack are running
+1. Check LlamaStack logs:
+   ```bash
+   oc logs -n private-ai-demo deployment/llama-stack -f
+   ```
 
-### No Results in Queries
-- Check collection exists: `utility.has_collection("red_hat_docs")`
-- Verify Granite embeddings cached: Check LlamaStack pod logs
-- Re-run ingestion with caching disabled
+2. Verify data in Milvus:
+   ```bash
+   oc exec -n private-ai-demo deployment/milvus-standalone -- \
+     python3 -c "from pymilvus import connections, Collection; connections.connect(host='localhost', port='19530'); print(Collection('acme_corporate').num_entities)"
+   ```
 
-### Slow Embeddings
-- Ensure using Granite image: `quay.io/redhat-et/llama:vllm-milvus-granite-0.2.8`
-- Check `HF_HOME` is set to `/data/hf_home` (PVC-backed)
-- First run takes ~22s to download model, then 0.22s
+### MinIO Upload Failing?
 
-## KFP Best Practices
+Check credentials:
+```bash
+oc get secret minio-credentials -n model-storage -o jsonpath='{.data.MINIO_ROOT_USER}' | base64 -d
+```
 
-This pipeline is fully aligned with [Kubeflow Pipelines User Guides](https://www.kubeflow.org/docs/components/pipelines/user-guides/):
+## 📞 Support
 
-✅ **Pinned Images** - `ubi9/python-311:1-77` (reproducible)  
-✅ **No Credential Logging** - Secure by design  
-✅ **Custom ParallelFor Names** - `process-each-pdf` (readable)  
-✅ **Type Annotations** - `List[str]`, `Input[Dataset]`, `Output[Dataset]`  
-✅ **Artifact Flow** - All data via Dataset artifacts  
-✅ **Clean Components** - Single source of truth  
+For issues or questions, refer to the comprehensive documentation in `docs/03-STAGE2-RAG/`.
 
-## Documentation
-
-Comprehensive documentation in `../../docs/03-STAGE2-RAG/`:
-
-1. **FINAL-SESSION-SUMMARY-2025-11-07.md** - Complete session details
-2. **KFP-BEST-PRACTICES-IMPLEMENTATION.md** - Alignment guide
-3. **PARALLELFOR-TYPE-ANNOTATION-FIX.md** - Type annotation fix
-4. **PLAYGROUND-VALIDATION-GUIDE.md** - Testing guide
-5. **LLAMASTACK-EMBEDDING-PROVIDER-ANALYSIS.md** - Embedding deep-dive
-
-## References
-
-- [Kubeflow Pipelines](https://www.kubeflow.org/docs/components/pipelines/)
-- [LlamaStack Documentation](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/2.25/html/working_with_llama_stack/)
-- [Docling](https://github.com/DS4SD/docling)
-- [Milvus](https://milvus.io/docs)
-
----
-
-**Status:** ✅ Production-ready  
-**Last Updated:** 2025-11-07  
-**Pipeline Version:** v20251107-110520-production-ready
