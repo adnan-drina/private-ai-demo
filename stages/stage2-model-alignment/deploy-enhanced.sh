@@ -295,11 +295,8 @@ echo "Step 3: Configure SCC permissions for LlamaStack"
 echo "──────────────────────────────────────────────────────────────────"
 echo ""
 
-echo "🔐 Granting anyuid SCC to llama-stack ServiceAccount..."
-echo "   Note: Required for LlamaStack components (Operator sets fsGroup: 0)"
-oc adm policy add-scc-to-user anyuid -z llama-stack -n "${PROJECT_NAME}" 2>&1 || echo "   Already granted"
-
-echo "🔐 Granting anyuid SCC to rag-workload-sa (for workbench/notebooks)..."
+echo "🔐 Granting anyuid SCC to rag-workload-sa (required by LlamaStack Operator)..."
+echo "   Note: LlamaStack Operator sets fsGroup: 0 which requires anyuid SCC"
 oc adm policy add-scc-to-user anyuid -z rag-workload-sa -n "${PROJECT_NAME}" 2>&1 || echo "   Already granted"
 
 echo "✅ SCC configured"

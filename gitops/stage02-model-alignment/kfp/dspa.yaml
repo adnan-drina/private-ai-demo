@@ -7,6 +7,7 @@ metadata:
   labels:
     app.kubernetes.io/part-of: private-ai-demo
     stage: "02"
+    opendatahub.io/dashboard: "true"  # Makes DSPA discoverable in RHOAI project UI
 spec:
   objectStorage:
     externalStorage:

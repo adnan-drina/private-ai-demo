@@ -1,45 +1,108 @@
-from kfp.dsl import component, Output, Metrics
+"""
+Verify ingestion by querying LlamaStack Vector IO API
+
+This component validates that chunks were successfully inserted and can be retrieved
+by performing a test query against the vector database.
+"""
+
+from kfp import dsl
+
+# Base container images
+# Pinned to specific version for reproducibility (per KFP best practices)
+BASE_PYTHON_IMAGE = "registry.access.redhat.com/ubi9/python-311:1-77"
 
 
-@component(
-    base_image="registry.access.redhat.com/ubi9/python-311:1-77",
-    packages_to_install=["pymilvus==2.4.6"],
+@dsl.component(
+    base_image=BASE_PYTHON_IMAGE,
+    packages_to_install=["requests"]
 )
-def verify_ingestion_op(
-    milvus_uri: str = "tcp://milvus-standalone.private-ai-demo.svc.cluster.local:19530",
-    collection_name: str = "rag_documents_v2",
-    min_chunks: int = 10,
-    metrics: Output[Metrics] = None,
-):
+def verify_ingestion(
+    llamastack_url: str,
+    vector_db_id: str,
+    min_chunks: int,
+    insert_result: dict
+) -> dict:
     """
-    Verify ingestion by querying Milvus collection count and asserting minimum threshold.
+    Verify ingestion by querying LlamaStack Vector IO API
     
-    - milvus_uri: Milvus connection URI
-    - collection_name: Collection to verify
-    - min_chunks: Minimum expected chunk count
-    - Emits metrics: chunk_count, verification_status
+    Tests that chunks can be retrieved via /v1/vector-io/query
     """
-    from pymilvus import connections, Collection
+    import requests
+    import json
     
-    print(f"🔍 Connecting to Milvus at {milvus_uri}")
-    connections.connect(alias="default", uri=milvus_uri)
+    print(f"Verifying ingestion in vector DB: {vector_db_id}")
+    print(f"Insert result: {insert_result}")
     
-    print(f"📊 Verifying collection '{collection_name}'")
-    coll = Collection(collection_name)
-    coll.load()
-    count = coll.num_entities
+    # Use a meaningful query derived from the document source
+    # Better than generic "test document content" - provides real signal
+    source_uri = insert_result.get("source", "")
+    if "rag-mini" in source_uri.lower():
+        test_query = "Red Hat OpenShift AI platform"
+    elif "acme" in source_uri.lower():
+        test_query = "corporate policy"
+    elif "ai" in source_uri.lower() and "act" in source_uri.lower():
+        test_query = "artificial intelligence regulation"
+    else:
+        # Generic fallback
+        test_query = "document information"
     
-    print(f"   Found {count} entities in collection")
+    print(f"Testing retrieval with query: '{test_query}'")
     
-    if count < min_chunks:
-        raise RuntimeError(
-            f"❌ Verification failed: {count} chunks < {min_chunks} minimum threshold"
-        )
+    response = requests.post(
+        f"{llamastack_url}/v1/vector-io/query",
+        json={
+            "vector_db_id": vector_db_id,
+            "query": test_query,
+            "params": {"top_k": 5}
+        },
+        headers={"Content-Type": "application/json"},
+        timeout=60
+    )
     
-    # Log metrics for KFP UI
-    metrics.log_metric("chunk_count", count)
-    metrics.log_metric("verification_status", 1.0)  # 1.0 = success
-    metrics.log_metric("min_threshold", min_chunks)
+    if response.status_code != 200:
+        print(f"ERROR: Query failed with status {response.status_code}")
+        print(f"Response: {response.text}")
+        return {
+            "success": False,
+            "error": f"Query failed: {response.status_code}",
+            "vector_db_id": vector_db_id
+        }
     
-    print(f"✅ Verification passed: {count} chunks ingested (>= {min_chunks} threshold)")
+    result = response.json()
+    chunks_returned = len(result.get("chunks", []))
+    
+    print(f"Query returned {chunks_returned} chunks")
+    
+    # Verify we got results
+    num_chunks = insert_result.get("num_chunks", 0)
+    success = chunks_returned > 0 and num_chunks >= min_chunks
+    
+    print(f"Ingestion verification:")
+    print(f"  Chunks inserted: {num_chunks}")
+    print(f"  Chunks retrieved: {chunks_returned}")
+    print(f"  Minimum required: {min_chunks}")
+    
+    if success:
+        print(f"[OK] Verification PASSED")
+        
+        # Print top results with scores (better signal than single chunk)
+        if result.get("chunks"):
+            print(f"Top {min(3, chunks_returned)} results with scores:")
+            for idx, chunk in enumerate(result["chunks"][:3]):
+                content = chunk.get("content", chunk.get("text", str(chunk)))
+                score = chunk.get("score", "N/A")
+                doc_id = chunk.get("metadata", {}).get("document_id", "unknown")
+                
+                print(f"  {idx + 1}. Score={score}, doc_id={doc_id}")
+                print(f"     Content: {content[:150]}...")
+    else:
+        print(f"[FAIL] Verification FAILED")
+    
+    return {
+        "success": success,
+        "num_chunks_inserted": num_chunks,
+        "num_chunks_retrieved": chunks_returned,
+        "min_chunks": min_chunks,
+        "vector_db_id": vector_db_id
+    }
 

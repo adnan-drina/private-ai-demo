@@ -20,69 +20,42 @@ spec:
   replicas: 1
   
   server:
-    # Let operator inject the default RHOAI 2.25 image with all required APIs (prompts, etc.)
-    # This ensures compatibility with the distribution's initialization requirements
-    distribution: {}
+    # Use Red Hat Emerging Technologies image with built-in Granite embeddings
+    # This image has inline Granite embeddings, avoiding on-demand model loading delays
+    distribution:
+      image: "quay.io/redhat-et/llama:vllm-milvus-granite-0.2.8"
     
     containerSpec:
       name: llamastack
-      port: 8321  # Port defined in rh-dev distribution's run.yaml
+      port: 8321
+      args:
+        - --yaml-config
+        - /opt/app-root/run.yaml
       
       env:
-        # Inference model configuration (required by rh-dev distribution)
-        - name: INFERENCE_MODEL
-          value: "mistral-24b-quantized"
-        - name: INFERENCE_MODEL_ID
-          value: "mistral-24b-quantized"
-        
-        # vLLM endpoint configuration (for remote::vllm provider)
-        # Using external HTTPS route as LlamaStack Operator blocks Istio sidecar injection
-        # Internal URL would require sidecar: http://mistral-24b-quantized-predictor.private-ai-demo.svc.cluster.local/v1
+        # Config and writable homes
+        - name: LLAMA_STACK_CONFIG
+          value: "/opt/app-root/run.yaml"
+        - name: LLAMA_STACK_HOME
+          value: "/data/.llama"
+        # Note: HF_HOME is set by operator to /opt/app-root/src/.llama/distributions/rh/
+        # TRANSFORMERS_CACHE for Granite embedding weights
+        - name: TRANSFORMERS_CACHE
+          value: "/data/hf_home"
+
+        # vLLM endpoint (external HTTPS Route)
         - name: VLLM_URL
           value: "https://mistral-24b-quantized-private-ai-demo.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com/v1"
         - name: VLLM_API_TOKEN
           value: "fake"
         - name: VLLM_TLS_VERIFY
           value: "false"
-        
-        # Milvus connection (for remote::milvus provider)
-        - name: MILVUS_HOST
-          value: "milvus-standalone.private-ai-demo.svc.cluster.local"
-        - name: MILVUS_PORT
-          value: "19530"
+
+        # Milvus (gRPC)
         - name: MILVUS_URI
           value: "tcp://milvus-standalone.private-ai-demo.svc.cluster.local:19530"
-        
-        # Embedding model configuration (for inline::sentence-transformers provider)
-        - name: EMBEDDING_MODEL
-          value: "sentence-transformers/all-MiniLM-L6-v2"
-        
-        # Docling document processing service (for RAG document preparation)
-        # Reference: RHOAI 2.25 - Section 3.10: Preparing documents with Docling for Llama Stack retrieval
-        - name: DOCLING_URL
-          value: "http://docling.private-ai-demo.svc:8080"
-        
-        # Data persistence
-        - name: SQLITE_STORE_DIR
-          value: "/data"
-        
-        # Config file path (explicit to avoid ambiguity across builds)
-        - name: LLAMA_STACK_CONFIG
-          value: "/opt/app-root/run.yaml"
-        
-        # Logging level
-        - name: LLAMA_STACK_LOG_LEVEL
-          value: "INFO"
-        
-        # HuggingFace token for model downloads (if needed)
-        - name: HF_TOKEN
-          valueFrom:
-            secretKeyRef:
-              name: huggingface-secret
-              key: token
-              optional: true
-        
-        # Files API configuration (S3/MinIO backend for RAG document storage)
+
+        # Files (MinIO) for Files API provider
         - name: FILES_S3_ENDPOINT
           value: "http://minio.model-storage.svc:9000"
         - name: FILES_S3_BUCKET
@@ -107,11 +80,11 @@ spec:
       resources:
         requests:
           memory: "2Gi"
-          cpu: "1"
+          cpu: "4"  # Increased from 2 to 4 cores for faster embedding computation
           ephemeral-storage: "5Gi"
         limits:
           memory: "4Gi"
-          cpu: "2"
+          cpu: "4"  # Set limit to 4 cores to handle embedding workload
           ephemeral-storage: "10Gi"
     
     # Pod-level configuration

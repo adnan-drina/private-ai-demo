@@ -23,6 +23,7 @@ resources:
   - service.yaml
   - route.yaml
   - servicemonitor.yaml  # Prometheus metrics collection
+  - playground-deployment.yaml  # Streamlit UI for LlamaStack (no default vector_db)
 
 # Llama Stack Component for RAG
 # Official Red Hat OpenShift AI RAG runtime

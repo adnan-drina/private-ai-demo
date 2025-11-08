@@ -1,0 +1,58 @@
+---
+# DoclingServe Custom Resource
+# Deployed via docling-operator for RAG document processing
+# Reference: https://github.com/docling-project/docling-operator
+
+apiVersion: docling.github.io/v1alpha1
+kind: DoclingServe
+metadata:
+  name: docling
+  namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/name: docling
+    app.kubernetes.io/component: document-processing
+    app.kubernetes.io/part-of: private-ai-demo
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+    openshift.io/display-name: "Docling Document Processor"
+    description: "Document processing service for RAG workflows"
+spec:
+  # API Server Configuration
+  apiServer:
+    # Official docling-serve image with v1 API
+    image: "quay.io/docling-project/docling-serve:latest"
+    
+    # Disable web UI (API-only for pipeline integration)
+    enableUI: false
+    
+    # Single instance for demo (scale up for production)
+    instances: 1
+    
+    # Resource requests/limits
+    # Increased for RAG pipeline PDF processing (3+ MB documents, complex layouts)
+    resources:
+      requests:
+        memory: "4Gi"
+        cpu: "2"
+      limits:
+        memory: "8Gi"
+        cpu: "4"
+  
+  # Engine Configuration
+  engine:
+    # Use local engine (KFP support is experimental)
+    # Note: KFP requires DOCLING_SERVE_ENG_KFP_EXPERIMENTAL=true
+    local:
+      # Number of worker processes for parallel conversion
+      # Increased from 2 to 4 for faster processing
+      numWorkers: 4
+    
+    # KFP engine (experimental - commented out for now)
+    # kfp:
+    #   endpoint: "https://ds-pipeline-dspa-private-ai-demo.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com"
+  
+  # OpenShift Route
+  route:
+    enabled: true
+    # Route will be: docling-private-ai-demo.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com
+
