@@ -34,11 +34,11 @@ log_success() { echo -e "${GREEN}✓${NC} $1"; }
 log_warning() { echo -e "${YELLOW}⚠${NC} $1"; }
 
 print_header() {
-  echo ""
+    echo ""
   echo "══════════════════════════════════════════════════════════════"
-  echo "  $1"
+    echo "  $1"
   echo "══════════════════════════════════════════════════════════════"
-  echo ""
+    echo ""
 }
 
 check_prerequisites() {

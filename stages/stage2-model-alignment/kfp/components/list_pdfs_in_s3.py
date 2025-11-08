@@ -18,29 +18,57 @@ BASE_PYTHON_IMAGE = "registry.access.redhat.com/ubi9/python-311:1-77"
 )
 def list_pdfs_in_s3(
     s3_prefix: str,
-    minio_endpoint: str,
-    minio_creds_b64: str
+    s3_secret_mount_path: str = "/mnt/secrets",
+    minio_endpoint: str = "",
+    minio_creds_b64: str = ""
 ) -> List[str]:
     """
     Discover all PDF files in an S3 prefix
     
     Parameters:
         s3_prefix: S3 path prefix (e.g. "s3://llama-files/scenario2-acme/")
-        minio_endpoint: MinIO endpoint
-        minio_creds_b64: Base64-encoded credentials (format: "access_key:secret_key")
+        s3_secret_mount_path: Filesystem path where S3 credentials are mounted
+        minio_endpoint: Optional fallback endpoint (used if secret not mounted)
+        minio_creds_b64: Optional fallback credentials in base64 ("access:secret")
     
     Returns:
         List of full S3 URIs for all PDFs found (e.g. ["s3://bucket/file1.pdf", ...])
     """
+    import os
+    from pathlib import Path
+
     import boto3
     from botocore.client import Config
-    import base64
     
     print(f"Discovering PDFs in: {s3_prefix}")
     
-    # Decode credentials
-    creds_decoded = base64.b64decode(minio_creds_b64).decode('utf-8')
-    aws_access_key_id, aws_secret_access_key = creds_decoded.split(':', 1)
+    endpoint_url = ""
+    access_key = ""
+    secret_key = ""
+
+    def _read_secret(key: str) -> str:
+        file_path = Path(s3_secret_mount_path) / key
+        if file_path.is_file():
+            return file_path.read_text().strip()
+        raise FileNotFoundError
+
+    try:
+        endpoint_url = _read_secret("S3_ENDPOINT_URL")
+        access_key = _read_secret("S3_ACCESS_KEY")
+        secret_key = _read_secret("S3_SECRET_KEY")
+        print(f"[OK] Loaded S3 credentials from secret at {s3_secret_mount_path}")
+    except FileNotFoundError:
+        if not minio_endpoint or not minio_creds_b64:
+            raise ValueError(
+                "S3 secret files were not found and fallback credentials were not provided. "
+                "Provide `minio_endpoint` and `minio_creds_b64`, or mount the secret."
+            )
+        import base64
+
+        creds_decoded = base64.b64decode(minio_creds_b64).decode("utf-8").strip()
+        access_key, secret_key = [c.strip() for c in creds_decoded.split(":", 1)]
+        endpoint_url = f"http://{minio_endpoint}" if not minio_endpoint.startswith("http") else minio_endpoint
+        print("[WARN] Falling back to inline credentials (base64 parameter).")
     
     # Parse S3 prefix
     if s3_prefix.startswith("s3://"):
@@ -58,11 +86,11 @@ def list_pdfs_in_s3(
     # Configure S3 client
     s3_client = boto3.client(
         "s3",
-        endpoint_url=f"http://{minio_endpoint}",
-        aws_access_key_id=aws_access_key_id,
-        aws_secret_access_key=aws_secret_access_key,
-        config=Config(signature_version="s3v4"),
-        region_name="us-east-1"
+        endpoint_url=endpoint_url,
+        aws_access_key_id=access_key,
+        aws_secret_access_key=secret_key,
+        config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
+        region_name="us-east-1",
     )
     
     # List all objects with prefix

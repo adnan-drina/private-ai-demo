@@ -31,6 +31,23 @@ spec:
         sidecar.istio.io/inject: "false"
     spec:
       serviceAccountName: llama-stack
+      initContainers:
+        # Pre-warm LlamaStack collections to avoid first-query segment load latency
+        - name: prewarm-collections
+          image: registry.access.redhat.com/ubi9/ubi-minimal:9.5
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Pre-warming LlamaStack vector collections..."
+              for collection in red_hat_docs acme_corporate eu_ai_act; do
+                echo "  Querying: $collection"
+                curl -sf -X POST http://llama-stack-service.private-ai-demo.svc:8321/v1/vector-io/query \
+                  -H 'Content-Type: application/json' \
+                  -d "{\"vector_db_id\":\"$collection\",\"query\":\"test\",\"params\":{\"top_k\":1}}" \
+                  > /dev/null && echo "    ✅ $collection ready" || echo "    ⚠️  $collection unavailable (will retry on first UI query)"
+              done
+              echo "Pre-warm complete"
       containers:
         - name: playground
           # Pinned to specific digest for reproducibility (verified 2025-11-07)
@@ -41,7 +58,7 @@ spec:
               containerPort: 8501
               protocol: TCP
           env:
-            # LlamaStack API endpoints (internal and external)
+            # LlamaStack API endpoints (internal for SSR, external for browser)
             - name: LLAMA_STACK_BASE_URL
               value: http://llama-stack-service.private-ai-demo.svc:8321
             - name: LLAMA_STACK_URL
@@ -51,14 +68,22 @@ spec:
             # Public-facing endpoint for browser
             - name: NEXT_PUBLIC_LLAMA_STACK_URL
               value: https://llamastack-private-ai-demo.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com
+            # Streamlit server configuration (Option A: serve at root)
+            - name: STREAMLIT_SERVER_HEADLESS
+              value: "true"
+            - name: STREAMLIT_SERVER_ENABLE_CORS
+              value: "false"
+            - name: STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION
+              value: "false"
+            # NOTE: No baseUrlPath - serving at root (/)
             # NOTE: No RAG_DEFAULT_VECTOR_DB_ID - Playground UI will explicitly select from /v1/vector-dbs
           resources:
             requests:
-              cpu: 50m
-              memory: 128Mi
-            limits:
               cpu: 200m
-              memory: 256Mi
+              memory: 512Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
           readinessProbe:
             httpGet:
               path: /

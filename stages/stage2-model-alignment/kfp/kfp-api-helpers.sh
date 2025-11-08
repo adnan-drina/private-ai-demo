@@ -132,7 +132,7 @@ print(json.dumps(result))
       resource_references: [
         { key: { type: "EXPERIMENT", id: $exp_id }, relationship: "OWNER" }
       ],
-      parameters: $params
+        parameters: $params
     }')
   
   curl -sk -H "Authorization: Bearer $KFP_TOKEN" \

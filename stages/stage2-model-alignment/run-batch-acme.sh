@@ -93,43 +93,64 @@ print("")
 
 # Upload batch pipeline
 pipeline_file = "../../artifacts/batch-docling-rag-pipeline.yaml"
-pipeline_name = "batch-data-processing-acme"
+pipeline_name = "data-processing-and-insertion"  # Shared pipeline name for all scenarios
+version_description = "v1.0.2 - Schema alignment fix: Milvus collections with default_value for content/metadata fields"
 
-print(f"Uploading smart batch pipeline: {pipeline_name}")
+print(f"Uploading NEW VERSION of pipeline: {pipeline_name}")
 
-try:
+# First, check if pipeline exists
+pipelines = client.list_pipelines(page_size=100).pipelines
+pipeline = next((p for p in pipelines if pipeline_name in (p.name if hasattr(p, 'name') else p.display_name)), None)
+
+uploaded_version_id = None
+
+if pipeline:
+    # Pipeline exists - upload a new version
+    pipeline_id = pipeline.id if hasattr(pipeline, 'id') else pipeline.pipeline_id
+    print(f"📦 Pipeline exists: {pipeline_id}, uploading new version...")
+    version_name = version_description if 'version_description' in dir() else f"v{os.popen('date +%Y%m%d-%H%M%S').read().strip()}"
+    try:
+        version = client.upload_pipeline_version(
+            pipeline_package_path=pipeline_file,
+            pipeline_id=pipeline_id,
+            pipeline_version_name=version_name
+        )
+        uploaded_version_id = version.pipeline_version_id if hasattr(version, 'pipeline_version_id') else version.id
+        print(f"✅ New version uploaded: {version_name} (ID: {uploaded_version_id})")
+    except Exception as e:
+        print(f"⚠️  Version upload failed: {e}")
+        print("    Continuing with existing pipeline...")
+else:
+    # Pipeline doesn't exist - create it
     pipeline = client.upload_pipeline(
         pipeline_package_path=pipeline_file,
         pipeline_name=pipeline_name
     )
     pipeline_id = pipeline.id if hasattr(pipeline, 'id') else pipeline.pipeline_id
-    print(f"✅ Pipeline uploaded: {pipeline_id}")
-except Exception as e:
-    # Pipeline might already exist, get it
-    pipelines = client.list_pipelines(page_size=100).pipelines
-    pipeline = next((p for p in pipelines if pipeline_name in (p.name if hasattr(p, 'name') else p.display_name)), None)
-    if pipeline:
-        pipeline_id = pipeline.id if hasattr(pipeline, 'id') else pipeline.pipeline_id
-        print(f"✅ Using existing pipeline: {pipeline_id}")
-    else:
-        raise e
+    print(f"✅ New pipeline uploaded: {pipeline_id}")
 
 print("")
 
-# Get pipeline version
-response = client.list_pipeline_versions(pipeline_id, page_size=10)
-pipeline_versions = response.pipeline_versions if hasattr(response, 'pipeline_versions') else []
-if pipeline_versions:
-    version_id = pipeline_versions[0].pipeline_version_id
-    print(f"Using version: {version_id}")
+# Use the newly uploaded version if available, otherwise get latest
+if uploaded_version_id:
+    version_id = uploaded_version_id
+    print(f"Using newly uploaded version: {version_id}")
 else:
-    version_id = None
-    print("No version found - will create default version")
+    response = client.list_pipeline_versions(pipeline_id, page_size=10, sort_by="created_at desc")
+    pipeline_versions = response.pipeline_versions if hasattr(response, 'pipeline_versions') else []
+    if pipeline_versions:
+        version_id = pipeline_versions[0].pipeline_version_id
+        print(f"Using latest version: {version_id}")
+    else:
+        version_id = None
+        print("No version found - will create default version")
 
 print("")
 
 # Create run - pipeline will auto-discover all PDFs in the folder
 run_name = f"batch-acme-auto-discover-{os.popen('date +%Y%m%d-%H%M%S').read().strip()}"
+
+import time
 
 params = {
     "s3_prefix": "$S3_PREFIX",
@@ -137,8 +158,11 @@ params = {
     "llamastack_url": "http://llama-stack-service.private-ai-demo.svc:8321",
     "vector_db_id": "acme_corporate",
     "chunk_size": 512,  # Integer, not string
+    "num_splits": 2,
+    "s3_secret_mount_path": "/mnt/secrets",
     "minio_endpoint": "minio.model-storage.svc:9000",
-    "minio_creds_b64": "$MINIO_CREDS_B64"
+    "minio_creds_b64": "$MINIO_CREDS_B64",
+    "cache_buster": str(int(time.time()))  # Force fresh run - no cache
 }
 
 print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
@@ -146,7 +170,7 @@ print(f"Run: {run_name}")
 print(f"Pipeline: {pipeline_name} (Smart Auto-Discovery)")
 print(f"S3 Prefix: $S3_PREFIX")
 print(f"Collection: acme_corporate")
-print(f"Parallelism: 2 PDFs at a time")
+print(f"Parallelism: {params['num_splits']} balanced groups")
 print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 print("")
 print("Pipeline will:")
@@ -161,14 +185,16 @@ if version_id:
         job_name=run_name,
         pipeline_id=pipeline_id,
         version_id=version_id,
-        params=params
+        params=params,
+        enable_caching=False  # Force fresh run - no caching
     )
 else:
     run = client.run_pipeline(
         experiment_id=None,
         job_name=run_name,
         pipeline_id=pipeline_id,
-        params=params
+        params=params,
+        enable_caching=False  # Force fresh run - no caching
     )
 
 run_id = run.id if hasattr(run, 'id') else run.run_id

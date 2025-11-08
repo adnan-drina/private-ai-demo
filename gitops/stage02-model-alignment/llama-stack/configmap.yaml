@@ -58,13 +58,32 @@ data:
           config: {}
       
       vector_io:
-        # Milvus in private-ai-demo (minimal config per official docs)
+        # Milvus in private-ai-demo - optimized with HNSW index
         # Reference: https://llama-stack.readthedocs.io/en/v0.2.11/providers/vector_io/milvus.html
+        # Reference: https://milvus.io/docs/schema-hands-on.md
+        # Schema: Int64 PK (auto_id=true), vector (HNSW indexed), dynamic fields
         - provider_id: milvus-shared
           provider_type: remote::milvus
           config:
             uri: "tcp://milvus-standalone.private-ai-demo.svc.cluster.local:19530"
-            # NO OTHER PARAMETERS - provider will use defaults
+            # Field mappings - LET PROVIDER OWN THE SCHEMA
+            # Provider creates: chunk_id (PK), vector, chunk_content (JSON)
+            # Do NOT override text_field or id_field - provider manages these
+            embedding_dimension: 768
+            metric_type: "L2"
+            # Search params aligned with HNSW index (M=16, efConstruction=200)
+            search_params:
+              metric_type: "L2"
+              params:
+                ef: 64
+            # Collection mappings (scenario-specific)
+            collections:
+              - vector_db_id: acme_corporate
+                provider_vector_db_id: acme_corporate
+              - vector_db_id: red_hat_docs
+                provider_vector_db_id: red_hat_docs
+              - vector_db_id: eu_ai_act
+                provider_vector_db_id: eu_ai_act
       
       agents:
         # Inline agent provider for RAG
@@ -199,35 +218,27 @@ data:
       #     uri: "http://slack-mcp.private-ai-demo.svc.cluster.local:8080/sse"
     
     vector_dbs:
-      # Register vector databases created by KFP ingestion pipelines
+      # Scenario-specific vector databases for RAG
       # All use IBM Granite embeddings (768 dimensions)
-      # CRITICAL FIX: Added provider_vector_db_id to map to actual Milvus collections
       
-      # KFP default collection used by store_in_milvus step
-      - vector_db_id: rag_documents
-        provider_id: milvus-shared
-        provider_vector_db_id: rag_documents
-        embedding_model: ibm-granite/granite-embedding-125m-english
-        embedding_dimension: 768
-      
-      # ACME Corporate collection (default for RAG queries)
-      - vector_db_id: acme_corporate
-        provider_id: milvus-shared
-        provider_vector_db_id: acme_corporate          # exact Milvus collection name
-        embedding_model: ibm-granite/granite-embedding-125m-english
-        embedding_dimension: 768
-      
-      # Red Hat Documentation collection
+      # Scenario 1: Red Hat Documentation
       - vector_db_id: red_hat_docs
         provider_id: milvus-shared
-        provider_vector_db_id: red_hat_docs            # exact Milvus collection name
+        provider_vector_db_id: red_hat_docs
         embedding_model: ibm-granite/granite-embedding-125m-english
         embedding_dimension: 768
       
-      # EU AI Act collection
+      # Scenario 2: ACME Corporate (default for Playground)
+      - vector_db_id: acme_corporate
+        provider_id: milvus-shared
+        provider_vector_db_id: acme_corporate
+        embedding_model: ibm-granite/granite-embedding-125m-english
+        embedding_dimension: 768
+      
+      # Scenario 3: EU AI Act Regulation
       - vector_db_id: eu_ai_act
         provider_id: milvus-shared
-        provider_vector_db_id: eu_ai_act               # exact Milvus collection name
+        provider_vector_db_id: eu_ai_act
         embedding_model: ibm-granite/granite-embedding-125m-english
         embedding_dimension: 768
     

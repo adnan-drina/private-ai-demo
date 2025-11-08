@@ -1,10 +1,12 @@
 """
-Insert chunks via LlamaStack Vector IO API
+Insert chunks via LlamaStack Vector IO API.
 
-This component inserts document chunks into Milvus via LlamaStack's /v1/vector-io/insert API.
-LlamaStack computes embeddings server-side using the configured embedding model.
+This component follows the ingestion contract documented in:
+- Red Hat OpenShift AI “Deploying a RAG stack in a data science project” (Docling sample).
+- Milvus + LlamaStack integration guide.
 
-Includes batching and exponential backoff retry logic for reliability.
+Chunks are sent with structured metadata (dict, not JSON string) so the provider can
+serialize fields appropriately for Milvus. Embeddings are generated server-side.
 """
 
 from kfp import dsl
@@ -50,31 +52,61 @@ def insert_via_llamastack(
     source_name = os.path.basename(input_uri).replace(".pdf", "").replace("s3://", "").replace("/", "-")
     
     # Format chunks for LlamaStack API
-    # LlamaStack expects: content (str) + metadata (dict with document_id AND token_count)
-    # Embeddings will be computed server-side by LlamaStack
+    # Reference: https://llama-stack.readthedocs.io/en/v0.2.11/providers/vector_io/milvus.html
+    # Reference: https://milvus.io/docs/llama_stack_with_milvus.md
     #
-    # CRITICAL: RAG tool requires 'token_count' in metadata to calculate context window usage
-    # Without it, RAG queries fail with KeyError: 'token_count'
+    # Milvus schema: Int64 PK (auto_id=true), vector, content (VarChar), metadata (JSON)
+    # Provider generates PK and vector; we supply content + metadata as a dictionary.
+    #
+    # Chunk structure:
+    #   - content: string (chunk text) -> mapped to Milvus 'content' field
+    #   - metadata: dict -> provider serializes for Milvus 'metadata' field
+    #
+    # NO id field needed - Milvus auto-generates Int64 PK.
     llamastack_chunks = []
+    skipped_chunks = 0
+    min_len = None
+    max_len = None
     for i, item in enumerate(chunks_data):
-        content = item.get("text", item.get("content", ""))
+        content_text = item.get("text") or item.get("content") or ""
+        if not isinstance(content_text, str):
+            content_text = str(content_text)
+        stripped = content_text.strip()
+        if not stripped:
+            skipped_chunks += 1
+            print(f"[SKIP] Chunk {i} empty after stripping; raw length={len(content_text)}")
+            continue
+        content_text = stripped
         
         # Calculate token count (rough estimation: ~4 chars per token)
-        # This is used by LlamaStack RAG tool to track context window usage
-        # More accurate: use tiktoken, but simple estimation is sufficient
-        token_count = len(content) // 4
+        token_count = len(content_text) // 4
         
-        chunk = {
-            "content": content,
-            "metadata": {
-                "document_id": f"{source_name}-chunk-{i}",
-                "source": input_uri,
-                "chunk_index": i,
-                "chunk_id": item.get("chunk_id", i),  # Keep original for reference
-                "token_count": token_count  # Required by RAG tool
-            }
+        metadata_dict = {
+            "document_id": source_name,
+            "chunk_index": int(i),
+            "chunk_id": int(item.get("chunk_id", i)),
+            "source_uri": input_uri,
+            "token_count": int(token_count),
+            "character_count": len(content_text),
         }
-        llamastack_chunks.append(chunk)
+
+        extra_metadata = item.get("metadata")
+        if isinstance(extra_metadata, dict):
+            metadata_dict.update(extra_metadata)
+
+        text_len = len(content_text)
+        min_len = text_len if min_len is None else min(min_len, text_len)
+        max_len = text_len if max_len is None else max(max_len, text_len)
+
+        llamastack_chunks.append({
+            "content": content_text,
+            "metadata": metadata_dict  # Must be dict - LlamaStack API requires it
+        })
+
+    if skipped_chunks:
+        print(f"Skipped {skipped_chunks} chunk(s) with empty content.")
+    if llamastack_chunks:
+        print(f"Prepared {len(llamastack_chunks)} chunk(s); content length range {min_len}-{max_len}.")
     
     # Insert via LlamaStack Vector IO API (with batching and retry)
     print(f"Inserting {len(llamastack_chunks)} chunks via LlamaStack...")
@@ -84,19 +116,28 @@ def insert_via_llamastack(
     total_inserted = 0
     batches = [llamastack_chunks[i:i + BATCH_SIZE] for i in range(0, len(llamastack_chunks), BATCH_SIZE)]
     
-    print(f"Split into {len(batches)} batches of up to {BATCH_SIZE} chunks")
+    print(f"Split into {len(batches)} batch(es) of up to {BATCH_SIZE} chunks")
     
     import time
     for batch_idx, batch in enumerate(batches):
         batch_num = batch_idx + 1
         print(f"Processing batch {batch_num}/{len(batches)} ({len(batch)} chunks)...")
+
+        # Validate batch content before calling LlamaStack
+        for chunk_meta in batch:
+            content_val = chunk_meta.get("content")
+            if not isinstance(content_val, str) or not content_val.strip():
+                raise ValueError(
+                    f"Chunk missing content prior to insert (batch {batch_num}): {chunk_meta.get('metadata')}"
+                )
         
-        # Retry logic with exponential backoff
-        max_retries = 3
+        # Retry logic with exponential backoff (per Milvus guidance: up to 5 retries)
+        max_retries = 5
+        response = None
         for attempt in range(max_retries):
             try:
-                # Timeout: ~2 sec/chunk + 60s overhead, max 300s
-                timeout = min(300, len(batch) * 2 + 60)
+                # Timeout: ~3 sec/chunk + 120s overhead, max 600s
+                timeout = min(600, len(batch) * 3 + 120)
                 
                 response = requests.post(
                     f"{llamastack_url}/v1/vector-io/insert",
@@ -120,31 +161,34 @@ def insert_via_llamastack(
                     print(f"  WARNING: Could not parse JSON response: {e}")
                     result = None
                 
-                # If no result or no num_inserted field, assume all chunks inserted
                 batch_inserted = result.get("num_inserted", len(batch)) if result else len(batch)
                 total_inserted += batch_inserted
                 print(f"  [OK] Batch {batch_num}: {batch_inserted} chunks inserted")
                 break  # Success
                 
-            except requests.exceptions.Timeout as e:
+            except requests.exceptions.Timeout:
                 if attempt < max_retries - 1:
-                    wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s, 4s
+                    wait_time = min(30, 2 ** attempt)  # 1,2,4,8,16 (cap at 30s)
                     print(f"  Timeout on batch {batch_num}, retry {attempt + 1}/{max_retries} after {wait_time}s...")
                     time.sleep(wait_time)
                 else:
                     print(f"  FAILED: Batch {batch_num} timed out after {max_retries} attempts")
                     raise
             except requests.exceptions.RequestException as e:
-                if attempt < max_retries - 1 and response.status_code >= 500:
-                    wait_time = 2 ** attempt
-                    print(f"  Server error on batch {batch_num} ({response.status_code}), retry {attempt + 1}/{max_retries} after {wait_time}s...")
+                status_info = ""
+                if response is not None:
+                    status_info = f" (status {response.status_code})"
+                if attempt < max_retries - 1:
+                    wait_time = min(30, 2 ** attempt)
+                    print(f"  Request error on batch {batch_num}{status_info}: {e}. Retry {attempt + 1}/{max_retries} after {wait_time}s...")
                     time.sleep(wait_time)
                 else:
-                    print(f"  FAILED: Batch {batch_num} error: {e}")
+                    print(f"  FAILED: Batch {batch_num} error after retries: {e}")
                     raise
     
     print(f"[OK] Successfully inserted {total_inserted}/{len(llamastack_chunks)} chunks across {len(batches)} batches")
-    print(f"Sample document_id: {llamastack_chunks[0]['metadata']['document_id']}")
+    if llamastack_chunks:
+        print(f"Sample document_id: {llamastack_chunks[0]['metadata'].get('document_id')}")
     
     return {
         "vector_db_id": vector_db_id,

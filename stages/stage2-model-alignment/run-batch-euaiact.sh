@@ -57,7 +57,7 @@ print(f"Connected to: {host}")
 print("")
 
 # Get pipeline
-pipeline_name = "batch-data-processing"
+pipeline_name = "data-processing-and-insertion"
 pipelines = client.list_pipelines(page_size=100).pipelines
 pipeline = next((p for p in pipelines if pipeline_name in (p.name if hasattr(p, 'name') else p.display_name)), None)
 
@@ -68,13 +68,13 @@ if not pipeline:
 pipeline_id = pipeline.pipeline_id if hasattr(pipeline, 'pipeline_id') else pipeline.id
 print(f"✅ Found pipeline: {pipeline_id}")
 
-# Get latest version
-response = client.list_pipeline_versions(pipeline_id, page_size=10)
+# Get LATEST version (sorted by creation time descending)
+response = client.list_pipeline_versions(pipeline_id, page_size=10, sort_by="created_at desc")
 pipeline_versions = response.pipeline_versions if hasattr(response, 'pipeline_versions') else []
 version_id = pipeline_versions[0].pipeline_version_id if pipeline_versions else None
 
 if version_id:
-    print(f"✅ Using version: {version_id}")
+    print(f"✅ Using LATEST version: {version_id}")
 else:
     print("⚠️  No version found, using pipeline directly")
 
@@ -83,14 +83,19 @@ print("")
 # Create run
 run_name = f"batch-eu-ai-act-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
 
+import time
+
 params = {
     "s3_prefix": "$S3_PREFIX",
     "docling_url": "http://docling-service.private-ai-demo.svc:5001",
     "llamastack_url": "http://llama-stack-service.private-ai-demo.svc:8321",
     "vector_db_id": "$VECTOR_DB_ID",
     "chunk_size": 512,
+    "num_splits": 2,
+    "s3_secret_mount_path": "/mnt/secrets",
     "minio_endpoint": "minio.model-storage.svc:9000",
-    "minio_creds_b64": "$MINIO_CREDS_B64"
+    "minio_creds_b64": "$MINIO_CREDS_B64",
+    "cache_buster": str(int(time.time()))  # Force fresh run - no cache
 }
 
 print(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
@@ -98,6 +103,7 @@ print(f"Creating run: {run_name}")
 print(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 print(f"  S3 Prefix: $S3_PREFIX")
 print(f"  Collection: $VECTOR_DB_ID")
+print(f"  Parallelism: {params['num_splits']} balanced groups")
 print("")
 
 try:
@@ -107,14 +113,16 @@ try:
             job_name=run_name,
             pipeline_id=pipeline_id,
             version_id=version_id,
-            params=params
+            params=params,
+            enable_caching=False  # Force fresh run - no caching
         )
     else:
         run = client.run_pipeline(
             experiment_id=None,
             job_name=run_name,
             pipeline_id=pipeline_id,
-            params=params
+            params=params,
+            enable_caching=False  # Force fresh run - no caching
         )
     
     run_id = run.run_id if hasattr(run, 'run_id') else run.id

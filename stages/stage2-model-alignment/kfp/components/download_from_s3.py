@@ -19,40 +19,56 @@ BASE_PYTHON_IMAGE = "registry.access.redhat.com/ubi9/python-311:1-77"
 )
 def download_from_s3(
     input_uri: str,
-    minio_endpoint: str,
-    minio_creds_b64: str,
-    output_file: Output[Dataset]
+    s3_secret_mount_path: str,
+    output_file: Output[Dataset],
+    minio_endpoint: str = "",
+    minio_creds_b64: str = ""
 ):
     """
-    Download document from MinIO/S3
-    
-    Credentials passed as base64-encoded string parameter (format: "access_key:secret_key")
-    to work within KFP v2 limitations (strips env secretKeyRef and custom volumes).
-    
-    This follows Red Hat guidance: base64 encode structured/sensitive parameters,
-    decode in component. Keeps secrets out of plaintext parameters.
+    Download document from MinIO/S3.
+
+    Credentials are expected to be provided via a mounted secret that matches the
+    canonical Data Processing layout (`S3_ENDPOINT_URL`, `S3_ACCESS_KEY`,
+    `S3_SECRET_KEY`). The component reads credential files directly, mirroring
+    the upstream Docling Kubeflow pipeline pattern. For environments where
+    Kubernetes secret mounts are not available (for example KFP v2 stripping
+    secret refs), provide `minio_endpoint` and `minio_creds_b64` as a fallback.
     """
+    import os
+    from pathlib import Path
+
     import boto3
     from botocore.client import Config
-    import base64
-    import os
     
     print(f"Downloading from: {input_uri}")
-    print(f"Endpoint: {minio_endpoint}")
-    
-    # Decode credentials from base64 parameter
-    # Format: "access_key:secret_key" encoded as base64
+
+    endpoint_url = ""
+    access_key = ""
+    secret_key = ""
+
+    def _read_secret(key: str) -> str:
+        file_path = Path(s3_secret_mount_path) / key
+        if file_path.is_file():
+            return file_path.read_text().strip()
+        raise FileNotFoundError
+
     try:
-        creds_decoded = base64.b64decode(minio_creds_b64).decode('utf-8')
-        aws_access_key_id, aws_secret_access_key = creds_decoded.split(':', 1)
-        
-        # Security: Do not log credentials (per KFP best practices)
-        print(f"[OK] Credentials decoded from parameter")
-    except Exception as e:
-        raise ValueError(
-            "Failed to decode MinIO credentials from minio_creds_b64 parameter. "
-            "Expected base64-encoded string in format 'access_key:secret_key'"
-        ) from e
+        endpoint_url = _read_secret("S3_ENDPOINT_URL")
+        access_key = _read_secret("S3_ACCESS_KEY")
+        secret_key = _read_secret("S3_SECRET_KEY")
+        print(f"[OK] Loaded S3 credentials from secret at {s3_secret_mount_path}")
+    except FileNotFoundError:
+        if not minio_endpoint or not minio_creds_b64:
+            raise ValueError(
+                "S3 secret files were not found and fallback credentials were not provided. "
+                "Provide `minio_endpoint` and `minio_creds_b64`, or mount the secret."
+            )
+        import base64
+
+        creds_decoded = base64.b64decode(minio_creds_b64).decode("utf-8").strip()
+        access_key, secret_key = [c.strip() for c in creds_decoded.split(":", 1)]
+        endpoint_url = f"http://{minio_endpoint}" if not minio_endpoint.startswith("http") else minio_endpoint
+        print("[WARN] Falling back to inline credentials (base64 parameter).")
     
     # Parse S3 URI
     if input_uri.startswith("s3://"):
@@ -64,14 +80,14 @@ def download_from_s3(
     
     print(f"Bucket: {bucket}, Key: {key}")
     
-    # Configure S3 client for MinIO
+    # Configure S3 client for MinIO/S3
     s3_client = boto3.client(
         "s3",
-        endpoint_url=f"http://{minio_endpoint}",
-        aws_access_key_id=aws_access_key_id,
-        aws_secret_access_key=aws_secret_access_key,
-        config=Config(signature_version="s3v4"),
-        region_name="us-east-1"
+        endpoint_url=endpoint_url,
+        aws_access_key_id=access_key,
+        aws_secret_access_key=secret_key,
+        config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
+        region_name="us-east-1",
     )
     
     # Download file
