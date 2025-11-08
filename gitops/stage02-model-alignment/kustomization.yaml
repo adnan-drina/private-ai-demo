@@ -5,8 +5,10 @@ kind: Kustomization
 namespace: private-ai-demo
 
 # Common labels applied to all resources
+# Note: includeSelectors=false to avoid modifying immutable Deployment selectors
+# Labels are still applied to metadata and pod templates, just not to selectors
 labels:
-  - includeSelectors: true
+  - includeSelectors: false
     pairs:
       app.kubernetes.io/part-of: private-ai-demo
       stage: "02"
