@@ -27,6 +27,7 @@ resources:
   - tempo-storage-secret.yaml
   - tempo-stack.yaml
   - otel-collector.yaml
+  - servicemonitor-otel-collector.yaml
   - grafana-instance.yaml
   - network-policy-grafana-operator.yaml
   - grafana-datasource.yaml
