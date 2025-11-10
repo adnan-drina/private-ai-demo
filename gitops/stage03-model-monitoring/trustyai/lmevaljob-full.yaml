@@ -7,7 +7,7 @@ metadata:
   labels:
     app.kubernetes.io/name: lm-eval
     app.kubernetes.io/component: trustyai-eval
-    app.kubernetes.io/part-of: trustyai-evaluation
+    app.kubernetes.io/part-of: evaluation
     model: mistral-24b
   annotations:
     description: "LM-Eval job for Mistral 24B Full Precision model (FP16, 4 GPUs)"

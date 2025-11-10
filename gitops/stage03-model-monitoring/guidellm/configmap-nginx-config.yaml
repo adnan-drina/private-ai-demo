@@ -82,8 +82,12 @@ data:
                 add_header Content-Security-Policy "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; script-src * 'unsafe-inline' 'unsafe-eval'; style-src * 'unsafe-inline';" always;
                 
                 # Rewrite CDN URLs in HTML to use local proxy
+                sub_filter_types text/html;
                 sub_filter 'https://blog.vllm.ai/guidellm/ui/' '/guidellm/ui/';
-                sub_filter_once off;
+               sub_filter_once off;
+                
+                # NOTE: GuideLLM embeds data in window.runInfo, window.workloadDetails, window.benchmarks
+                # The Next.js UI framework from CDN should read these automatically
             }
             
             # Serve JSON data

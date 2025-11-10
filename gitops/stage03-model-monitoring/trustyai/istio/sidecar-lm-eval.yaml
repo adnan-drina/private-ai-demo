@@ -5,7 +5,7 @@ metadata:
   name: lm-eval-egress
   namespace: private-ai-demo
   labels:
-    app.kubernetes.io/part-of: trustyai-evaluation
+    app.kubernetes.io/part-of: evaluation
 spec:
   workloadSelector:
     labels:

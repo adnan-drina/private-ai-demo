@@ -8,7 +8,7 @@ metadata:
     app: llama-stack-playground
     app.kubernetes.io/name: llama-stack-playground
     app.kubernetes.io/component: rag-ui
-    app.kubernetes.io/part-of: private-ai-demo
+    app.kubernetes.io/part-of: serving
 spec:
   replicas: 1
   selector:
@@ -20,7 +20,7 @@ spec:
         app: llama-stack-playground
         app.kubernetes.io/name: llama-stack-playground
         app.kubernetes.io/component: rag-ui
-        app.kubernetes.io/part-of: private-ai-demo
+        app.kubernetes.io/part-of: serving
         app.openshift.io/runtime: python
       annotations:
         # Topology: Connects to LlamaStack API
@@ -106,7 +106,7 @@ metadata:
     app: llama-stack-playground
     app.kubernetes.io/name: llama-stack-playground
     app.kubernetes.io/component: rag-ui
-    app.kubernetes.io/part-of: private-ai-demo
+    app.kubernetes.io/part-of: serving
 spec:
   selector:
     app: llama-stack-playground
@@ -126,7 +126,7 @@ metadata:
     app: llama-stack-playground
     app.kubernetes.io/name: llama-stack-playground
     app.kubernetes.io/component: rag-ui
-    app.kubernetes.io/part-of: private-ai-demo
+    app.kubernetes.io/part-of: serving
 spec:
   to:
     kind: Service

@@ -4,7 +4,7 @@ kind: ServiceEntry
 metadata:
   name: mistral-models-route
   labels:
-    app.kubernetes.io/part-of: trustyai-evaluation
+    app.kubernetes.io/part-of: evaluation
 spec:
   hosts:
     - mistral-24b-predictor-private-ai-demo.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com

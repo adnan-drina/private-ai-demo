@@ -4,7 +4,7 @@ kind: DestinationRule
 metadata:
   name: mistral-models-route
   labels:
-    app.kubernetes.io/part-of: trustyai-evaluation
+    app.kubernetes.io/part-of: evaluation
 spec:
   host: mistral-24b-predictor-private-ai-demo.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com
   trafficPolicy:
@@ -18,7 +18,7 @@ kind: DestinationRule
 metadata:
   name: mistral-models-route-quantized
   labels:
-    app.kubernetes.io/part-of: trustyai-evaluation
+    app.kubernetes.io/part-of: evaluation
 spec:
   host: mistral-24b-quantized-predictor-private-ai-demo.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com
   trafficPolicy:

@@ -28,7 +28,7 @@ labels:
   - includeSelectors: false
     pairs:
       app.kubernetes.io/managed-by: kustomize
-      app.kubernetes.io/part-of: trustyai-evaluation
+      app.kubernetes.io/part-of: evaluation
 
 namespace: private-ai-demo
 

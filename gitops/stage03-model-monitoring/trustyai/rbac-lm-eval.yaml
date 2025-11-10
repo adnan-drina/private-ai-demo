@@ -5,7 +5,7 @@ metadata:
   name: lm-eval-sa
   namespace: private-ai-demo
   labels:
-    app.kubernetes.io/part-of: trustyai-evaluation
+    app.kubernetes.io/part-of: evaluation
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -13,7 +13,7 @@ metadata:
   name: lm-eval-inferenceservice-access
   namespace: private-ai-demo
   labels:
-    app.kubernetes.io/part-of: trustyai-evaluation
+    app.kubernetes.io/part-of: evaluation
 rules:
   - apiGroups: ["serving.kserve.io"]
     resources: ["inferenceservices"]
@@ -25,7 +25,7 @@ metadata:
   name: lm-eval-inferenceservice-access
   namespace: private-ai-demo
   labels:
-    app.kubernetes.io/part-of: trustyai-evaluation
+    app.kubernetes.io/part-of: evaluation
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
