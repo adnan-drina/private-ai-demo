@@ -113,53 +113,6 @@ spec:
             cpu: "1"
             memory: "2Gi"
       
-      # Sidecar: Upload results to MinIO S3
-      - name: s3-uploader
-        image: quay.io/minio/mc:latest
-        command:
-        - /bin/sh
-        - -c
-        - |
-          # Wait for benchmark to complete
-          while [ ! -f /results/*.html ]; do
-            echo "Waiting for benchmark results..."
-            sleep 10
-          done
-          
-          # Configure MinIO alias
-          mc alias set minio http://minio.private-ai-demo.svc.cluster.local:9000 \
-            $MINIO_ACCESS_KEY $MINIO_SECRET_KEY
-          
-          # Upload results
-          mc cp /results/*.html minio/guidellm-results/
-          if ls /results/*.json 1> /dev/null 2>&1; then
-            mc cp /results/*.json minio/guidellm-results/
-          fi
-          
-          echo "✅ Results uploaded to MinIO"
-          mc ls minio/guidellm-results/
-        env:
-        - name: MINIO_ACCESS_KEY
-          valueFrom:
-            secretKeyRef:
-              name: minio-root-credentials
-              key: MINIO_ROOT_USER
-        - name: MINIO_SECRET_KEY
-          valueFrom:
-            secretKeyRef:
-              name: minio-root-credentials
-              key: MINIO_ROOT_PASSWORD
-        volumeMounts:
-        - name: results
-          mountPath: /results
-        resources:
-          requests:
-            cpu: "100m"
-            memory: "128Mi"
-          limits:
-            cpu: "500m"
-            memory: "512Mi"
-      
       volumes:
       - name: shared
         emptyDir: {}  # Shared volume for passing URL between containers
