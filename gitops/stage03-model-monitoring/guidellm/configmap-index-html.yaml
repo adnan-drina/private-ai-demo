@@ -149,6 +149,11 @@ data:
                 // Hardcoded list of reports for now (TODO: dynamic fetching)
                 const reports = [
                     {
+                        filename: 'mistral-quantized-20251110-171537.html',
+                        timestamp: '2025-11-10T17:15:37Z',
+                        model: 'mistral-24b-quantized'
+                    },
+                    {
                         filename: 'mistral-quantized-20251110-164449.html',
                         timestamp: '2025-11-10T16:44:49Z',
                         model: 'mistral-24b-quantized'

@@ -88,8 +88,6 @@ spec:
           
           echo "✅ Benchmark complete! HTML report generated with embedded GuideLLM UI"
         env:
-        - name: GUIDELLM__ENV
-          value: "prod"  # Uses hosted UI build
         - name: TZ
           value: "America/New_York"
         - name: PYTHONHTTPSVERIFY
