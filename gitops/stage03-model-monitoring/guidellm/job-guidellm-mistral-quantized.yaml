@@ -133,25 +133,6 @@ spec:
           echo "📤 Uploading report to MinIO..."
           mc cp /results/*.html minio/guidellm-results/
           
-          echo "📋 Updating reports.json manifest..."
-          REPORT_FILE=$(ls /results/*.html | xargs basename)
-          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          
-          # Download existing reports.json or create new one
-          mc cp minio/guidellm-results/reports.json /tmp/reports.json 2>/dev/null || echo '{"reports":[]}' > /tmp/reports.json
-          
-          # Add new report to the list (using simple append)
-          cat /tmp/reports.json | sed 's/\]$//' > /tmp/reports-new.json
-          if grep -q '"reports":\[' /tmp/reports-new.json && ! grep -q '\[\]' /tmp/reports-new.json; then
-            echo "," >> /tmp/reports-new.json
-          fi
-          echo "{\"filename\":\"$REPORT_FILE\",\"timestamp\":\"$TIMESTAMP\",\"model\":\"mistral-24b-quantized\"}" >> /tmp/reports-new.json
-          echo "]}' >> /tmp/reports-new.json
-          sed -i "s/}'/}/" /tmp/reports-new.json
-          
-          # Upload updated manifest
-          mc cp /tmp/reports-new.json minio/guidellm-results/reports.json
-          
           echo "✅ Upload complete!"
           mc ls minio/guidellm-results/
         env:
