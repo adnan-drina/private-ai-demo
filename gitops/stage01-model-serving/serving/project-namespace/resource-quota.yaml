@@ -6,6 +6,6 @@ metadata:
   namespace: private-ai-demo
 spec:
   hard:
-    requests.nvidia.com/gpu: "8"
-    limits.nvidia.com/gpu: "8"
+    requests.nvidia.com/gpu: "10"
+    limits.nvidia.com/gpu: "10"
 

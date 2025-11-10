@@ -66,7 +66,7 @@ To use this dashboard in Grafana directly:
 
 ```bash
 # 1. Access Grafana UI
-GRAFANA_URL=$(oc get route grafana -n grafana-system -o jsonpath='{.spec.host}')
+GRAFANA_URL=$(oc get route grafana -n private-ai-demo -o jsonpath='{.spec.host}')
 echo "Grafana: https://${GRAFANA_URL}"
 
 # 2. Log in (admin/admin123)
@@ -85,7 +85,7 @@ apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaDashboard
 metadata:
   name: nvidia-dcgm-exporter
-  namespace: grafana-system
+  namespace: private-ai-demo
 spec:
   instanceSelector:
     matchLabels:

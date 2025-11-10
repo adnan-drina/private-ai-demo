@@ -1,0 +1,21 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-grafana-operator
+  namespace: private-ai-demo
+spec:
+  podSelector:
+    matchLabels:
+      app: grafana
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: grafana-operator-system
+      ports:
+        - protocol: TCP
+          port: 3000
+  policyTypes:
+    - Ingress
+

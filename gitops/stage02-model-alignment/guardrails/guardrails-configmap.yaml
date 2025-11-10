@@ -1,0 +1,21 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: guardrails-config
+  labels:
+    app.kubernetes.io/component: guardrails
+    app.kubernetes.io/managed-by: gitops
+data:
+  detectors.yaml: |
+    detectors:
+      - id: regex_detector
+        type: builtin
+        params:
+          preset: pii
+      - id: prompt_injection
+        type: builtin
+        params:
+          preset: prompt_injection
+
+

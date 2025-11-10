@@ -1,0 +1,23 @@
+---
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: mistral-models-route
+  labels:
+    app.kubernetes.io/part-of: trustyai-evaluation
+spec:
+  hosts:
+    - mistral-24b-predictor-private-ai-demo.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com
+    - mistral-24b-quantized-predictor-private-ai-demo.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com
+    - "*.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com"
+  location: MESH_EXTERNAL
+  resolution: STATIC
+  ports:
+    - number: 443
+      name: https
+      protocol: HTTPS
+  endpoints:
+    - address: 3.132.168.36
+      ports:
+        https: 443
+

@@ -3,7 +3,7 @@ apiVersion: grafana.integreatly.org/v1beta1
 kind: Grafana
 metadata:
   name: grafana
-  namespace: grafana-system
+  namespace: private-ai-demo
   labels:
     dashboards: "grafana"
 spec:
@@ -12,6 +12,10 @@ spec:
       mode: "console"
     auth:
       disable_login_form: "false"
+    # Allow anonymous access to frontend settings (for operator health checks)
+    auth.anonymous:
+      enabled: "true"
+      org_role: "Viewer"
     security:
       admin_user: admin
       admin_password: admin123
@@ -20,7 +24,7 @@ apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
   name: grafana
-  namespace: grafana-system
+  namespace: private-ai-demo
 spec:
   to:
     kind: Service

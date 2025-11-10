@@ -1,0 +1,20 @@
+apiVersion: operator.authorino.kuadrant.io/v1beta1
+kind: Authorino
+metadata:
+  name: authorino
+  namespace: redhat-ods-applications-auth-provider
+  labels:
+    app.kubernetes.io/component: authorization
+    app.kubernetes.io/part-of: stage01-model-serving
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  authConfigLabelSelectors: security.opendatahub.io/authorization-group=default
+  clusterWide: true
+  listener:
+    tls:
+      enabled: false
+  oidcServer:
+    tls:
+      enabled: false
+

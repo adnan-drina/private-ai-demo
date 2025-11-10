@@ -1,0 +1,26 @@
+---
+apiVersion: networking.istio.io/v1beta1
+kind: Sidecar
+metadata:
+  name: lm-eval-egress
+  namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/part-of: trustyai-evaluation
+spec:
+  workloadSelector:
+    labels:
+      app.kubernetes.io/name: lm-eval
+  egress:
+    - hosts:
+        # Allow in-namespace services
+        - "./*"
+        # Istio control-plane / mesh services
+        - "istio-system/*"
+        # Knative and mesh gateways referenced by the predictors
+        - "knative-serving/*"
+        - "knative-monitoring/*"
+        # Model-serving namespace services (predictor private endpoints)
+        - "private-ai-demo/*"
+        # External OpenShift routes for the predictors (via ServiceEntry)
+        - "*/*.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com"
+

@@ -1,0 +1,21 @@
+---
+apiVersion: trustyai.opendatahub.io/v1
+kind: TrustyAIService
+metadata:
+  name: trustyai-service
+  labels:
+    app.kubernetes.io/component: trustyai-runtime
+    app.kubernetes.io/managed-by: gitops
+spec:
+  replicas: 1
+  data:
+    filename: trustyai-data.csv
+    format: CSV
+  storage:
+    format: PVC
+    folder: /inputs
+    size: 10Gi
+  metrics:
+    schedule: 5m
+
+

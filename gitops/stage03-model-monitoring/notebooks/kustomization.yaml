@@ -5,3 +5,5 @@ kind: Kustomization
 resources:
   - configmap-notebook-02-eval.yaml
 
+namespace: private-ai-demo
+

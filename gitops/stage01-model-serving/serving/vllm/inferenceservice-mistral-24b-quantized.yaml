@@ -12,28 +12,28 @@ metadata:
     opendatahub.io/dashboard: "true"
     modelregistry.opendatahub.io/name: private-ai-model-registry
     modelregistry.opendatahub.io/registered-model-name: "Mistral-Small-24B-Instruct"
+    modelregistry.opendatahub.io/registered-model-id: "2"
     modelregistry.opendatahub.io/model-version: "quant-w4a16"
-    modelregistry.opendatahub.io/inference-service-id: "11"
+    modelregistry.opendatahub.io/model-version-id: "3"
   annotations:
     argocd.argoproj.io/sync-wave: "5"
     app.openshift.io/connects-to: '[{"apiVersion":"apps/v1","kind":"Deployment","name":"llama-stack"}]'
     openshift.io/display-name: "Mistral-24B-quantized"
     serving.kserve.io/deploymentMode: "Serverless"
-    description: "Mistral Small 24B Instruct W4A16 quantized - 1 GPU (weights in S3)"
-    serving.knative.openshift.io/enablePassthrough: "true"
+    description: "Mistral Small 24B Instruct W4A16 quantized - 1 GPU (weights in PVC)"
     autoscaling.knative.dev/min-scale: "1"
     autoscaling.knative.dev/target: "6"
-    sidecar.istio.io/inject: "true"
-    sidecar.istio.io/rewriteAppHTTPProbers: "true"
-    security.opendatahub.io/enable-auth: "true"
+    autoscaling.knative.dev/scale-to-zero-pod-retention-period: "60m"
+    opendatahub.io/accelerator-profile: nvidia-l4-1gpu
+    opendatahub.io/accelerator-name: nvidia-l4-1gpu
+    serving.knative.openshift.io/enablePassthrough: "true"
+    serving.kserve.io/enablePrometheusScraping: "true"
     # S3 configuration per KServe: host:port + s3-usehttps controls scheme
-    serving.kserve.io/s3-endpoint: "minio.model-storage.svc:9000"
-    serving.kserve.io/s3-usehttps: "0"
-    serving.kserve.io/s3-verifyssl: "0"
-    serving.kserve.io/s3-region: "us-east-1"
-    serving.kserve.io/s3-secret-name: "s3-credentials-kserve"
 spec:
   predictor:
+    logger:
+      mode: all
+      url: http://trustyai-service.private-ai-demo.svc.cluster.local
     containerConcurrency: 16  # Phase 1 optimization: match max_num_seqs (was 6)
     serviceAccountName: ai-workload-sa
     automountServiceAccountToken: false
@@ -44,22 +44,24 @@ spec:
         name: vLLM
       name: ""
       runtime: vllm-cuda-runtime
-      # Path B: weights in MinIO (S3-compatible) populated by pipeline
-      storageUri: s3://llm-models/Mistral-Small-24B-Instruct/quant-w4a16/
+      # PVC storage populated via mirror job
+      storageUri: pvc://mistral-24b-quantized-pvc/
       resources:
         requests:
           cpu: "6"
           memory: 16Gi
           nvidia.com/gpu: "1"
+          ephemeral-storage: "4Gi"
         limits:
           cpu: "10"
           memory: 20Gi
           nvidia.com/gpu: "1"
+          ephemeral-storage: "8Gi"
       # Model-specific vLLM args for Mistral Small 24B quantized (W4A16)
       # Quantization: compressed-tensors (auto-detected by vLLM)
       args:
-        - --gpu-memory-utilization=0.90     # Add headroom to reduce 500s
-        - --max-model-len=32768             # Mistral Small supports 32K context
+        - --gpu-memory-utilization=0.70     # Allow enough headroom for KV cache at 8K context
+        - --max-model-len=8192              # Keeps KV cache within 1x L4 limits
         - --max-num-seqs=16                  # Limit concurrent sequences per GPU
         - --enable-chunked-prefill          # Performance optimization
         - --enable-prefix-caching           # Cache optimization for repeated prompts

@@ -1,0 +1,15 @@
+apiVersion: maistra.io/v1
+kind: ServiceMeshMember
+metadata:
+  name: default
+  namespace: redhat-ods-applications-auth-provider
+  labels:
+    app.kubernetes.io/component: servicemesh
+    app.kubernetes.io/part-of: stage01-model-serving
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  controlPlaneRef:
+    name: data-science-smcp
+    namespace: istio-system
+

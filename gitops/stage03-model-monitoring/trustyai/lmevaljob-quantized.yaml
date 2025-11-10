@@ -20,7 +20,7 @@ spec:
     - name: model
       value: "mistral-24b-quantized"
     - name: base_url
-      value: "https://mistral-24b-quantized-private-ai-demo.apps.cluster-qtvt5.qtvt5.sandbox2082.opentlc.com/v1/completions"
+      value: "http://mistral-24b-quantized-predictor-00039-private.private-ai-demo.svc.cluster.local/v1/completions"
     - name: tokenizer
       value: "RedHatAI/Mistral-Small-24B-Instruct-2501-quantized.w4a16"
     - name: num_concurrent
@@ -29,6 +29,8 @@ spec:
       value: "5"
     - name: timeout
       value: "600"
+    - name: tokenized_requests
+      value: "false"
   
   # Evaluation tasks (All 4 benchmarks)
   taskList:
@@ -39,7 +41,7 @@ spec:
       - truthfulqa_mc2 # Truthfulness assessment
   
   # Sample configuration (fast-track for demo)
-  limit: "100"  # Samples per task
+  limit: "100"  # Samples per task (production)
   
   # Batching configuration
   batchSize: "1"  # Disabled for stability
@@ -56,7 +58,7 @@ spec:
     pvcManaged:
       size: 2Gi
   
-  # Environment configuration
+  # Environment configuration (HF token & vLLM timeout only)
   pod:
     container:
       env:
@@ -67,4 +69,11 @@ spec:
               key: HF_TOKEN
         - name: VLLM_TIMEOUT
           value: "600"
+      resources:
+        requests:
+          cpu: "1"
+          memory: 4Gi
+        limits:
+          cpu: "2"
+          memory: 6Gi
 

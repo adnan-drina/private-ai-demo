@@ -3,15 +3,41 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
+  # TrustyAI runtime service + monitoring
+  - service
+
+  # TrustyAI operator global configuration (LM Eval enablement)
+  - operator-config
+
+  # DataScienceCluster overrides (permit online/code execution)
+  - dsc-config
+
+  # LMEval metrics exporter
+  - metrics
+
+  # ServiceAccount + RBAC for LM-Eval workloads
+  - rbac-lm-eval.yaml
+
   # LMEvalJob CRs (operator will create Jobs + PVCs)
   - lmevaljob-quantized.yaml
   - lmevaljob-full.yaml
 
+# Note: includeSelectors=false to avoid modifying immutable Deployment selectors
+# Labels are still applied to metadata and pod templates, just not to selectors
 labels:
-  - includeSelectors: true
+  - includeSelectors: false
     pairs:
       app.kubernetes.io/managed-by: kustomize
       app.kubernetes.io/part-of: trustyai-evaluation
 
 namespace: private-ai-demo
+
+patches:
+  - target:
+      kind: ConfigMap
+      name: trustyai-service-operator-config
+    patch: |-
+      - op: replace
+        path: /metadata/namespace
+        value: redhat-ods-applications
 

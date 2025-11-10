@@ -1,0 +1,28 @@
+---
+apiVersion: tempo.grafana.com/v1alpha1
+kind: TempoStack
+metadata:
+  name: tempo
+  namespace: private-ai-demo
+spec:
+  managementState: Managed
+  # Single-tenant mode (default) - no complex OIDC authentication needed
+  storage:
+    secret:
+      name: tempo-storage
+      type: s3
+  storageSize: 10Gi
+  # Resource limits for tempo components
+  template:
+    queryFrontend:
+      jaegerQuery:
+        enabled: true
+    distributor:
+      replicas: 1
+    ingester:
+      replicas: 1
+    querier:
+      replicas: 1
+    compactor:
+      replicas: 1
+

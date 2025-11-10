@@ -50,12 +50,13 @@ spec:
         #!/bin/bash
         set -e
         
-        echo "🔍 Discovering External HTTPS Knative Service URL"
+        echo "🔍 Discovering external HTTPS route"
         echo "════════════════════════════════════════════════════════════"
-        ISVC_NAME="$(params.inference_service_name)-predictor"
-        ROUTE_URL=$(oc get ksvc "$ISVC_NAME" -n "$(params.namespace)" -o jsonpath='{.status.url}' 2>/dev/null || echo "")
+        KSVC_NAME="$(params.inference_service_name)-predictor"
+        NAMESPACE="$(params.namespace)"
+        ROUTE_URL=$(oc get ksvc "$KSVC_NAME" -n "$NAMESPACE" -o jsonpath='{.status.url}' 2>/dev/null || echo "")
         if [ -z "$ROUTE_URL" ]; then
-          echo "❌ ERROR: Could not resolve external route for $ISVC_NAME"
+          echo "❌ ERROR: Could not resolve route URL for $KSVC_NAME"
           exit 1
         fi
         echo "✅ External URL: ${ROUTE_URL}"
@@ -79,7 +80,7 @@ spec:
         echo "🎯 Running LM-Eval Evaluation"
         echo "════════════════════════════════════════════════════════════"
         echo "Model URL: ${MODEL_URL}"
-        echo "Protocol: HTTPS (external route with cluster CA)"
+        echo "Protocol: HTTPS (router edge termination)"
         echo ""
         
         # Install lm-eval from PyPI using default CA bundle
@@ -93,7 +94,18 @@ spec:
         
         # Discover vLLM model name
         echo "📡 Discovering vLLM model name..."
-        VLLM_MODEL_NAME=$( 
+        TOKEN_PATH="${K8S_TOKEN_PATH:-/var/run/secrets/kubernetes.io/serviceaccount/token}"
+        if [ ! -f "${TOKEN_PATH}" ]; then
+          echo "❌ ERROR: Service account token not found at ${TOKEN_PATH}"
+          exit 1
+        fi
+        AUTH_TOKEN=$(cat "${TOKEN_PATH}")
+        if [ -z "${AUTH_TOKEN}" ]; then
+          echo "❌ ERROR: Service account token is empty"
+          exit 1
+        fi
+
+        VLLM_MODEL_NAME=$(
           (curl -sSk "${MODEL_URL}/v1/models" || true) | \
           python3 -c "import sys, json; print(json.load(sys.stdin)['data'][0]['id'])" 2>/dev/null || \
           echo "$(params.model_name)"
@@ -102,27 +114,10 @@ spec:
         echo "   Model: ${VLLM_MODEL_NAME}"
         echo ""
         
-        echo "📊 Starting evaluation (SSL verification DISABLED for test)..."
-        # Disable SSL verification globally for Python requests (temporary test)
-        printf '%s\n' \
-          "import requests, urllib3" \
-          "urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)" \
-          "_old = requests.Session.request" \
-          "def _noverify(self, method, url, **kwargs):" \
-          "    kwargs['verify'] = False" \
-          "    return _old(self, method, url, **kwargs)" \
-          "requests.Session.request = _noverify" \
-        > /workspace/results/sitecustomize.py
-        export PYTHONPATH="/workspace/results:${PYTHONPATH:-}"
-        export PYTHONWARNINGS=ignore
-        TOK="$(params.tokenizer_name)"
-        if [ -z "$TOK" ]; then
-          # Fallback: try to use discovered model name as tokenizer id
-          TOK="$VLLM_MODEL_NAME"
-        fi
+        echo "📊 Starting evaluation (TLS verification disabled for router cert)..."
         python3 -m lm_eval \
           --model local-completions \
-          --model_args "model=${VLLM_MODEL_NAME},tokenizer=${TOK},base_url=${MODEL_URL}/v1/completions,num_concurrent=1,max_retries=3,timeout=300" \
+          --model_args "model=${VLLM_MODEL_NAME},tokenizer=${TOK},base_url=${MODEL_URL}/v1/completions,num_concurrent=1,max_retries=3,timeout=300,verify_certificate=false" \
           --tasks $(params.tasks) \
           --limit $(params.limit) \
           --output_path /workspace/results/eval \

@@ -42,6 +42,7 @@ This script provides **one-click deployment**:
 1. **Deploys all infrastructure:**
    - Docling service (PDF processing)
    - LlamaStack (RAG orchestration)
+   - Guardrails Orchestrator (safety shields + policy enforcement)
    - LlamaStack Playground UI
    - Milvus vector database
    - KFP Data Science Pipelines
@@ -85,6 +86,23 @@ Available scenarios:
 - `acme` - ACME Corporate lithography documentation (6 PDFs → ~32 chunks)
 - `redhat` - Red Hat OpenShift AI RAG guide (1 PDF → ~135 chunks)
 - `eu-ai-act` - EU AI Act official documents (3 PDFs → ~953 chunks)
+
+### 4. Guardrails Configuration
+
+The Guardrails Orchestrator is fully declarative via GitOps. Before deploying you must provide secrets in the project `.env` (see `docs/SETUP.md`):
+
+```bash
+export GUARDRAILS_OPENAI_API_KEY=...
+./deploy.sh  # Creates secret + syncs GitOps manifests
+```
+
+Configuration files live in `gitops/stage02-model-alignment/guardrails/`:
+
+- `guardrails-configmap.yaml` – detector presets (PII + prompt-injection)
+- `guardrails-orchestrator.yaml` – runtime definition + OTEL telemetry
+- `guardrails-route.yaml` – external access for policy testing
+
+The LlamaStack Playground reads the Guardrails route to enforce policies in the RAG UI.
 
 **Examples:**
 ```bash

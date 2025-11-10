@@ -80,6 +80,7 @@ metadata:
   namespace: private-ai-demo
   labels:
     app: pushgateway
+    observability.rh-ai/demo: "true"
 spec:
   selector:
     matchLabels:

@@ -11,8 +11,7 @@ metadata:
   namespace: grafana-operator-system
 spec:
   targetNamespaces:
-  - grafana-operator-system
-  - grafana-system
+    - private-ai-demo
 ---
 apiVersion: operators.coreos.com/v1alpha1
 kind: Subscription
@@ -25,4 +24,5 @@ spec:
   name: grafana-operator
   source: community-operators
   sourceNamespace: openshift-marketplace
+
 

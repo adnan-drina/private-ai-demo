@@ -2,16 +2,23 @@
 apiVersion: monitoring.coreos.com/v1
 kind: PodMonitor
 metadata:
-  name: llama-stack-metrics
+  name: vllm-predictor-metrics
   namespace: private-ai-demo
   labels:
-    app: llama-stack
+    app.kubernetes.io/component: observability
+    app.kubernetes.io/name: vllm-metrics
+    observability.rh-ai/demo: "true"
 spec:
   selector:
-    matchLabels:
-      app: llama-stack
+    matchExpressions:
+      - key: serving.kserve.io/inferenceservice
+        operator: In
+        values:
+          - mistral-24b
+          - mistral-24b-quantized
   podMetricsEndpoints:
-  - port: http
-    path: /metrics
-    interval: 30s
+    - path: /metrics
+      interval: 30s
+      targetPort: 8080
+      scheme: http
 

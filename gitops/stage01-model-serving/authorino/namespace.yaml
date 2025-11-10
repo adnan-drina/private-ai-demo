@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: redhat-ods-applications-auth-provider
+  labels:
+    istio-injection: "enabled"
+    security.opendatahub.io/authorization-group: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+

@@ -8,10 +8,12 @@
 
 ## Overview
 
-This directory contains **LMEvalJob Custom Resources** for evaluating Mistral models using the **Red Hat TrustyAI Operator**. This is the **official Red Hat-recommended approach** for LLM evaluation on OpenShift AI.
+This directory contains **TrustyAI runtime resources** plus **LMEvalJob Custom Resources** for evaluating Mistral models using the **Red Hat TrustyAI Operator**. This is the **official Red Hat-recommended approach** for LLM evaluation and continuous monitoring on OpenShift AI.
 
 ### Components
 
+- `service/` – Declarative manifests for the TrustyAI runtime (`TrustyAIService` CR, PVC, ServiceMonitor)
+- `metrics/` – Pushgateway exporter CronJob that publishes `lm_eval_*` metrics
 - **`lmevaljob-quantized.yaml`**: Evaluation job for Mistral 24B Quantized (W4A16, 1 GPU)
 - **`lmevaljob-full.yaml`**: Evaluation job for Mistral 24B Full Precision (FP16, 4 GPUs)
 - **`kustomization.yaml`**: Kustomize configuration for deployment
@@ -29,10 +31,11 @@ model: local-completions  # Required for loglikelihood support (arc_easy, hellas
 ```yaml
 modelArgs:
   - name: base_url
-    value: "https://MODEL-ROUTE/v1/completions"  # MUST include /v1/completions
+    value: "http://mistral-24b-predictor-00001-private.private-ai-demo.svc.cluster.local/v1/completions"
 ```
 
-**Why**: The `local-completions` model type uses the base_url **verbatim**. It does NOT append paths automatically like `openai-completions` does.
+**Why**: The `local-completions` model type uses the base_url **verbatim**. It does NOT append paths automatically like `openai-completions` does.  
+**Revision updates**: when KServe rolls out a new revision, bump the `-00001-` suffix to match the latest ready revision before re-running evaluations.
 
 ### 3. Tokenizer (HuggingFace Repo IDs)
 ```yaml
@@ -63,6 +66,19 @@ modelArgs:
   - name: timeout
     value: "600"  # 10 minutes per request
 ```
+
+### 6. Service Mesh integration
+
+- LM-Eval jobs call the **external HTTPS route** (`https://mistral-24b(-quantized)-private-ai-demo.apps.<cluster>/v1/completions`) with `verify_certificate=false`, relying on router edge termination instead of the service mesh.
+
+### 7. Let vLLM perform tokenisation
+```yaml
+modelArgs:
+  - name: tokenized_requests
+    value: "false"
+```
+
+**Why**: Allowing vLLM to expand prompts eliminates `Token id ... is out of vocabulary` errors when using the external OpenShift route.
 
 ---
 
@@ -122,12 +138,20 @@ oc get pod -n redhat-ods-applications -l control-plane=trustyai-service-operator
 
 ---
 
+### 2. Enable LM-Eval Global Configuration
+
+The GitOps overlay `operator-config/` applies the recommended global settings described in the Red Hat LM-Eval documentation [^lm-doc], including `lmes-allow-online`, `lmes-allow-code-execution`, and device detection defaults. No manual patching of the operator ConfigMap is required.
+
+[^lm-doc]: [Red Hat OpenShift AI – Evaluating large language models](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_cloud_service/1/html/monitoring_data_science_models/evaluating-large-language-models_monitor)
+
+---
+
 ## Deployment
 
 ### Using Kustomize (Recommended)
 
 ```bash
-# Deploy both LMEvalJob CRs
+# Deploy TrustyAI runtime + LMEvalJobs
 oc apply -k gitops/components/trustyai-eval-operator/
 
 # Verify deployment
@@ -136,15 +160,16 @@ oc get lmevaljob -n private-ai-demo
 
 ### Manual Deployment
 
-```bash
-# Deploy individual jobs
-oc apply -f gitops/components/trustyai-eval-operator/lmevaljob-quantized.yaml
-oc apply -f gitops/components/trustyai-eval-operator/lmevaljob-full.yaml
-```
+### Monitoring
 
----
+The `service/` overlay provisions:
 
-## Monitoring
+- `TrustyAIService` CR configured with PVC-backed storage (`10Gi`) and periodic metrics publishing
+- A `ServiceMonitor` scraping `/q/metrics`
+
+Prometheus ingests the metrics automatically; they surface in the Grafana dashboards added under `observability/`.
+
+The `metrics/` overlay deploys a CronJob that queries `LMEvalJob` CRs and pushes results to the in-cluster Pushgateway every five minutes. Grafana panels consuming `lm_eval_*` metrics update without manual intervention.
 
 ### Check LMEvalJob Status
 

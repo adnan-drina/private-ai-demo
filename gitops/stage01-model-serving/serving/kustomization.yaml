@@ -26,12 +26,12 @@ resources:
   # Wave 1: Infrastructure
   - network-policy              # NetworkPolicy for Model Registry access
   - model-registry              # Model Registry ConfigMap (used by pipelines)
-  
+
   # Wave 2: MLOps Pipeline
   - pipelines                   # Tekton pipelines and tasks
   
   # Wave 3: Model Serving
-  - vllm                        # InferenceServices and ServingRuntimes
+  - vllm                        # InferenceServices
   
   # Wave 4: Development Tools
   - model-serving-testing       # Interactive notebooks for testing

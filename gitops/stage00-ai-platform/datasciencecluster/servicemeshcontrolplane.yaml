@@ -57,6 +57,11 @@ spec:
     meshConfig:
       defaultConfig:
         terminationDrainDuration: 35s
+      extensionProviders:
+        - name: redhat-ods-applications-auth-provider
+          envoyExtAuthzGrpc:
+            service: authorino-authorino-authorization.redhat-ods-applications-auth-provider.svc.cluster.local
+            port: 50051
   telemetry:
     type: Istiod
   tracing:

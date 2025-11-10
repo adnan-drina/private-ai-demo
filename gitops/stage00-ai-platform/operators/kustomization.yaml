@@ -25,6 +25,7 @@ resources:
 - subscription-servicemeshoperator.yaml
 - subscription-serverless-operator.yaml
 - subscription-openshift-pipelines-operator.yaml
+- subscription-authorino-operator.yaml
 
 # TektonConfig (pruner)
 - tektonconfig.yaml

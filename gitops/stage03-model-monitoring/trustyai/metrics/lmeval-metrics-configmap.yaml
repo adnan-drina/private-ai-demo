@@ -1,0 +1,110 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lmeval-metrics-exporter
+  labels:
+    app.kubernetes.io/component: metrics
+data:
+  export.py: |
+    import json
+    import os
+    import sys
+    import time
+
+    import requests
+
+    NAMESPACE = os.environ.get("TARGET_NAMESPACE", "private-ai-demo")
+    PUSHGATEWAY = os.environ.get("PUSHGATEWAY_URL", "http://prometheus-pushgateway.private-ai-demo.svc.cluster.local:9091")
+    JOB_NAME = os.environ.get("PUSH_JOB_NAME", "lmeval")
+
+    SESSION = requests.Session()
+
+    def query_lmevaljobs():
+        token_path = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+        ca_path = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+        if not os.path.exists(token_path):
+            raise RuntimeError("ServiceAccount token not found")
+        token = open(token_path, "r", encoding="utf-8").read().strip()
+        api_host = os.environ.get("KUBERNETES_SERVICE_HOST")
+        api_port = os.environ.get("KUBERNETES_SERVICE_PORT", "443")
+        url = f"https://{api_host}:{api_port}/apis/trustyai.opendatahub.io/v1alpha1/namespaces/{NAMESPACE}/lmevaljobs"
+        headers = {"Authorization": f"Bearer {token}"}
+        response = SESSION.get(url, headers=headers, verify=ca_path, timeout=30)
+        response.raise_for_status()
+        return response.json().get("items", [])
+
+    def build_metrics(jobs):
+        lines = [
+            "# HELP lm_eval_accuracy Accuracy from TrustyAI LMEvalJob results",
+            "# TYPE lm_eval_accuracy gauge",
+            "# HELP lm_eval_samples_evaluated Number of samples evaluated by task",
+            "# TYPE lm_eval_samples_evaluated gauge",
+        ]
+        timestamp = int(time.time())
+
+        for job in jobs:
+            metadata = job.get("metadata", {})
+            labels = metadata.get("labels", {})
+            model = labels.get("model", metadata.get("name", "unknown"))
+            status = job.get("status", {})
+            results = status.get("results", {})
+            samples = status.get("samples")
+
+            if isinstance(results, str):
+                try:
+                    results = json.loads(results)
+                except json.JSONDecodeError:
+                    continue
+
+            if not isinstance(results, dict):
+                continue
+
+            for task, metrics in results.items():
+                if not isinstance(metrics, dict):
+                    continue
+                # metrics like {"acc_norm,none": 0.9, ...}
+                for metric_name, value in metrics.items():
+                    if metric_name.startswith("acc") and isinstance(value, (int, float)):
+                        lines.append(
+                            f'lm_eval_accuracy{{model="{model}",task="{task}",metric="{metric_name}"}} {value}'
+                        )
+
+            # Add sample count if available
+            if isinstance(samples, dict):
+                for task, value in samples.items():
+                    if isinstance(value, (int, float)):
+                        lines.append(
+                            f'lm_eval_samples_evaluated{{model="{model}",task="{task}"}} {value}'
+                        )
+
+            # Include completion timestamp if present
+            completion_time = status.get("completionTime")
+            if completion_time:
+                lines.append(
+                    f'lm_eval_completion_timestamp{{model="{model}"}} {timestamp}'
+                )
+
+        return "\n".join(lines) + "\n"
+
+    def push_metrics(body):
+        url = f"{PUSHGATEWAY}/metrics/job/{JOB_NAME}"
+        response = SESSION.put(url, data=body.encode("utf-8"), timeout=15)
+        response.raise_for_status()
+
+    def main():
+        jobs = query_lmevaljobs()
+        if not jobs:
+            print("No LMEvalJob resources found", file=sys.stderr)
+            return
+        metrics_body = build_metrics(jobs)
+        push_metrics(metrics_body)
+        print("Metrics pushed for", len(jobs), "jobs")
+
+    if __name__ == "__main__":
+        try:
+            main()
+        except Exception as exc:
+            print(f"Error exporting LMEval metrics: {exc}", file=sys.stderr)
+            sys.exit(1)
+

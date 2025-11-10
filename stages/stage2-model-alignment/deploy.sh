@@ -286,6 +286,19 @@ oc -n "${PROJECT_NAME}" create secret generic llama-files-credentials \
   --from-literal=secretkey="$SECRET" \
   --dry-run=client -o yaml | oc apply -f -
 
+# Guardrails API credentials (optional but recommended when enabling Guardrails)
+if [ -n "${GUARDRAILS_OPENAI_API_KEY:-}" ]; then
+  echo ""
+  echo "🔐 Creating secret: guardrails-credentials (detector API tokens)"
+  oc -n "${PROJECT_NAME}" create secret generic guardrails-credentials \
+    --from-literal=openai-api-key="${GUARDRAILS_OPENAI_API_KEY}" \
+    --dry-run=client -o yaml | oc apply -f -
+else
+  echo ""
+  echo "⚠️  Guardrails API key (GUARDRAILS_OPENAI_API_KEY) not set in .env"
+  echo "    Guardrails detectors that call external services will be disabled."
+fi
+
 echo "✅ Secrets created"
 echo ""
 

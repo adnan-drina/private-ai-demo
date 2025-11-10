@@ -1,0 +1,201 @@
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: guidellm-weekly-comprehensive
+  namespace: private-ai-demo
+  labels:
+    app: guidellm
+    schedule: weekly
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+    description: "Weekly comprehensive GuideLLM benchmarks (1-hour duration)"
+spec:
+  schedule: "0 0 * * 0"  # Run weekly on Sundays at midnight
+  timeZone: "America/New_York"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 4  # Keep last 4 weeks
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    metadata:
+      labels:
+        app: guidellm
+        schedule: weekly
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 2592000  # Keep for 30 days
+      template:
+        metadata:
+          labels:
+            app: guidellm
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: guidellm-runner
+          
+          initContainers:
+          # Get URLs for both models
+          - name: get-inference-urls
+            image: registry.redhat.io/openshift4/ose-cli:latest
+            command:
+            - /bin/bash
+            - -c
+            - |
+              echo "🔍 Getting latest revision service URLs (bypasses Knative routing)"
+              
+              # Quantized model - get latest revision from Knative Service
+              QUANTIZED_REV=$(oc get ksvc mistral-24b-quantized-predictor -n private-ai-demo \
+                -o jsonpath='{.status.latestReadyRevisionName}')
+              if [ -z "$QUANTIZED_REV" ]; then
+                echo "❌ ERROR: Could not find latest quantized revision"
+                exit 1
+              fi
+              QUANTIZED_URL="http://${QUANTIZED_REV}-private.private-ai-demo.svc.cluster.local"
+              echo "✅ Quantized: ${QUANTIZED_REV} -> ${QUANTIZED_URL}"
+              echo -n "${QUANTIZED_URL}" > /shared/quantized-url.txt
+              
+              # Full precision model - get latest revision from Knative Service
+              FULL_REV=$(oc get ksvc mistral-24b-predictor -n private-ai-demo \
+                -o jsonpath='{.status.latestReadyRevisionName}')
+              if [ -z "$FULL_REV" ]; then
+                echo "❌ ERROR: Could not find latest full revision"
+                exit 1
+              fi
+              FULL_URL="http://${FULL_REV}-private.private-ai-demo.svc.cluster.local"
+              echo "✅ Full: ${FULL_REV} -> ${FULL_URL}"
+              echo -n "${FULL_URL}" > /shared/full-url.txt
+            volumeMounts:
+            - name: shared
+              mountPath: /shared
+          
+          containers:
+          # Comprehensive benchmark for Quantized Model
+          - name: guidellm-quantized
+            image: ghcr.io/vllm-project/guidellm:latest
+            command:
+            - /bin/bash
+            - -c
+            - |
+              MODEL_URL=$(cat /shared/quantized-url.txt)
+              echo "🚀 Running GuideLLM Comprehensive Benchmark (Quantized)"
+              echo "Target: ${MODEL_URL}"
+              
+              TIMESTAMP=$(date +%Y%m%d)
+              guidellm benchmark \
+                --target "${MODEL_URL}" \
+                --model "mistral-24b-quantized" \
+                --rate-type sweep \
+                --rate 20 \
+                --max-seconds 3600 \
+                --data "prompt_tokens=512,output_tokens=256,samples=500" \
+                --output-path "/results/weekly-quantized-${TIMESTAMP}.html"
+            env:
+            - name: GUIDELLM__ENV
+              value: "prod"
+            - name: PYTHONHTTPSVERIFY
+              value: "0"
+            - name: CURL_CA_BUNDLE
+              value: ""
+            volumeMounts:
+            - name: shared
+              mountPath: /shared
+            - name: results
+              mountPath: /results
+            resources:
+              requests:
+                cpu: "200m"
+                memory: "512Mi"
+              limits:
+                cpu: "1"
+                memory: "2Gi"
+          
+          # Comprehensive benchmark for Full Model
+          - name: guidellm-full
+            image: ghcr.io/vllm-project/guidellm:latest
+            command:
+            - /bin/bash
+            - -c
+            - |
+              # Wait for quantized to finish
+              sleep 120
+              
+              MODEL_URL=$(cat /shared/full-url.txt)
+              echo "🚀 Running GuideLLM Comprehensive Benchmark (Full Precision)"
+              echo "Target: ${MODEL_URL}"
+              
+              TIMESTAMP=$(date +%Y%m%d)
+              guidellm benchmark \
+                --target "${MODEL_URL}" \
+                --model "mistral-24b" \
+                --rate-type sweep \
+                --rate 20 \
+                --max-seconds 3600 \
+                --data "prompt_tokens=512,output_tokens=256,samples=500" \
+                --output-path "/results/weekly-full-${TIMESTAMP}.html"
+            env:
+            - name: GUIDELLM__ENV
+              value: "prod"
+            - name: PYTHONHTTPSVERIFY
+              value: "0"
+            - name: CURL_CA_BUNDLE
+              value: ""
+            volumeMounts:
+            - name: shared
+              mountPath: /shared
+            - name: results
+              mountPath: /results
+            resources:
+              requests:
+                cpu: "200m"
+                memory: "512Mi"
+              limits:
+                cpu: "1"
+                memory: "2Gi"
+          
+          # Upload to MinIO
+          - name: s3-uploader
+            image: quay.io/minio/mc:latest
+            command:
+            - /bin/sh
+            - -c
+            - |
+              # Wait for both benchmarks
+              while [ $(ls -1 /results/*.html 2>/dev/null | wc -l) -lt 2 ]; do
+                echo "Waiting for comprehensive benchmarks..."
+                sleep 60
+              done
+              
+              mc alias set minio http://minio.private-ai-demo.svc.cluster.local:9000 \
+                $MINIO_ACCESS_KEY $MINIO_SECRET_KEY
+              
+              mc cp /results/*.html minio/guidellm-results/weekly/
+              [ -f /results/*.json ] && mc cp /results/*.json minio/guidellm-results/weekly/
+              
+              echo "✅ Weekly comprehensive benchmarks uploaded"
+            env:
+            - name: MINIO_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: minio-root-credentials
+                  key: MINIO_ROOT_USER
+            - name: MINIO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: minio-root-credentials
+                  key: MINIO_ROOT_PASSWORD
+            volumeMounts:
+            - name: results
+              mountPath: /results
+            resources:
+              requests:
+                cpu: "100m"
+                memory: "128Mi"
+              limits:
+                cpu: "500m"
+                memory: "512Mi"
+          
+          volumes:
+          - name: shared
+            emptyDir: {}  # Shared volume for passing URLs between containers
+          - name: results
+            emptyDir: {}  # Ephemeral storage, results uploaded to MinIO S3
+

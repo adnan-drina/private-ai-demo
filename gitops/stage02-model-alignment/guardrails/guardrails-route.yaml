@@ -1,0 +1,18 @@
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: guardrails-route
+  labels:
+    app.kubernetes.io/component: guardrails
+    app.kubernetes.io/managed-by: gitops
+spec:
+  to:
+    kind: Service
+    name: llama-guardrails
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+
+

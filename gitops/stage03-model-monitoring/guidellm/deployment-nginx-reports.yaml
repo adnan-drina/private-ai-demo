@@ -1,0 +1,99 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: guidellm-reports
+  namespace: private-ai-demo
+  labels:
+    app: guidellm-reports
+    app.kubernetes.io/name: guidellm-reports
+    app.kubernetes.io/component: web-server
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: guidellm-reports
+  template:
+    metadata:
+      labels:
+        app: guidellm-reports
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      
+      initContainers:
+      # Copy index.html to PVC
+      - name: setup-index
+        image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          cp /config/index.html /usr/share/nginx/html/index.html
+          echo "✅ Index page copied successfully"
+        volumeMounts:
+        - name: index-html
+          mountPath: /config
+        - name: results
+          mountPath: /usr/share/nginx/html
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+      
+      containers:
+      - name: nginx
+        image: registry.access.redhat.com/ubi9/nginx-122:latest
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        volumeMounts:
+        - name: nginx-config
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
+          readOnly: true
+        - name: results
+          mountPath: /usr/share/nginx/html
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          runAsNonRoot: true
+      
+      volumes:
+      - name: nginx-config
+        configMap:
+          name: guidellm-nginx-config
+      - name: index-html
+        configMap:
+          name: guidellm-index-html
+      - name: results
+        persistentVolumeClaim:
+          claimName: guidellm-results
+

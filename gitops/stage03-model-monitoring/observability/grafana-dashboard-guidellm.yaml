@@ -1,0 +1,392 @@
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDashboard
+metadata:
+  name: guidellm-benchmarks
+  namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/part-of: guidellm
+    dashboards: grafana
+spec:
+  instanceSelector:
+    matchLabels:
+      dashboards: grafana
+  allowCrossNamespaceImport: true
+  json: |
+    {
+      "title": "GuideLLM Benchmark Performance",
+      "tags": ["guidellm", "llm", "performance", "benchmarking"],
+      "timezone": "browser",
+      "schemaVersion": 38,
+      "version": 1,
+      "refresh": "30s",
+      "time": {
+        "from": "now-7d",
+        "to": "now"
+      },
+      "panels": [
+        {
+          "id": 1,
+          "title": "📊 Overview",
+          "type": "stat",
+          "gridPos": {"h": 4, "w": 24, "x": 0, "y": 0},
+          "targets": [],
+          "options": {
+            "textMode": "value_and_name",
+            "colorMode": "background"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {"value": null, "color": "green"}
+                ]
+              }
+            }
+          }
+        },
+        {
+          "id": 2,
+          "title": "Request Latency (P95) - Last 7 Days",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+          "targets": [
+            {
+              "expr": "guidellm_request_latency_p95_seconds",
+              "legendFormat": "{{model}} ({{benchmark_type}})",
+              "refId": "A"
+            }
+          ],
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "custom": {
+                "axisLabel": "Latency (seconds)"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {"value": null, "color": "green"},
+                  {"value": 1, "color": "yellow"},
+                  {"value": 2, "color": "red"}
+                ]
+              }
+            }
+          }
+        },
+        {
+          "id": 3,
+          "title": "Throughput (Requests/sec) - Last 7 Days",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+          "targets": [
+            {
+              "expr": "guidellm_throughput_requests_per_second",
+              "legendFormat": "{{model}} ({{benchmark_type}})",
+              "refId": "A"
+            }
+          ],
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "custom": {
+                "axisLabel": "Requests per second"
+              }
+            }
+          }
+        },
+        {
+          "id": 4,
+          "title": "Time to First Token (TTFT) P95",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+          "targets": [
+            {
+              "expr": "guidellm_ttft_p95_seconds",
+              "legendFormat": "{{model}} ({{benchmark_type}})",
+              "refId": "A"
+            }
+          ],
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "custom": {
+                "axisLabel": "TTFT (seconds)"
+              }
+            }
+          }
+        },
+        {
+          "id": 5,
+          "title": "Request Success Rate",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+          "targets": [
+            {
+              "expr": "guidellm_request_success_rate",
+              "legendFormat": "{{model}} ({{benchmark_type}})",
+              "refId": "A"
+            }
+          ],
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "min": 0,
+              "max": 1,
+              "custom": {
+                "axisLabel": "Success Rate"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {"value": 0, "color": "red"},
+                  {"value": 0.95, "color": "yellow"},
+                  {"value": 0.99, "color": "green"}
+                ]
+              }
+            }
+          }
+        },
+        {
+          "id": 6,
+          "title": "Model Comparison - Latest P95 Latency",
+          "type": "bargauge",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 20},
+          "targets": [
+            {
+              "expr": "guidellm_request_latency_p95_seconds",
+              "legendFormat": "{{model}}",
+              "refId": "A",
+              "instant": true
+            }
+          ],
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {"value": null, "color": "green"},
+                  {"value": 1, "color": "yellow"},
+                  {"value": 2, "color": "red"}
+                ]
+              }
+            }
+          }
+        },
+        {
+          "id": 7,
+          "title": "Model Comparison - Latest Throughput",
+          "type": "bargauge",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 20},
+          "targets": [
+            {
+              "expr": "guidellm_throughput_requests_per_second",
+              "legendFormat": "{{model}}",
+              "refId": "A",
+              "instant": true
+            }
+          ],
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps"
+            }
+          }
+        },
+        {
+          "id": 8,
+          "title": "📄 Latest Benchmark Reports",
+          "type": "table",
+          "gridPos": {"h": 10, "w": 24, "x": 0, "y": 28},
+          "targets": [
+            {
+              "expr": "guidellm_total_requests",
+              "format": "table",
+              "instant": true,
+              "refId": "A"
+            }
+          ],
+          "options": {
+            "showHeader": true,
+            "sortBy": [
+              {"displayName": "Time", "desc": true}
+            ]
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "left",
+                "filterable": true
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {"id": "byName", "options": "model"},
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Model"
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 250
+                  }
+                ]
+              },
+              {
+                "matcher": {"id": "byName", "options": "benchmark_type"},
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Type"
+                  },
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "daily": {"text": "Daily", "color": "blue"},
+                          "weekly": {"text": "Weekly", "color": "purple"},
+                          "manual": {"text": "Manual", "color": "orange"}
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "matcher": {"id": "byName", "options": "Value"},
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Total Requests"
+                  }
+                ]
+              }
+            ]
+          },
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "__name__": true,
+                  "instance": true,
+                  "job": true
+                },
+                "indexByName": {},
+                "renameByName": {}
+              }
+            }
+          ]
+        },
+        {
+          "id": 9,
+          "title": "🔗 View HTML Reports",
+          "type": "text",
+          "gridPos": {"h": 4, "w": 24, "x": 0, "y": 38},
+          "options": {
+            "mode": "markdown",
+            "content": "## GuideLLM HTML Reports\n\nView detailed interactive benchmark reports with charts:\n\n**[Open GuideLLM Reports Dashboard →](https://guidellm-reports-private-ai-demo.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com)**\n\nReports include:\n- Latency distribution charts\n- Throughput over time\n- Request success/failure rates\n- Token generation statistics\n- Full benchmark configuration\n\n---\n\n### Quick Access\n\n```bash\n# Get reports URL\nREPORTS_URL=$(oc get route guidellm-reports -n private-ai-demo -o jsonpath='{.spec.host}')\necho \"https://${REPORTS_URL}\"\n```"
+          }
+        }
+      ],
+      "annotations": {
+        "list": [
+          {
+            "datasource": "-- Grafana --",
+            "enable": true,
+            "hide": false,
+            "iconColor": "rgba(0, 211, 255, 1)",
+            "name": "Benchmarks",
+            "type": "dashboard"
+          }
+        ]
+      },
+      "templating": {
+        "list": [
+          {
+            "name": "model",
+            "type": "query",
+            "datasource": "Prometheus",
+            "query": "label_values(guidellm_request_latency_p95_seconds, model)",
+            "multi": true,
+            "includeAll": true,
+            "refresh": 1
+          },
+          {
+            "name": "benchmark_type",
+            "type": "query",
+            "datasource": "Prometheus",
+            "query": "label_values(guidellm_request_latency_p95_seconds, benchmark_type)",
+            "multi": true,
+            "includeAll": true,
+            "refresh": 1
+          }
+        ]
+      },
+      "links": [
+        {
+          "title": "GuideLLM Reports",
+          "type": "link",
+          "url": "https://guidellm-reports-private-ai-demo.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com",
+          "targetBlank": true,
+          "icon": "external link"
+        },
+        {
+          "title": "GuideLLM Documentation",
+          "type": "link",
+          "url": "https://github.com/vllm-project/guidellm",
+          "targetBlank": true,
+          "icon": "doc"
+        }
+      ]
+    }
+

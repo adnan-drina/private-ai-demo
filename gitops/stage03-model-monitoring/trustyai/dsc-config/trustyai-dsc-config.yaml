@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: trustyai-dsc-config
+  namespace: redhat-ods-applications
+  annotations:
+    opendatahub.io/managed: "false"
+data:
+  eval.lmeval.permitOnline: "true"
+  eval.lmeval.permitCodeExecution: "true"
+

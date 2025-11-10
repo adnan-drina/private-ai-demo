@@ -6,6 +6,7 @@ metadata:
   namespace: nvidia-gpu-operator
   labels:
     app.kubernetes.io/name: nvidia-dcgm-exporter
+    observability.rh-ai/demo: "true"
 spec:
   selector:
     matchLabels:

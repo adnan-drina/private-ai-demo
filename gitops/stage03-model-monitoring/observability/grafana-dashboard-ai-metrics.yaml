@@ -3,7 +3,7 @@ apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaDashboard
 metadata:
   name: llama-stack-ai-metrics
-  namespace: grafana-system
+  namespace: private-ai-demo
 spec:
   instanceSelector:
     matchLabels:
@@ -14,7 +14,7 @@ spec:
       "uid": "ai-ml-performance",
       "timezone": "browser",
       "schemaVersion": 38,
-      "version": 2,
+      "version": 3,
       "refresh": "10s",
       "panels": [
         {
@@ -44,7 +44,7 @@ spec:
               "legendFormat": "Full Precision Model"
             }
           ],
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
           "options": {
             "graphMode": "none",
             "colorMode": "background",
@@ -103,7 +103,7 @@ spec:
               "legendFormat": "Full Precision (Total)"
             }
           ],
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
           "options": {
             "graphMode": "area",
             "colorMode": "background",
@@ -162,7 +162,7 @@ spec:
               "legendFormat": "Full Precision P95"
             }
           ],
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
           "options": {
             "graphMode": "area",
             "colorMode": "background",
@@ -221,7 +221,7 @@ spec:
               "legendFormat": "Full Precision (4 GPUs)"
             }
           ],
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
           "fieldConfig": {
             "defaults": {
               "unit": "ops",
@@ -292,7 +292,7 @@ spec:
               "legendFormat": "Full Precision P95"
             }
           ],
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
           "fieldConfig": {
             "defaults": {
               "unit": "ms",
@@ -351,7 +351,7 @@ spec:
               "legendFormat": "Full Precision (Avg 4 GPUs)"
             }
           ],
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
           "fieldConfig": {
             "defaults": {
               "unit": "percent",
@@ -409,7 +409,7 @@ spec:
               "legendFormat": "Full Precision (Total 4 GPUs)"
             }
           ],
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
           "fieldConfig": {
             "defaults": {
               "unit": "gibibytes",

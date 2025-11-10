@@ -5,8 +5,7 @@ metadata:
   name: otel-collector
   namespace: private-ai-demo
 spec:
-  mode: deployment
-  
+  mode: statefulset
   config: |
     receivers:
       otlp:
@@ -15,20 +14,50 @@ spec:
             endpoint: 0.0.0.0:4317
           http:
             endpoint: 0.0.0.0:4318
-    
+      
+      # Prometheus receiver for scraping PodMonitors/ServiceMonitors
+      prometheus:
+        config:
+          scrape_configs:
+          - job_name: 'otel-collector'
+            scrape_interval: 15s
+            http_sd_configs:
+            - url: http://otel-collector-targetallocator:80/jobs/otel-collector/targets
+
     processors:
       batch: {}
-    
+
     exporters:
       prometheus:
         endpoint: "0.0.0.0:8889"
       
+      otlp/tempo:
+        endpoint: tempo-distributor.private-ai-demo.svc.cluster.local:4317
+        tls:
+          insecure: true
+
       debug: {}
-    
+
     service:
       pipelines:
         metrics:
-          receivers: [otlp]
+          receivers: [otlp, prometheus]
           processors: [batch]
           exporters: [prometheus, debug]
+        traces:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [otlp/tempo, debug]
+  
+  # Target Allocator for discovering PodMonitors/ServiceMonitors
+  targetAllocator:
+    enabled: true
+    serviceAccount: otel-collector-targetallocator
+    prometheusCR:
+      enabled: true
+      podMonitorSelector:
+        "observability.rh-ai/demo": "true"
+      serviceMonitorSelector:
+        "observability.rh-ai/demo": "true"
+      scrapeInterval: 15s
 
