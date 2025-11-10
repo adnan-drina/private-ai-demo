@@ -8,6 +8,7 @@ metadata:
     app.kubernetes.io/component: observability
     app.kubernetes.io/name: vllm-metrics
     observability.rh-ai/demo: "true"
+    openshift.io/user-monitoring: "true"
 spec:
   selector:
     matchExpressions:
