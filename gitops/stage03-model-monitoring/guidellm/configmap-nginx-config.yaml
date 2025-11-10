@@ -61,6 +61,18 @@ data:
                 try_files /index.html =404;
             }
             
+            # Proxy GuideLLM UI assets from CDN (redirect v0.3.0 to latest)
+            location ~ ^/guidellm/ui/ {
+                # Rewrite v0.3.0 to latest
+                rewrite ^/guidellm/ui/v[0-9.]+/(.*)$ /guidellm/ui/latest/$1 break;
+                proxy_pass https://blog.vllm.ai;
+                proxy_ssl_verify off;
+                proxy_set_header Host blog.vllm.ai;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+            }
+            
             # Serve HTML reports directly
             location ~ \.html$ {
                 add_header Content-Type text/html;
@@ -68,6 +80,10 @@ data:
                 add_header X-Frame-Options "ALLOWALL" always;
                 add_header Access-Control-Allow-Origin "*" always;
                 add_header Content-Security-Policy "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; script-src * 'unsafe-inline' 'unsafe-eval'; style-src * 'unsafe-inline';" always;
+                
+                # Rewrite CDN URLs in HTML to use local proxy
+                sub_filter 'https://blog.vllm.ai/guidellm/ui/' '/guidellm/ui/';
+                sub_filter_once off;
             }
             
             # Serve JSON data
