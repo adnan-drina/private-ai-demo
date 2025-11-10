@@ -72,25 +72,21 @@ spec:
           MODEL_URL=$(cat /shared/inference-url.txt)
           echo "🚀 Running GuideLLM Benchmark"
           echo "Target: ${MODEL_URL}"
+          echo "Model: mistral-24b"
           
-          # Create test data in chat format
-          cat > /tmp/test-data.json << 'EOF'
-          [
-            {"messages": [{"role": "user", "content": "What is the capital of France?"}]},
-            {"messages": [{"role": "user", "content": "Explain machine learning in simple terms."}]},
-            {"messages": [{"role": "user", "content": "Write a short poem about clouds."}]}
-          ]
-          EOF
-          
+          # Use synthetic data with Mistral tokenizer
+          # This generates test prompts with specified token counts
           guidellm benchmark \
             --target "${MODEL_URL}" \
             --model "mistral-24b" \
             --backend-type openai_http \
-            --rate-type sweep \
-            --rate 5 \
-            --max-seconds 180 \
-            --data /tmp/test-data.json \
+            --processor "mistralai/Mistral-Small-Instruct-2409" \
+            --rate-type synchronous \
+            --max-requests 10 \
+            --data "prompt_tokens=128,output_tokens=64,samples=10" \
             --output-path /results/mistral-full-$(date +%Y%m%d-%H%M%S).html
+          
+          echo "✅ Benchmark complete! HTML report generated with embedded GuideLLM UI"
         env:
         - name: GUIDELLM__ENV
           value: "prod"  # Uses hosted UI build
@@ -100,6 +96,10 @@ spec:
           value: "0"  # Disable SSL verification for self-signed OpenShift certs
         - name: CURL_CA_BUNDLE
           value: ""  # Disable SSL bundle verification
+        - name: HOME
+          value: "/tmp"  # Writable directory for cache
+        - name: HF_HOME
+          value: "/tmp/hf"  # HuggingFace cache directory
         volumeMounts:
         - name: shared
           mountPath: /shared
