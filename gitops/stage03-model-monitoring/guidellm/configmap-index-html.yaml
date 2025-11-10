@@ -146,64 +146,63 @@ data:
                 document.getElementById('report-list').style.display = 'none';
                 document.getElementById('no-reports').style.display = 'none';
                 
-                fetch('/reports/')
-                    .then(res => res.text())
-                    .then(html => {
-                        const parser = new DOMParser();
-                        const doc = parser.parseFromString(html, 'text/html');
-                        const links = Array.from(doc.querySelectorAll('a[href$=".html"]'))
-                            .filter(link => !link.getAttribute('href').includes('index.html'));
-                        
-                        const reportList = document.getElementById('report-list');
-                        reportList.innerHTML = '';
-                        
-                        if (links.length === 0) {
-                            document.getElementById('loading').style.display = 'none';
-                            document.getElementById('no-reports').style.display = 'block';
-                            return;
-                        }
-                        
-                        links.forEach(link => {
-                            const filename = link.textContent;
-                            const category = categorizeReport(filename);
-                            const date = formatDate(filename);
-                            
-                            const model = filename.includes('quantized') ? 'Mistral 24B Quantized' : 'Mistral 24B Full';
-                            
-                            const card = document.createElement('div');
-                            card.className = 'report-card';
-                            card.innerHTML = `
-                                <div style="display: flex; justify-content: space-between; align-items: center;">
-                                    <div>
-                                        <h3 class="pf-v5-c-title pf-m-md" style="margin: 0;">
-                                            <a href="/reports/${link.getAttribute('href')}" target="_blank" style="text-decoration: none; color: #0066cc;">
-                                                ${model}
-                                            </a>
-                                        </h3>
-                                        <p style="margin: 0.5rem 0; color: #6a6e73;">
-                                            <span class="badge badge-${category}">${category.toUpperCase()}</span>
-                                            ${date}
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <a href="/reports/${link.getAttribute('href')}" target="_blank" class="pf-v5-c-button pf-m-primary">
-                                            View Report
-                                        </a>
-                                    </div>
-                                </div>
-                            `;
-                            reportList.appendChild(card);
-                        });
-                        
-                        document.getElementById('loading').style.display = 'none';
-                        document.getElementById('report-list').style.display = 'block';
-                    })
-                    .catch(err => {
-                        console.error('Error loading reports:', err);
-                        document.getElementById('loading').innerHTML = `
-                            <p style="color: #c9190b;">Failed to load reports. Please check if the server is running.</p>
-                        `;
-                    });
+                // Hardcoded list of reports for now (TODO: dynamic fetching)
+                const reports = [
+                    {
+                        filename: 'mistral-quantized-20251110-164449.html',
+                        timestamp: '2025-11-10T16:44:49Z',
+                        model: 'mistral-24b-quantized'
+                    }
+                ];
+                
+                const links = reports.map(r => ({
+                    textContent: r.filename,
+                    getAttribute: () => r.filename
+                }));
+                
+                const reportList = document.getElementById('report-list');
+                reportList.innerHTML = '';
+                
+                if (links.length === 0) {
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('no-reports').style.display = 'block';
+                    return;
+                }
+                
+                links.forEach(link => {
+                    const filename = link.textContent;
+                    const category = categorizeReport(filename);
+                    const date = formatDate(filename);
+                    
+                    const model = filename.includes('quantized') ? 'Mistral 24B Quantized' : 'Mistral 24B Full';
+                    
+                    const card = document.createElement('div');
+                    card.className = 'report-card';
+                    card.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <h3 class="pf-v5-c-title pf-m-md" style="margin: 0;">
+                                    <a href="/${link.getAttribute()}" target="_blank" style="text-decoration: none; color: #0066cc;">
+                                        ${model}
+                                    </a>
+                                </h3>
+                                <p style="margin: 0.5rem 0; color: #6a6e73;">
+                                    <span class="badge badge-${category}">${category.toUpperCase()}</span>
+                                    ${date}
+                                </p>
+                            </div>
+                            <div>
+                                <a href="/${link.getAttribute()}" target="_blank" class="pf-v5-c-button pf-m-primary">
+                                    View Report
+                                </a>
+                            </div>
+                        </div>
+                    `;
+                    reportList.appendChild(card);
+                });
+                
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('report-list').style.display = 'block';
             }
             
             function refreshReports() {

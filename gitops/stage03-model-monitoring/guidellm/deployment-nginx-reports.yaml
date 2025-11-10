@@ -77,6 +77,10 @@ spec:
           name: http
           protocol: TCP
         volumeMounts:
+        - name: nginx-config
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
+          readOnly: true
         - name: results
           mountPath: /usr/share/nginx/html
           readOnly: true
@@ -107,6 +111,9 @@ spec:
           runAsNonRoot: true
       
       volumes:
+      - name: nginx-config
+        configMap:
+          name: guidellm-nginx-config
       - name: index-html
         configMap:
           name: guidellm-index-html
