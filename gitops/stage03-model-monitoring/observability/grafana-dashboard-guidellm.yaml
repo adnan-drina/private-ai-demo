@@ -48,13 +48,46 @@ spec:
           }
         },
         {
+          "id": 10,
+          "title": "GuideLLM Jobs Succeeded (7d)",
+          "type": "stat",
+          "gridPos": {"h": 4, "w": 12, "x": 0, "y": 4},
+          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
+          "targets": [
+            {
+              "expr": "sum(max_over_time(kube_job_status_succeeded{namespace=\"private-ai-demo\",job_name=~\"guidellm.*\"}[7d])) or vector(0)",
+              "refId": "A"
+            }
+          ],
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "reduceOptions": {"calcs": ["lastNotNull"], "values": false},
+            "textMode": "value_and_name"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "decimals": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {"value": 0, "color": "red"},
+                  {"value": 1, "color": "green"}
+                ]
+              }
+            }
+          }
+        },
+        {
           "id": 2,
           "title": "Request Latency (P95) - Last 7 Days",
           "type": "timeseries",
-          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
           "targets": [
             {
-              "expr": "guidellm_request_latency_p95_seconds",
+              "expr": "clamp_min(guidellm_request_latency_p95_seconds or vector(0), 0)",
               "legendFormat": "{{model}} ({{benchmark_type}})",
               "refId": "A"
             }
@@ -91,10 +124,11 @@ spec:
           "id": 3,
           "title": "Throughput (Requests/sec) - Last 7 Days",
           "type": "timeseries",
-          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
           "targets": [
             {
-              "expr": "guidellm_throughput_requests_per_second",
+              "expr": "clamp_min(guidellm_throughput_requests_per_second or vector(0), 0)",
               "legendFormat": "{{model}} ({{benchmark_type}})",
               "refId": "A"
             }
@@ -124,9 +158,10 @@ spec:
           "title": "Time to First Token (TTFT) P95",
           "type": "timeseries",
           "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
           "targets": [
             {
-              "expr": "guidellm_ttft_p95_seconds",
+              "expr": "clamp_min(guidellm_ttft_p95_seconds or vector(0), 0)",
               "legendFormat": "{{model}} ({{benchmark_type}})",
               "refId": "A"
             }
@@ -152,9 +187,10 @@ spec:
           "title": "Request Success Rate",
           "type": "timeseries",
           "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
           "targets": [
             {
-              "expr": "guidellm_request_success_rate",
+              "expr": "clamp_min(guidellm_request_success_rate or vector(0), 0)",
               "legendFormat": "{{model}} ({{benchmark_type}})",
               "refId": "A"
             }
@@ -190,9 +226,10 @@ spec:
           "title": "Model Comparison - Latest P95 Latency",
           "type": "bargauge",
           "gridPos": {"h": 8, "w": 12, "x": 0, "y": 20},
+          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
           "targets": [
             {
-              "expr": "guidellm_request_latency_p95_seconds",
+              "expr": "clamp_min(guidellm_request_latency_p95_seconds or vector(0), 0)",
               "legendFormat": "{{model}}",
               "refId": "A",
               "instant": true
@@ -221,9 +258,10 @@ spec:
           "title": "Model Comparison - Latest Throughput",
           "type": "bargauge",
           "gridPos": {"h": 8, "w": 12, "x": 12, "y": 20},
+          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
           "targets": [
             {
-              "expr": "guidellm_throughput_requests_per_second",
+              "expr": "clamp_min(guidellm_throughput_requests_per_second or vector(0), 0)",
               "legendFormat": "{{model}}",
               "refId": "A",
               "instant": true
@@ -244,9 +282,10 @@ spec:
           "title": "📄 Latest Benchmark Reports",
           "type": "table",
           "gridPos": {"h": 10, "w": 24, "x": 0, "y": 28},
+          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
           "targets": [
             {
-              "expr": "guidellm_total_requests",
+              "expr": "clamp_min(guidellm_total_requests or vector(0), 0)",
               "format": "table",
               "instant": true,
               "refId": "A"
@@ -355,7 +394,7 @@ spec:
           {
             "name": "model",
             "type": "query",
-            "datasource": "Prometheus",
+            "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
             "query": "label_values(guidellm_request_latency_p95_seconds, model)",
             "multi": true,
             "includeAll": true,
@@ -364,7 +403,7 @@ spec:
           {
             "name": "benchmark_type",
             "type": "query",
-            "datasource": "Prometheus",
+            "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
             "query": "label_values(guidellm_request_latency_p95_seconds, benchmark_type)",
             "multi": true,
             "includeAll": true,
@@ -386,6 +425,13 @@ spec:
           "url": "https://github.com/vllm-project/guidellm",
           "targetBlank": true,
           "icon": "doc"
+        },
+        {
+          "title": "Runbook - LM-Eval & TrustyAI Integration",
+          "type": "link",
+          "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/2.25/html-single/managing_and_monitoring_models/index#proc_evaluating_models",
+          "targetBlank": true,
+          "icon": "book"
         }
       ]
     }

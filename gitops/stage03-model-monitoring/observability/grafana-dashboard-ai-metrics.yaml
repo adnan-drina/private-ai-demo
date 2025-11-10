@@ -16,6 +16,15 @@ spec:
       "schemaVersion": 38,
       "version": 3,
       "refresh": "10s",
+      "links": [
+        {
+          "title": "Runbook - vLLM Serving Metrics",
+          "type": "link",
+          "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/2.25/html-single/managing_and_monitoring_models/index#proc_viewing_model_metrics",
+          "targetBlank": true,
+          "icon": "book"
+        }
+      ],
       "panels": [
         {
           "gridPos": {"h": 3, "w": 24, "x": 0, "y": 0},
@@ -34,12 +43,12 @@ spec:
           "type": "stat",
           "targets": [
             {
-              "expr": "count(count by (gpu) (DCGM_FI_DEV_GPU_UTIL{exported_pod=~\"mistral-24b-quantized-predictor.*\"}))",
+              "expr": "sum(max_over_time((DCGM_FI_DEV_GPU_UTIL{namespace=\"private-ai-demo\",exported_pod=~\"mistral-24b-quantized-predictor.*\"}>-1)[5m]))",
               "refId": "A",
               "legendFormat": "Quantized Model"
             },
             {
-              "expr": "count(count by (gpu) (DCGM_FI_DEV_GPU_UTIL{exported_pod=~\"mistral-24b-predictor.*\"}))",
+              "expr": "sum(max_over_time((DCGM_FI_DEV_GPU_UTIL{namespace=\"private-ai-demo\",exported_pod=~\"mistral-24b-predictor.*\"}>-1)[5m]))",
               "refId": "B",
               "legendFormat": "Full Precision Model"
             }
@@ -93,12 +102,12 @@ spec:
           "type": "stat",
           "targets": [
             {
-              "expr": "max(DCGM_FI_DEV_FB_USED{exported_pod=~\"mistral-24b-quantized-predictor.*\"}) / 1024",
+              "expr": "max(DCGM_FI_DEV_FB_USED{namespace=\"private-ai-demo\",exported_pod=~\"mistral-24b-quantized-predictor.*\"}) / 1024",
               "refId": "A",
               "legendFormat": "Quantized"
             },
             {
-              "expr": "sum(DCGM_FI_DEV_FB_USED{exported_pod=~\"mistral-24b-predictor.*\"}) / 1024",
+              "expr": "sum(DCGM_FI_DEV_FB_USED{namespace=\"private-ai-demo\",exported_pod=~\"mistral-24b-predictor.*\"}) / 1024",
               "refId": "B",
               "legendFormat": "Full Precision (Total)"
             }
@@ -152,12 +161,12 @@ spec:
           "type": "stat",
           "targets": [
             {
-              "expr": "histogram_quantile(0.95, rate(vllm:time_to_first_token_seconds_bucket{pod=~\"mistral-24b-quantized-predictor.*\"}[5m])) * 1000",
+              "expr": "clamp_min(histogram_quantile(0.95, rate(vllm:time_to_first_token_seconds_bucket{namespace=\"private-ai-demo\",pod=~\"mistral-24b-quantized-predictor.*\"}[5m])) * 1000, 0)",
               "refId": "A",
               "legendFormat": "Quantized P95"
             },
             {
-              "expr": "histogram_quantile(0.95, rate(vllm:time_to_first_token_seconds_bucket{pod=~\"mistral-24b-predictor.*\"}[5m])) * 1000",
+              "expr": "clamp_min(histogram_quantile(0.95, rate(vllm:time_to_first_token_seconds_bucket{namespace=\"private-ai-demo\",pod=~\"mistral-24b-predictor.*\"}[5m])) * 1000, 0)",
               "refId": "B",
               "legendFormat": "Full Precision P95"
             }
@@ -211,12 +220,12 @@ spec:
           "type": "timeseries",
           "targets": [
             {
-              "expr": "rate(vllm:generation_tokens_total{pod=~\"mistral-24b-quantized-predictor.*\"}[5m])",
+              "expr": "clamp_min(rate(vllm:generation_tokens_total{namespace=\"private-ai-demo\",pod=~\"mistral-24b-quantized-predictor.*\"}[5m]), 0)",
               "refId": "A",
               "legendFormat": "Quantized (1 GPU)"
             },
             {
-              "expr": "rate(vllm:generation_tokens_total{pod=~\"mistral-24b-predictor.*\"}[5m])",
+              "expr": "clamp_min(rate(vllm:generation_tokens_total{namespace=\"private-ai-demo\",pod=~\"mistral-24b-predictor.*\"}[5m]), 0)",
               "refId": "B",
               "legendFormat": "Full Precision (4 GPUs)"
             }
@@ -272,22 +281,22 @@ spec:
           "type": "timeseries",
           "targets": [
             {
-              "expr": "histogram_quantile(0.50, rate(vllm:time_to_first_token_seconds_bucket{pod=~\"mistral-24b-quantized-predictor.*\"}[5m])) * 1000",
+              "expr": "clamp_min(histogram_quantile(0.50, rate(vllm:time_to_first_token_seconds_bucket{namespace=\"private-ai-demo\",pod=~\"mistral-24b-quantized-predictor.*\"}[5m])) * 1000, 0)",
               "refId": "A",
               "legendFormat": "Quantized P50"
             },
             {
-              "expr": "histogram_quantile(0.95, rate(vllm:time_to_first_token_seconds_bucket{pod=~\"mistral-24b-quantized-predictor.*\"}[5m])) * 1000",
+              "expr": "clamp_min(histogram_quantile(0.95, rate(vllm:time_to_first_token_seconds_bucket{namespace=\"private-ai-demo\",pod=~\"mistral-24b-quantized-predictor.*\"}[5m])) * 1000, 0)",
               "refId": "B",
               "legendFormat": "Quantized P95"
             },
             {
-              "expr": "histogram_quantile(0.50, rate(vllm:time_to_first_token_seconds_bucket{pod=~\"mistral-24b-predictor.*\"}[5m])) * 1000",
+              "expr": "clamp_min(histogram_quantile(0.50, rate(vllm:time_to_first_token_seconds_bucket{namespace=\"private-ai-demo\",pod=~\"mistral-24b-predictor.*\"}[5m])) * 1000, 0)",
               "refId": "C",
               "legendFormat": "Full Precision P50"
             },
             {
-              "expr": "histogram_quantile(0.95, rate(vllm:time_to_first_token_seconds_bucket{pod=~\"mistral-24b-predictor.*\"}[5m])) * 1000",
+              "expr": "clamp_min(histogram_quantile(0.95, rate(vllm:time_to_first_token_seconds_bucket{namespace=\"private-ai-demo\",pod=~\"mistral-24b-predictor.*\"}[5m])) * 1000, 0)",
               "refId": "D",
               "legendFormat": "Full Precision P95"
             }
@@ -341,12 +350,12 @@ spec:
           "type": "timeseries",
           "targets": [
             {
-              "expr": "avg(DCGM_FI_DEV_GPU_UTIL{exported_pod=~\"mistral-24b-quantized-predictor.*\"})",
+              "expr": "avg(DCGM_FI_DEV_GPU_UTIL{namespace=\"private-ai-demo\",exported_pod=~\"mistral-24b-quantized-predictor.*\"})",
               "refId": "A",
               "legendFormat": "Quantized (1 GPU)"
             },
             {
-              "expr": "avg(DCGM_FI_DEV_GPU_UTIL{exported_pod=~\"mistral-24b-predictor.*\"})",
+              "expr": "avg(DCGM_FI_DEV_GPU_UTIL{namespace=\"private-ai-demo\",exported_pod=~\"mistral-24b-predictor.*\"})",
               "refId": "B",
               "legendFormat": "Full Precision (Avg 4 GPUs)"
             }
@@ -399,12 +408,12 @@ spec:
           "type": "timeseries",
           "targets": [
             {
-              "expr": "max(DCGM_FI_DEV_FB_USED{exported_pod=~\"mistral-24b-quantized-predictor.*\"}) / 1024",
+              "expr": "max(DCGM_FI_DEV_FB_USED{namespace=\"private-ai-demo\",exported_pod=~\"mistral-24b-quantized-predictor.*\"}) / 1024",
               "refId": "A",
               "legendFormat": "Quantized (1 GPU)"
             },
             {
-              "expr": "sum(DCGM_FI_DEV_FB_USED{exported_pod=~\"mistral-24b-predictor.*\"}) / 1024",
+              "expr": "sum(DCGM_FI_DEV_FB_USED{namespace=\"private-ai-demo\",exported_pod=~\"mistral-24b-predictor.*\"}) / 1024",
               "refId": "B",
               "legendFormat": "Full Precision (Total 4 GPUs)"
             }

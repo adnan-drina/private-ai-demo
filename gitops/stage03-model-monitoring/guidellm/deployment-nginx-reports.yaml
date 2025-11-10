@@ -26,15 +26,38 @@ spec:
           type: RuntimeDefault
       
       initContainers:
-      # Copy index.html to PVC
-      - name: setup-index
-        image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+      # Download reports from MinIO
+      - name: sync-minio-reports
+        image: quay.io/minio/mc:latest
         command:
         - /bin/sh
         - -c
         - |
+          echo "📦 Configuring MinIO client..."
+          mc alias set minio http://minio.model-storage.svc.cluster.local:9000 \
+            $MINIO_ACCESS_KEY $MINIO_SECRET_KEY --api S3v4
+          
+          echo "📥 Downloading reports from MinIO..."
+          mc cp --recursive minio/guidellm-results/ /usr/share/nginx/html/ || true
+          
+          echo "📋 Copying index.html..."
           cp /config/index.html /usr/share/nginx/html/index.html
-          echo "✅ Index page copied successfully"
+          
+          echo "✅ Reports synced successfully"
+          ls -lh /usr/share/nginx/html/
+        env:
+        - name: HOME
+          value: "/tmp"
+        - name: MINIO_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: guidellm-s3-credentials
+              key: AWS_ACCESS_KEY_ID
+        - name: MINIO_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: guidellm-s3-credentials
+              key: AWS_SECRET_ACCESS_KEY
         volumeMounts:
         - name: index-html
           mountPath: /config
@@ -48,27 +71,24 @@ spec:
       
       containers:
       - name: nginx
-        image: registry.access.redhat.com/ubi9/nginx-122:latest
+        image: nginxinc/nginx-unprivileged:latest
         ports:
         - containerPort: 8080
           name: http
           protocol: TCP
         volumeMounts:
-        - name: nginx-config
-          mountPath: /etc/nginx/nginx.conf
-          subPath: nginx.conf
-          readOnly: true
         - name: results
           mountPath: /usr/share/nginx/html
+          readOnly: true
         livenessProbe:
           httpGet:
-            path: /healthz
+            path: /
             port: 8080
-          initialDelaySeconds: 30
+          initialDelaySeconds: 10
           periodSeconds: 10
         readinessProbe:
           httpGet:
-            path: /healthz
+            path: /
             port: 8080
           initialDelaySeconds: 5
           periodSeconds: 5
@@ -87,13 +107,9 @@ spec:
           runAsNonRoot: true
       
       volumes:
-      - name: nginx-config
-        configMap:
-          name: guidellm-nginx-config
       - name: index-html
         configMap:
           name: guidellm-index-html
       - name: results
-        persistentVolumeClaim:
-          claimName: guidellm-results
+        emptyDir: {}  # Synced from MinIO on pod start
 

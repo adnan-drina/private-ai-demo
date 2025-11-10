@@ -16,6 +16,15 @@ spec:
       "version": 2,
       "tags": ["tempo", "llama-stack"],
       "refresh": "30s",
+      "links": [
+        {
+          "title": "Runbook - Tempo & OTEL Tracing",
+          "type": "link",
+          "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/2.25/html-single/managing_and_monitoring_models/index#proc_configuring_tracing",
+          "targetBlank": true,
+          "icon": "book"
+        }
+      ],
       "time": {"from": "now-1h", "to": "now"},
       "panels": [
         {
@@ -75,7 +84,7 @@ spec:
           "targets": [
             {
               "refId": "A",
-              "expr": "sum(rate(tempo_spanmetrics_errors_total{service=\"llama-stack\"}[5m])) / sum(rate(tempo_spanmetrics_spans_total{service=\"llama-stack\"}[5m])) * 100"
+              "expr": "100 * clamp_min(sum(rate(tempo_spanmetrics_errors_total{service=~\"$service\",span_kind=~\"$span_kind\"}[5m])) / clamp_min(sum(rate(tempo_spanmetrics_spans_total{service=~\"$service\",span_kind=~\"$span_kind\"}[5m])), 1e-06), 0)"
             }
           ],
           "fieldConfig": {
@@ -102,12 +111,12 @@ spec:
           "targets": [
             {
               "refId": "A",
-              "expr": "histogram_quantile(0.5, sum(rate(tempo_spanmetrics_latency_bucket{service=\"llama-stack\"}[5m])) by (le)) / 1e6",
+              "expr": "clamp_min(histogram_quantile(0.5, sum(rate(tempo_spanmetrics_latency_bucket{service=~\"$service\",span_kind=~\"$span_kind\"}[5m])) by (le)) / 1e6, 0)",
               "legendFormat": "P50"
             },
             {
               "refId": "B",
-              "expr": "histogram_quantile(0.95, sum(rate(tempo_spanmetrics_latency_bucket{service=\"llama-stack\"}[5m])) by (le)) / 1e6",
+              "expr": "clamp_min(histogram_quantile(0.95, sum(rate(tempo_spanmetrics_latency_bucket{service=~\"$service\",span_kind=~\"$span_kind\"}[5m])) by (le)) / 1e6, 0)",
               "legendFormat": "P95"
             }
           ],
@@ -118,7 +127,56 @@ spec:
             }
           },
           "options": {"legend": {"showLegend": true, "placement": "bottom"}}
+        },
+        {
+          "id": 6,
+          "type": "table",
+          "title": "Top Slow Operations (P95, Last 5m)",
+          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
+          "gridPos": {"h": 8, "w": 24, "x": 0, "y": 28},
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "topk(10, histogram_quantile(0.95, sum(rate(tempo_spanmetrics_latency_bucket{service=~\"$service\",span_kind=~\"$span_kind\"}[5m])) by (le, span, service)) / 1e6)",
+              "format": "table",
+              "instant": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ms",
+              "decimals": 1
+            }
+          },
+          "options": {
+            "showHeader": true,
+            "sortBy": [
+              {"displayName": "Value", "desc": true}
+            ]
+          }
         }
-      ]
+      ],
+      "templating": {
+        "list": [
+          {
+            "name": "service",
+            "type": "query",
+            "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
+            "query": "label_values(tempo_spanmetrics_spans_total, service)",
+            "refresh": 1,
+            "includeAll": true,
+            "multi": true
+          },
+          {
+            "name": "span_kind",
+            "type": "query",
+            "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
+            "query": "label_values(tempo_spanmetrics_spans_total, span_kind)",
+            "refresh": 1,
+            "includeAll": true,
+            "multi": true
+          }
+        ]
+      }
     }
 

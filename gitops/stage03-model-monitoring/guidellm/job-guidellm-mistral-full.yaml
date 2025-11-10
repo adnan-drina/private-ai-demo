@@ -113,6 +113,52 @@ spec:
             cpu: "1"
             memory: "2Gi"
       
+      # S3 Upload Sidecar - uploads HTML reports to MinIO
+      - name: s3-uploader
+        image: quay.io/minio/mc:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "⏰ Waiting for benchmark to complete..."
+          while [ ! -f /results/*.html ]; do
+            sleep 5
+          done
+          sleep 5  # Extra time to ensure file is fully written
+          
+          echo "📦 Configuring MinIO client..."
+          mc alias set minio http://minio.model-storage.svc.cluster.local:9000 \
+            $MINIO_ACCESS_KEY $MINIO_SECRET_KEY --api S3v4
+          
+          echo "📤 Uploading report to MinIO..."
+          mc cp /results/*.html minio/guidellm-results/
+          
+          echo "✅ Upload complete!"
+          mc ls minio/guidellm-results/
+        env:
+        - name: HOME
+          value: "/tmp"  # Writable directory for mc config
+        - name: MINIO_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: guidellm-s3-credentials
+              key: AWS_ACCESS_KEY_ID
+        - name: MINIO_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: guidellm-s3-credentials
+              key: AWS_SECRET_ACCESS_KEY
+        volumeMounts:
+        - name: results
+          mountPath: /results
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+      
       volumes:
       - name: shared
         emptyDir: {}  # Shared volume for passing URL between containers
