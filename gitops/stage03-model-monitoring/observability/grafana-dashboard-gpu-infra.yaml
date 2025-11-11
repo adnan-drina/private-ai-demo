@@ -1,0 +1,504 @@
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDashboard
+metadata:
+  name: nvidia-gpu-infrastructure
+  namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/part-of: observability
+spec:
+  instanceSelector:
+    matchLabels:
+      dashboards: "grafana"
+  json: |
+    {
+        "title": "GPU Infrastructure - NVIDIA DCGM",
+        "uid": "gpu-dcgm-infra",
+        "timezone": "browser",
+        "schemaVersion": 39,
+        "refresh": "15s",
+        "version": 1,
+        "links": [
+            {
+                "title": "Runbook - GPU Monitoring",
+                "type": "link",
+                "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/2.25/html-single/managing_and_monitoring_models/index",
+                "targetBlank": true,
+                "icon": "book"
+            }
+        ],
+        "templating": {
+            "list": [
+                {
+                    "name": "instance",
+                    "type": "query",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "otel-prometheus"
+                    },
+                    "query": "label_values(DCGM_FI_DEV_GPU_UTIL, instance)",
+                    "refresh": 1,
+                    "includeAll": true,
+                    "multi": true
+                },
+                {
+                    "name": "gpu",
+                    "type": "query",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "otel-prometheus"
+                    },
+                    "query": "label_values(DCGM_FI_DEV_GPU_UTIL, gpu)",
+                    "refresh": 1,
+                    "includeAll": true,
+                    "multi": true
+                }
+            ]
+        },
+        "panels": [
+            {
+                "id": 1,
+                "title": "Active GPUs",
+                "type": "stat",
+                "gridPos": {
+                    "h": 4,
+                    "w": 6,
+                    "x": 0,
+                    "y": 0
+                },
+                "datasource": {
+                    "type": "prometheus",
+                    "uid": "otel-prometheus"
+                },
+                "options": {
+                    "reduceOptions": {
+                        "calcs": [
+                            "lastNotNull"
+                        ],
+                        "fields": ""
+                    },
+                    "colorMode": "value",
+                    "graphMode": "area",
+                    "justifyMode": "auto",
+                    "orientation": "auto"
+                },
+                "targets": [
+                    {
+                        "expr": "sum(max_over_time(DCGM_FI_DEV_GPU_UTIL{instance=~\"$instance\",gpu=~\"$gpu\",UUID!~\"MIG.*\",exported_pod=~\".+\"}[5m]) > bool 0)",
+                        "refId": "A"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "unit": "none",
+                        "mappings": [],
+                        "thresholds": {
+                            "mode": "percentage",
+                            "steps": [
+                                {
+                                    "color": "green",
+                                    "value": null
+                                },
+                                {
+                                    "color": "#EAB839",
+                                    "value": 4
+                                },
+                                {
+                                    "color": "red",
+                                    "value": 6
+                                }
+                            ]
+                        }
+                    },
+                    "overrides": []
+                }
+            },
+            {
+                "id": 2,
+                "title": "GPU Utilization",
+                "type": "timeseries",
+                "gridPos": {
+                    "h": 8,
+                    "w": 18,
+                    "x": 6,
+                    "y": 0
+                },
+                "datasource": {
+                    "type": "prometheus",
+                    "uid": "otel-prometheus"
+                },
+                "fieldConfig": {
+                    "defaults": {
+                        "mappings": [],
+                        "unit": "percent",
+                        "thresholds": {
+                            "mode": "off",
+                            "steps": [
+                                {
+                                    "color": "green",
+                                    "value": null
+                                },
+                                {
+                                    "color": "#EAB839",
+                                    "value": 70
+                                },
+                                {
+                                    "color": "red",
+                                    "value": 85
+                                }
+                            ]
+                        },
+                        "min": 0,
+                        "max": 100
+                    },
+                    "overrides": []
+                },
+                "options": {
+                    "legend": {
+                        "calcs": [
+                            "lastNotNull",
+                            "mean"
+                        ],
+                        "displayMode": "table",
+                        "placement": "bottom"
+                    },
+                    "tooltip": {
+                        "mode": "multi"
+                    }
+                },
+                "targets": [
+                    {
+                        "expr": "avg(DCGM_FI_DEV_GPU_UTIL{instance=~\"$instance\",gpu=~\"$gpu\",UUID!~\"MIG.*\",exported_pod=~\".+\"})",
+                        "refId": "A",
+                        "legendFormat": "GPU {{gpu}}"
+                    }
+                ]
+            },
+            {
+                "id": 3,
+                "title": "Framebuffer Memory Used",
+                "type": "timeseries",
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 0,
+                    "y": 4
+                },
+                "datasource": {
+                    "type": "prometheus",
+                    "uid": "otel-prometheus"
+                },
+                "fieldConfig": {
+                    "defaults": {
+                        "mappings": [],
+                        "unit": "bytes",
+                        "thresholds": {
+                            "mode": "off",
+                            "steps": [
+                                {
+                                    "color": "green",
+                                    "value": null
+                                }
+                            ]
+                        }
+                    },
+                    "overrides": []
+                },
+                "options": {
+                    "legend": {
+                        "calcs": [
+                            "lastNotNull",
+                            "mean"
+                        ],
+                        "displayMode": "table",
+                        "placement": "bottom"
+                    },
+                    "tooltip": {
+                        "mode": "multi"
+                    }
+                },
+                "targets": [
+                    {
+                        "expr": "avg(DCGM_FI_DEV_FB_USED{instance=~\"$instance\",gpu=~\"$gpu\",UUID!~\"MIG.*\",exported_pod=~\".+\"}) * 1048576",
+                        "refId": "A",
+                        "legendFormat": "GPU {{gpu}}"
+                    }
+                ]
+            },
+            {
+                "id": 4,
+                "title": "Tensor Core Utilization",
+                "type": "timeseries",
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 12,
+                    "y": 4
+                },
+                "datasource": {
+                    "type": "prometheus",
+                    "uid": "otel-prometheus"
+                },
+                "fieldConfig": {
+                    "defaults": {
+                        "mappings": [],
+                        "unit": "percent",
+                        "thresholds": {
+                            "mode": "off",
+                            "steps": [
+                                {
+                                    "color": "green",
+                                    "value": null
+                                },
+                                {
+                                    "color": "#EAB839",
+                                    "value": 70
+                                },
+                                {
+                                    "color": "red",
+                                    "value": 90
+                                }
+                            ]
+                        },
+                        "min": 0,
+                        "max": 100
+                    },
+                    "overrides": []
+                },
+                "options": {
+                    "legend": {
+                        "calcs": [
+                            "lastNotNull",
+                            "mean"
+                        ],
+                        "displayMode": "table",
+                        "placement": "bottom"
+                    },
+                    "tooltip": {
+                        "mode": "multi"
+                    }
+                },
+                "targets": [
+                    {
+                        "expr": "avg(DCGM_FI_PROF_PIPE_TENSOR_ACTIVE{instance=~\"$instance\",gpu=~\"$gpu\",UUID!~\"MIG.*\",exported_pod=~\".+\"}) * 100",
+                        "refId": "A",
+                        "legendFormat": "GPU {{gpu}}"
+                    }
+                ]
+            },
+            {
+                "id": 5,
+                "title": "Power Usage",
+                "type": "timeseries",
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 0,
+                    "y": 12
+                },
+                "datasource": {
+                    "type": "prometheus",
+                    "uid": "otel-prometheus"
+                },
+                "fieldConfig": {
+                    "defaults": {
+                        "mappings": [],
+                        "unit": "watt",
+                        "thresholds": {
+                            "mode": "off",
+                            "steps": [
+                                {
+                                    "color": "green",
+                                    "value": null
+                                }
+                            ]
+                        }
+                    },
+                    "overrides": []
+                },
+                "options": {
+                    "legend": {
+                        "calcs": [
+                            "lastNotNull",
+                            "mean"
+                        ],
+                        "displayMode": "table",
+                        "placement": "bottom"
+                    },
+                    "tooltip": {
+                        "mode": "multi"
+                    }
+                },
+                "targets": [
+                    {
+                        "expr": "avg(DCGM_FI_DEV_POWER_USAGE{instance=~\"$instance\",gpu=~\"$gpu\",UUID!~\"MIG.*\"})",
+                        "refId": "A",
+                        "legendFormat": "GPU {{gpu}}"
+                    }
+                ]
+            },
+            {
+                "id": 6,
+                "title": "GPU Temperature",
+                "type": "timeseries",
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 12,
+                    "y": 12
+                },
+                "datasource": {
+                    "type": "prometheus",
+                    "uid": "otel-prometheus"
+                },
+                "fieldConfig": {
+                    "defaults": {
+                        "mappings": [],
+                        "unit": "celsius",
+                        "thresholds": {
+                            "mode": "off",
+                            "steps": [
+                                {
+                                    "color": "green",
+                                    "value": null
+                                },
+                                {
+                                    "color": "#EAB839",
+                                    "value": 75
+                                },
+                                {
+                                    "color": "red",
+                                    "value": 85
+                                }
+                            ]
+                        }
+                    },
+                    "overrides": []
+                },
+                "options": {
+                    "legend": {
+                        "calcs": [
+                            "lastNotNull",
+                            "mean"
+                        ],
+                        "displayMode": "table",
+                        "placement": "bottom"
+                    },
+                    "tooltip": {
+                        "mode": "multi"
+                    }
+                },
+                "targets": [
+                    {
+                        "expr": "avg(DCGM_FI_DEV_GPU_TEMP{instance=~\"$instance\",gpu=~\"$gpu\",UUID!~\"MIG.*\"})",
+                        "refId": "A",
+                        "legendFormat": "GPU {{gpu}}"
+                    }
+                ]
+            },
+            {
+                "id": 7,
+                "title": "Memory Utilization (%)",
+                "type": "timeseries",
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 0,
+                    "y": 20
+                },
+                "datasource": {
+                    "type": "prometheus",
+                    "uid": "otel-prometheus"
+                },
+                "fieldConfig": {
+                    "defaults": {
+                        "unit": "percent",
+                        "min": 0,
+                        "max": 100,
+                        "thresholds": {
+                            "mode": "off",
+                            "steps": [
+                                {
+                                    "color": "green",
+                                    "value": null
+                                }
+                            ]
+                        }
+                    },
+                    "overrides": []
+                },
+                "options": {
+                    "legend": {
+                        "displayMode": "table",
+                        "placement": "bottom",
+                        "calcs": [
+                            "lastNotNull",
+                            "mean"
+                        ]
+                    },
+                    "tooltip": {
+                        "mode": "multi"
+                    }
+                },
+                "targets": [
+                    {
+                        "expr": "100 * avg(DCGM_FI_DEV_FB_USED{instance=~\"$instance\",gpu=~\"$gpu\",UUID!~\"MIG.*\",exported_pod=~\".+\"}) / ignoring(gpu) group_left() label_replace(kube_node_labels{label_nvidia_com_gpu_memory!\"\"}, \"Hostname\", \"$1\", \"node\", \"(.*)\")",
+                        "refId": "A",
+                        "legendFormat": "GPU {{gpu}}"
+                    }
+                ]
+            },
+            {
+                "id": 8,
+                "title": "Power Utilization (%)",
+                "type": "timeseries",
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 12,
+                    "y": 20
+                },
+                "datasource": {
+                    "type": "prometheus",
+                    "uid": "otel-prometheus"
+                },
+                "fieldConfig": {
+                    "defaults": {
+                        "unit": "percent",
+                        "min": 0,
+                        "max": 120,
+                        "thresholds": {
+                            "mode": "off",
+                            "steps": [
+                                {
+                                    "color": "green",
+                                    "value": null
+                                }
+                            ]
+                        }
+                    },
+                    "overrides": []
+                },
+                "options": {
+                    "legend": {
+                        "displayMode": "table",
+                        "placement": "bottom",
+                        "calcs": [
+                            "lastNotNull",
+                            "mean"
+                        ]
+                    },
+                    "tooltip": {
+                        "mode": "multi"
+                    }
+                },
+                "targets": [
+                    {
+                        "expr": "100 * avg(DCGM_FI_DEV_POWER_USAGE{instance=~\"$instance\",gpu=~\"$gpu\",UUID!~\"MIG.*\"}) / avg(DCGM_FI_DEV_POWER_MGMT_LIMIT_MAX{instance=~\"$instance\",gpu=~\"$gpu\",UUID!~\"MIG.*\"})",
+                        "refId": "A",
+                        "legendFormat": "GPU {{gpu}}"
+                    }
+                ]
+            }
+        ]
+    }

@@ -1,0 +1,20 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ocp-injected-certs
+  namespace: private-ai-demo
+  labels:
+    config.openshift.io/inject-trusted-cabundle: "true"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: grafana-proxy
+  namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/name: grafana-proxy
+    app.kubernetes.io/part-of: observability
+type: Opaque
+data:
+  session_secret: mFv7iR53JVEIHij8ZCuZqcBLRomG5pAMKnVKI7fuC+c=

@@ -8,28 +8,82 @@ metadata:
     dashboards: "grafana"
     app.kubernetes.io/part-of: observability
 spec:
+  serviceAccount:
+    metadata:
+      annotations:
+        serviceaccounts.openshift.io/oauth-redirectreference.primary: '{"kind":"OAuthRedirectReference","apiVersion":"v1","reference":{"kind":"Route","name":"grafana"}}'
   config:
     log:
       mode: "console"
     auth:
-      disable_login_form: "true"
+      disable_login_form: "false"
+      disable_signout_menu: "true"
+    auth.proxy:
+      enabled: "true"
+      enable_login_token: "true"
+      header_name: "X-Forwarded-User"
+      header_property: "username"
     auth.anonymous:
       enabled: "false"
-    auth.generic_oauth:
-      enabled: "true"
-      name: "OpenShift OAuth"
-      allow_sign_up: "true"
-      client_id: "grafana-private-ai-demo"
-      client_secret: "f4824a7d5c4948c6815f582ad3e49c9a"
-      scopes: "user:info user:check-access"
-      auth_url: "https://oauth-openshift.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com/oauth/authorize"
-      token_url: "https://oauth-openshift.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com/oauth/token"
-      api_url: "https://oauth-openshift.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com/apis/user.openshift.io/v1/users/~"
-      login_attribute_path: "metadata.name"
-      groups_attribute_path: "groups"
-      role_attribute_path: "contains(groups[*], 'system:cluster-admins') && 'Admin' || 'Viewer'"
-      use_pkce: "false"
-      tls_skip_verify_insecure: "false"
+  deployment:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: grafana-proxy
+              image: quay.io/openshift/origin-oauth-proxy:4.16
+              imagePullPolicy: IfNotPresent
+              args:
+                - '-provider=openshift'
+                - '-pass-basic-auth=false'
+                - '-https-address=:9091'
+                - '-http-address='
+                - '-email-domain=*'
+                - '-upstream=http://localhost:3000'
+                - '-openshift-sar={"resource": "namespaces", "verb": "get"}'
+                - '-openshift-delegate-urls={"/": {"resource": "namespaces", "verb": "get"}}'
+                - '-tls-cert=/etc/tls/private/tls.crt'
+                - '-tls-key=/etc/tls/private/tls.key'
+                - '-client-secret-file=/var/run/secrets/kubernetes.io/serviceaccount/token'
+                - '-cookie-secret-file=/etc/proxy/secrets/session_secret'
+                - '-openshift-service-account=grafana-sa'
+                - '-openshift-ca=/etc/pki/tls/cert.pem'
+                - '-openshift-ca=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt'
+                - '-openshift-ca=/etc/proxy/certs/ca-bundle.crt'
+                - '-skip-auth-regex=^/metrics'
+              ports:
+                - containerPort: 9091
+                  name: https
+              volumeMounts:
+                - mountPath: /etc/tls/private
+                  name: grafana-tls
+                  readOnly: true
+                - mountPath: /etc/proxy/secrets
+                  name: grafana-proxy
+                  readOnly: true
+                - mountPath: /etc/proxy/certs
+                  name: ocp-injected-certs
+                  readOnly: true
+          volumes:
+            - name: grafana-tls
+              secret:
+                secretName: grafana-tls
+            - name: grafana-proxy
+              secret:
+                secretName: grafana-proxy
+            - name: ocp-injected-certs
+              configMap:
+                name: ocp-injected-certs
+  service:
+    metadata:
+      annotations:
+        service.beta.openshift.io/serving-cert-secret-name: grafana-tls
+    spec:
+      ports:
+        - name: https
+          port: 9091
+          protocol: TCP
+          targetPort: https
 ---
 apiVersion: route.openshift.io/v1
 kind: Route
@@ -42,7 +96,7 @@ spec:
     kind: Service
     name: grafana-service
   port:
-    targetPort: grafana
+    targetPort: https
   tls:
-    termination: edge
+    termination: reencrypt
     insecureEdgeTerminationPolicy: Redirect
