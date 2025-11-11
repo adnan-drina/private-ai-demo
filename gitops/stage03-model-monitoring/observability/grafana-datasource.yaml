@@ -3,22 +3,24 @@ apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaDatasource
 metadata:
   name: prometheus-datasource
-  namespace: grafana-system
+  namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/part-of: observability
 spec:
   instanceSelector:
     matchLabels:
       dashboards: "grafana"
   datasource:
-    name: Prometheus
+    name: OTEL Prometheus
     type: prometheus
-    uid: prometheus
+    uid: otel-prometheus
     access: proxy
     url: https://thanos-querier.openshift-monitoring.svc.cluster.local:9091
     isDefault: true
-    jsonData:
-      tlsSkipVerify: true
-      timeInterval: "30s"
-      httpHeaderName1: "Authorization"
-    secureJsonData:
-      httpHeaderValue1: "Bearer <SERVICE_ACCOUNT_TOKEN>"
     editable: false
+    jsonData:
+      httpHeaderName1: Authorization
+      tlsSkipVerify: true
+      timeInterval: 30s
+    secureJsonData:
+      httpHeaderValue1: "Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6IndLUmU0VS00a0NBbUMyQ3BNQnBLVzdOQk1tcjVxLTJfTjM3TzNqcUN1cG8ifQ.eyJpc3MiOiJrdWJlcm5ldGVzL3NlcnZpY2VhY2NvdW50Iiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9uYW1lc3BhY2UiOiJwcml2YXRlLWFpLWRlbW8iLCJrdWJlcm5ldGVzLmlvL3NlcnZpY2VhY2NvdW50L3NlY3JldC5uYW1lIjoiZ3JhZmFuYS1zYS10b2tlbiIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VydmljZS1hY2NvdW50Lm5hbWUiOiJncmFmYW5hLXNhIiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9zZXJ2aWNlLWFjY291bnQudWlkIjoiYzE0NDNjYzEtYzMxYi00N2ExLTlkMTQtNjVhYmVjMzMzYWM2Iiwic3ViIjoic3lzdGVtOnNlcnZpY2VhY2NvdW50OnByaXZhdGUtYWktZGVtbzpncmFmYW5hLXNhIn0.rCF68ulLhn5yMFLxHz2T_0nkUt3yBS7QkP5PPyOBIwr29GoQPoO8YKVr1Nn0xmuxoRwsk6GoOhuTOo2Bz0ywo5dT2PY35AW2URKTf2rO7K_s1gzn64h6UYcURvkO7RJ23eX4c2Dx01kumXxa7EapiXMGucXowl1zxe5uXX0sFeAHKadKUj8ff9Z1sKN-DWDUo2BjerhOeU6SIdNoCil3f7WxThLFPG-azQK_Ty2C70SzF4aG2dAPQjT2Oyl1i6sMpl575nO6F5vvFdUzxELJLKTLWr_sQy7929wD65PcL7py6oh0CuYhYXn9BnEweEYGm7YysGnseFzqKRTyrs0qaH2l1dXTQYALG1YHzFRUOuoj24_OJGMl5qL9iY1XwVe3L7qYNVXMzBJwaP6-FHGc6y6iRNmG3sNVhIzMc5a_LXpqG7IyGQyPzyEcwhgcn7aHUy_nhgOKXWzL0cItUsPmdAfJckjeh5miBsM98_sF9EGuLiz_2ydCOMGh3uXM39_tggU0uhjqJ6k0uOo9q1kaXh2m4RSk9yt5Dgp14XSmRsv9StROj9S7C4D4PUaCmqaBgIwvCJVRoAQblSZ_cWePQS5S6TXbsMVwnIuidPtNq0aFkljeQ2UqqNmSmcRloToCAMKWvkjwLFJo5_yiobSrM7j1DCvWgT4Eq68kp-raYNI"

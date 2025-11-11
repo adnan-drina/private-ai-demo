@@ -10,7 +10,7 @@ spec:
   project: stage03-model-monitoring # Use the dedicated AppProject
   source:
     repoURL: https://github.com/adnan-drina/private-ai-demo.git # Will be updated dynamically
-    targetRevision: feature/stage2-implementation
+    targetRevision: main
     path: gitops/stage03-model-monitoring # Path to Stage 03 manifests
   destination:
     server: https://kubernetes.default.svc

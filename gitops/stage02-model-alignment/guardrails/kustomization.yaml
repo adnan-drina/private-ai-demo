@@ -1,0 +1,16 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - guardrails-serviceaccount.yaml
+  - guardrails-configmap.yaml
+  - guardrails-orchestrator.yaml
+  - guardrails-route.yaml
+
+commonLabels:
+  app.kubernetes.io/name: guardrails-orchestrator
+  app.kubernetes.io/part-of: private-ai-demo
+  stage: "02"
+
+

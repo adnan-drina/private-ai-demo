@@ -1,0 +1,22 @@
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: guidellm-reports
+  namespace: private-ai-demo
+  labels:
+    app: guidellm-reports
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  to:
+    kind: Service
+    name: guidellm-reports
+    weight: 100
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None
+

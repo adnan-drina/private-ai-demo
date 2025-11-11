@@ -95,12 +95,11 @@ Full end-to-end MLOps pipeline for Mistral 24B model serving with quantized and 
 
 ### 3. ImageStreams Cleanup ✅
 **Problem**: Empty ImageStreams (pipelines push to Quay, not internal registry)  
-**Solution**: Archived unused ImageStreams  
+**Solution**: Removed unused ImageStreams from GitOps  
 **Result**: Cleaner GitOps structure  
 **Files Changed**:
-- Moved `imagestreams/` → `archive/imagestreams/`
-- Removed from `serving/kustomization.yaml`
-- Updated `deploy.sh` to remove internal-registry secret creation
+- Deleted `gitops/stage01-model-serving/serving/archive/imagestreams/`
+- Removed references in deployment scripts and documentation
 
 ### 4. GPU Quota Issue Fix ✅
 **Problem**: Multiple failed revisions causing GPU quota exhaustion (6+4 > 8)  
@@ -126,11 +125,11 @@ gitops/stage01-model-serving/
 │   ├── network-policy/            # Model Registry access
 │   ├── model-registry/            # ConfigMap for pipelines
 │   ├── pipelines/                 # Tekton Tasks & Pipelines
-│   │   ├── 00-rbac/
-│   │   ├── active/
-│   │   │   ├── 01-tasks/          # build-runtime, download-model, upload-to-minio, register-model
-│   │   │   ├── 02-pipeline/       # pipeline-model-import
-│   │   │   └── 03-pipelineruns/   # mistral-full, mistral-quantized
+│   │   ├── 00-rbac/               # ServiceAccounts, Roles, RoleBindings
+│   │   └── active/
+│   │       ├── 01-tasks/          # download-model, upload-to-minio, build-runtime, register-model
+│   │       ├── 02-pipeline/       # pipeline-model-import & testing pipeline charts
+│   │       └── 03-pipelineruns/   # mistral-full, mistral-quantized PipelineRuns
 │   ├── vllm/                      # InferenceServices & ServingRuntime
 │   │   ├── servingruntime-vllm-cuda.yaml
 │   │   ├── pvc-mistral-24b.yaml
@@ -138,9 +137,7 @@ gitops/stage01-model-serving/
 │   │   ├── inferenceservice-mistral-24b-quantized.yaml
 │   │   ├── virtualservice-*.yaml
 │   │   └── destinationrule-*.yaml
-│   ├── model-serving-testing/     # Jupyter notebooks for validation
-│   └── archive/                   # Archived/unused manifests
-│       └── imagestreams/          # Empty ImageStreams (not used)
+│   └── model-serving-testing/     # Jupyter notebooks for validation
 ```
 
 ---

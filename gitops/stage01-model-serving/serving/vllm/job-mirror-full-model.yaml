@@ -30,6 +30,7 @@ metadata:
   labels:
     app: model-mirror
     model: mistral-24b-full
+    app.kubernetes.io/part-of: serving
   annotations:
     argocd.argoproj.io/sync-options: "Prune=false"
     description: "One-time Job to populate PVC with full model from MinIO"
@@ -42,6 +43,7 @@ spec:
       labels:
         app: model-mirror
         model: mistral-24b-full
+        app.kubernetes.io/part-of: serving
     spec:
       restartPolicy: Never
       securityContext:

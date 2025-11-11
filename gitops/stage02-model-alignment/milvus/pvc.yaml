@@ -7,7 +7,7 @@ metadata:
     app: milvus
     app.kubernetes.io/name: milvus
     app.kubernetes.io/component: vector-database
-    app.kubernetes.io/part-of: rag
+    app.kubernetes.io/part-of: pipeline
     component: vector-db
 spec:
   accessModes:

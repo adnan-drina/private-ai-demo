@@ -1,202 +1,160 @@
-# Stage 3: Model Monitoring with TrustyAI + OpenTelemetry + Llama Stack
+# Stage 3: Model Monitoring with TrustyAI, Tempo, OpenTelemetry, and Grafana
 
 ## Overview
 
-Stage 3 establishes comprehensive model monitoring, quality assessment, and observability. This stage integrates TrustyAI for model evaluation, Grafana for visualization, and OpenTelemetry for distributed tracing.
+Stage 3 equips the Private AI Demo with full observability, safety, and quality insights. It combines:
+
+- **TrustyAI** LMEvalJobs to benchmark the deployed models.
+- **TrustyAI Service** runtime to persist evaluation history and expose metrics.
+- **OpenTelemetry Collector** for OTLP ingest (metrics + traces).
+- **TempoStack** for distributed trace storage and search.
+- **Grafana** for dashboards that correlate metrics, benchmark results, and recent traces.
+
+```
+Llama Stack / vLLM pods
+        │ (OTLP gRPC/HTTP)
+        ▼
+OpenTelemetry Collector ──► Prometheus endpoint (metrics)
+        │
+        └──────────────► Tempo distributor (traces)
+                                │
+                                ▼
+                           Tempo Stack
+                                │
+                                ▼
+                      Grafana dashboards (metrics + traces)
+```
 
 ## Components
 
 ### Model Quality Assessment
-- **TrustyAI Operator** - Model evaluation framework
-- **LMEvalJobs** - Automated quality benchmarks
-  - `arc_easy` - Reasoning capability
-  - `hellaswag` - Commonsense reasoning
-  - `gsm8k` - Mathematical reasoning
-  - `truthfulqa_mc2` - Truthfulness assessment
+- TrustyAI Operator (enabled in Stage 0 DataScienceCluster)
+- TrustyAI Service (`trustyai-service` CR + PVC)
+- TrustyAI operator config map enabling LM-Eval online/code execution (GitOps managed)
+- LMEvalJobs: `arc_easy`, `hellaswag`, optional `gsm8k`, `truthfulqa_mc2`
+- LMEval metrics exporter CronJob → Pushgateway
+- Evaluation notebook for deeper analysis
+- **Service Mesh routing** – LM-Eval pods keep Istio sidecars but call the revision-private Knative services directly (`http://mistral-24b(-quantized)-predictor-00001-private.private-ai-demo.svc.cluster.local`). Update the suffix when a new revision becomes ready; no additional TLS overrides are required.
 
 ### Observability Stack
-- **Grafana** - Metrics visualization dashboards
-  - AI/ML Performance - Model Comparison
-  - Model Quality Assessment - Evaluation Results
-- **Prometheus** - Metrics collection and storage
-- **ServiceMonitors** - vLLM and Llama Stack metrics
-- **PodMonitors** - Container-level metrics
-- **OpenTelemetry Collector** - Distributed tracing
-
-### Analysis Tools
-- **Evaluation Notebook** - Interactive results analysis
+- **Operators (phase 1)** – see `gitops/stage03-model-monitoring/operators/`
+  - `grafana-operator.yaml`
+  - `otel-operator.yaml`
+  - `tempo-operator.yaml`
+- **Infrastructure (phase 2)**
+  - `otel-collector.yaml` – metrics pipeline → Prometheus endpoint (`:8889`), traces pipeline → Tempo (`tempo-distributor:4317`)
+  - `tempo-stack.yaml` – single-tenant Tempo deployment (local storage backend)
+  - `grafana-instance.yaml` – routed Grafana instance (namespace `private-ai-demo`)
+- Datasources: `grafana-datasource.yaml` (OTEL metrics), `grafana-datasource-tempo.yaml`
+- Dashboards: `grafana-dashboard-ai-metrics.yaml`, `grafana-dashboard-eval-results.yaml`, `grafana-dashboard-traces.yaml`
+  - Monitoring CRDs: `podmonitor.yaml`, `podmonitor-dcgm.yaml`, `pushgateway.yaml`
+- Metrics jobs: `trustyai/metrics/` CronJob pushing `lm_eval_*` to Pushgateway
+- Dashboard integration: `dashboard/odh-dashboard-config-patch.yaml` enables the **Model evaluations** navigation item by setting `disableLMEval: false` in the `OdhDashboardConfig` CR ([Red Hat guidance](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_cloud_service/1/html/managing_resources/customizing-the-dashboard#ref-dashboard-configuration-options_dashboard)).
+- 🔎 **Guardrails note**: Safety enforcement (GuardrailsOrchestrator, detectors, and their secrets) lives in Stage 2 alongside ingestion/serving so responses can be filtered before hitting observability. Stage 3 only consumes the guardrails telemetry exposed via OTEL.
 
 ## Prerequisites
 
-- **Stage 1 & 2** deployed and validated
-- Models serving and processing queries
-- TrustyAI operator enabled in DataScienceCluster
+- Stage 1 & 2 must be operational (models serving traffic)
+- Stage 0 bootstrap already enabled **User Workload Monitoring**
+- Cluster-admin permissions to install operators
+- MinIO credentials available in `.env` (used to provision Tempo object storage bucket + secret)
 
-## Deployment
+## Deployment & Validation
 
 ```bash
-# Deploy all Stage 3 components
+# Deploy Stage 3 resources via GitOps
 ./deploy.sh
 
-# Validate deployment
+# Optional sanity checks
 ./validate.sh
 ```
 
-## Verification
+The deploy script applies operator subscriptions (Grafana, OpenTelemetry, Tempo), waits for the CRDs to appear, and only then applies the TrustyAI, observability, and notebook overlays to avoid race conditions.
+It also provisions the Tempo trace bucket (via a short-lived `mc` pod) and generates the `tempo-storage` secret from the MinIO credentials stored in `.env`, so no manual steps are required.
 
-Monitor deployment:
+After deployment use the helper scripts to create runtime secrets from `.env` (for TrustyAI + Guardrails) and then synchronise GitOps. Useful commands:
 
 ```bash
-# Check TrustyAI LMEvalJobs
 oc get lmevaljob -n private-ai-demo
-
-# Monitor evaluation progress
-oc get pods -n private-ai-demo -l app=lm-eval
-
-# Check Grafana
-oc get deployment grafana-deployment -n grafana-system
-oc get route grafana-route -n grafana-system
-
-# Access Grafana dashboard
-GRAFANA_URL=$(oc get route grafana-route -n grafana-system -o jsonpath='{.spec.host}')
-echo "https://${GRAFANA_URL}"
+oc get deployment otel-collector-collector -n private-ai-demo
+oc get pods -n private-ai-demo -l app.kubernetes.io/name=tempo
+oc get route grafana -n private-ai-demo -o jsonpath='{.spec.host}'
 ```
-
-## Model Evaluation
-
-### TrustyAI LMEvalJobs
-
-Evaluations run automatically for both models:
-- **Mistral 24B Quantized** - Evaluate W4A16 quantized model
-- **Mistral 24B Full** - Evaluate FP16 full precision model
-
-Each evaluation includes:
-- 4 standard benchmark tasks
-- 100 samples per task (configurable)
-- Results published to Model Registry
-- Metrics exposed to Prometheus
-
-### Evaluation Metrics
-
-| Task | Measures | Higher is Better |
-|------|----------|------------------|
-| arc_easy | Reasoning | Yes |
-| hellaswag | Common sense | Yes |
-| gsm8k | Math | Yes |
-| truthfulqa_mc2 | Truthfulness | Yes |
-
-### Results Location
-
-Evaluation results are stored in multiple locations:
-1. **Model Registry** - As model version properties
-2. **Prometheus** - As time-series metrics
-3. **Grafana** - Visualized in dashboards
-4. **Notebook** - For detailed analysis
 
 ## Grafana Dashboards
 
-### AI/ML Performance - Model Comparison
+- **AI/ML Performance** – GPU utilisation, TTFT, throughput.
+- **Model Quality Assessment** – TrustyAI benchmark scores.
+- **Tempo Trace Explorer** – recent Llama Stack traces with service map integration.
 
-Tracks runtime performance metrics:
-- **GPU Utilization** - Compute usage per model
-- **GPU Memory** - Memory consumption
-- **TTFT** (Time To First Token) - P50, P90, P99 latencies
-- **Throughput** - Tokens per second
-- **Request Rate** - Queries per second
-
-### Model Quality Assessment
-
-Displays evaluation results:
-- **Accuracy Scores** - Per benchmark task
-- **Model Comparison** - Quantized vs Full precision
-- **Delta Analysis** - Quality trade-offs
-- **Trend Analysis** - Quality over time
-
-Access dashboards:
-```bash
-# Get Grafana URL
-oc get route grafana-route -n grafana-system -o jsonpath='{.spec.host}'
-
-# Login with OpenShift credentials
-# Navigate to: Dashboards → AI/ML Performance
-```
-
-## OpenTelemetry Integration
-
-Llama Stack exports traces to OpenTelemetry Collector:
-- Request tracing (e2e latency)
-- Component timing (embedding, retrieval, inference)
-- Error tracking
-- Resource utilization
-
-## Quality vs Performance Trade-offs
-
-Compare quantized vs full precision models:
+Access Grafana:
 
 ```bash
-# Access evaluation notebook
-# Navigate to: OpenShift AI → Workbenches → rag-testing
-# Open: 02-eval-results.ipynb
+GRAFANA_URL=$(oc get route grafana -n private-ai-demo -o jsonpath='{.spec.host}')
+echo "https://${GRAFANA_URL}"
 ```
 
-Expected results:
-- **Quantized**: ~1-3% accuracy drop, 5x cost savings
-- **Full**: Highest accuracy, 5x higher cost
+## OpenTelemetry + Tempo
+
+- OTLP gRPC (`:4317`) and HTTP (`:4318`) receivers enabled.
+- Metrics pipeline exports to the collector’s Prometheus endpoint.
+- Trace pipeline exports to `tempo-distributor.private-ai-demo.svc:4317` (insecure gRPC).
+- Grafana Tempo datasource points at `tempo-query-frontend.private-ai-demo.svc:3100`.
+
+## TrustyAI LMEval and Service Runtime
+
+- Evaluates quantised and full precision Mistral models.
+- Persists evaluation artifacts to the TrustyAI Service PVC (10Gi default).
+- Benchmarks: four tasks × configurable sample count (default 100).
+- Outputs:
+  1. Model Registry annotations
+  2. Prometheus metrics (`lm_eval_*` exporter, `trustyai_service_*`)
+  3. Grafana dashboards
+  4. Evaluation notebook
 
 ## Troubleshooting
 
-### LMEvalJobs Not Starting
-- Check TrustyAI operator: `oc get csv -n redhat-ods-operator | grep trustyai`
-- Verify DSC config: `oc get datasciencecluster -o yaml | grep trustyai`
-- Check job status: `oc describe lmevaljob <name> -n private-ai-demo`
+| Issue | Checks |
+|-------|--------|
+| OTEL collector unhealthy | `oc logs deployment/otel-collector-collector -n private-ai-demo` |
+| Tempo pods not ready | `oc get pods -n private-ai-demo | grep tempo` |
+| Grafana panels blank | `oc get grafanadatasource -n private-ai-demo`; `oc exec -n private-ai-demo deployment/otel-collector-collector -- curl -s http://localhost:8889/metrics | head` |
+| Traces missing | `oc logs -n private-ai-demo deployment/tempo-query-frontend` |
+| LMEval jobs stalled | `oc get csv -n redhat-ods-operator | grep trustyai`; `oc describe lmevaljob <name> -n private-ai-demo` |
 
-### Evaluations Running Too Long
-- Reduce sample count in LMEvalJob spec
-- Use fewer benchmark tasks
-- Check model availability: `oc get inferenceservice -n private-ai-demo`
-
-### Grafana Dashboards Empty
-- Verify ServiceMonitors: `oc get servicemonitor -n private-ai-demo`
-- Check Prometheus targets: Navigate to Prometheus → Status → Targets
-- Verify metrics endpoint: `curl <vllm-pod>:8000/metrics`
-
-### Missing Evaluation Results
-- Check LMEvalJob completion: `oc get lmevaljob -n private-ai-demo`
-- Verify Prometheus scraping: `oc logs -n grafana-system <prometheus-pod>`
-- Check Model Registry: Results should appear as model version properties
-
-## GitOps Structure
+## GitOps Layout
 
 ```
-gitops-new/stage03-model-monitoring/
-├── trustyai/          # LMEvalJob CRs for both models
-├── observability/     # Grafana, ServiceMonitors, PodMonitors
-└── notebooks/         # Evaluation results notebook
+stage3-model-monitoring/
+├── operators/
+│   ├── grafana-operator.yaml
+│   ├── otel-operator.yaml
+│   └── tempo-operator.yaml
+├── observability/
+│   ├── grafana-*.yaml
+│   ├── otel-collector.yaml
+│   └── tempo-stack.yaml
+├── trustyai/
+├── dashboard/
+│   └── odh-dashboard-config-patch.yaml
+└── notebooks/
 ```
 
-## Metrics Reference
+## Metrics & Traces Reference
 
-### vLLM Metrics
-- `vllm:num_requests_running` - Active requests
-- `vllm:gpu_cache_usage_perc` - KV cache utilization
-- `vllm:time_to_first_token_seconds` - TTFT latency
-- `vllm:time_per_output_token_seconds` - Generation speed
-
-### TrustyAI Metrics
-- `lm_eval_accuracy` - Task accuracy score
-- `lm_eval_completion_time` - Evaluation duration
-- `lm_eval_samples_evaluated` - Sample count
+- `vllm_time_to_first_token_seconds`, `vllm_tokens_per_second`
+- `lm_eval_accuracy`, `lm_eval_completion_time`
+- Tempo Trace Explorer → correlate retrieval vs inference latency
 
 ## Next Steps
 
-Once Stage 3 is validated:
-1. Review evaluation results in Grafana
-2. Analyze quality/performance trade-offs
-3. Proceed to **Stage 4: Model Integration with MCP**
+1. Monitor dashboards for performance and quality drift.
+2. Use Tempo traces to diagnose RAG latency and errors.
+3. Proceed to Stage 4 (MCP integration) once observability is validated.
 
 ## Documentation
 
-- [TrustyAI Documentation](https://trustyai-explainability.github.io/)
-- [Red Hat Monitoring Guide](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/2.24/html/monitoring_data_science_models/)
-- [Grafana Dashboards](https://grafana.com/docs/)
+- [TrustyAI](https://trustyai-explainability.github.io/)
+- [Tempo Operator](https://grafana.com/docs/tempo/latest/operations/operator/)
 - [OpenTelemetry](https://opentelemetry.io/docs/)
+- [Grafana](https://grafana.com/docs/)

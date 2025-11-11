@@ -5,29 +5,34 @@ metadata:
   name: mistral-24b
   namespace: private-ai-demo
   labels:
-    app.kubernetes.io/part-of: vllm-serving
+    app.kubernetes.io/part-of: serving
     app.kubernetes.io/component: inference
     app.kubernetes.io/name: mistral-24b
     app.openshift.io/runtime: python
     opendatahub.io/dashboard: "true"
     modelregistry.opendatahub.io/name: private-ai-model-registry
     modelregistry.opendatahub.io/registered-model-name: "Mistral-Small-24B-Instruct"
+    modelregistry.opendatahub.io/registered-model-id: "2"
     modelregistry.opendatahub.io/model-version: "full-fp16"
+    modelregistry.opendatahub.io/model-version-id: "4"
   annotations:
     argocd.argoproj.io/sync-wave: "5"
     app.openshift.io/connects-to: '[{"apiVersion":"apps/v1","kind":"Deployment","name":"llama-stack"}]'
     openshift.io/display-name: "Mistral 24B Full"
     serving.kserve.io/deploymentMode: "Serverless"
     description: "Mistral Small 24B Instruct full precision - 4 GPU (weights in PVC)"
-    security.opendatahub.io/enable-auth: "true"
-    serving.knative.openshift.io/enablePassthrough: "true"
-    sidecar.istio.io/inject: "true"
-    sidecar.istio.io/rewriteAppHTTPProbers: "true"
+    opendatahub.io/accelerator-profile: nvidia-l4-4gpu
+    opendatahub.io/accelerator-name: nvidia-l4-4gpu
     autoscaling.knative.dev/min-scale: "1"
     autoscaling.knative.dev/target: "4"
     autoscaling.knative.dev/scale-to-zero-pod-retention-period: "60m"
+    serving.knative.openshift.io/enablePassthrough: "true"
+    serving.kserve.io/enablePrometheusScraping: "true"
 spec:
   predictor:
+    logger:
+      mode: all
+      url: http://trustyai-service.private-ai-demo.svc.cluster.local
     containerConcurrency: 32  # Phase 1 optimization: match max_num_seqs (was 4)
     serviceAccountName: ai-workload-sa
     automountServiceAccountToken: false
@@ -38,7 +43,7 @@ spec:
         name: vLLM
       name: ""
       runtime: vllm-cuda-runtime  # Shared runtime for all vLLM models
-      # PVC storage (Red Hat best practice for large models to avoid node ephemeral-storage pressure)
+      # PVC storage populated via mirror job to avoid node ephemeral pressure
       storageUri: pvc://mistral-24b-pvc/
       # Model-specific resources for 4-GPU full precision model
       resources:
@@ -46,17 +51,17 @@ spec:
           cpu: "16"
           memory: 80Gi
           nvidia.com/gpu: "4"
-          ephemeral-storage: "10Gi"  # PVC-backed: only vLLM runtime + cache needed
+          ephemeral-storage: "80Gi"
         limits:
           cpu: "32"
           memory: 80Gi
           nvidia.com/gpu: "4"
-          ephemeral-storage: "15Gi"
+          ephemeral-storage: "120Gi"
       # Model-specific vLLM args for Mistral Small 24B full precision (FP16)
       args:
         - --dtype=bfloat16                  # Use BF16 for better performance on L4 GPUs
         - --tensor-parallel-size=4          # Distribute across 4 GPUs
-        - --gpu-memory-utilization=0.85     # Conservative for 4-GPU setup
+        - --gpu-memory-utilization=0.85     # Validated setting from prior stable rollout
         - --max-model-len=32768             # Mistral Small supports 32K context
         - --max-num-seqs=24                  # Cap sequences to reduce multi-GPU stalls
         - --enable-chunked-prefill          # Performance optimization

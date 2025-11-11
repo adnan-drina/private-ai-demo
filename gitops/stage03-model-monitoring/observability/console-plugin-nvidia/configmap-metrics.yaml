@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: console-plugin-nvidia-gpu
+  namespace: nvidia-gpu-operator
+data:
+  dcgm-metrics.csv: |
+    DCGM_FI_DEV_GPU_UTIL, gauge, gpu utilization.
+    DCGM_FI_DEV_FB_USED, gauge, framebuffer memory used.
+    DCGM_FI_PROF_PIPE_TENSOR_ACTIVE, gauge, tensor core utilization.
+    DCGM_FI_PROF_GR_ENGINE_ACTIVE, gauge, graphics engine active.
+    DCGM_FI_DEV_MEM_COPY_UTIL, gauge, memory copy utilization.
+    DCGM_FI_DEV_ENC_UTIL, gauge, encoder utilization.
+    DCGM_FI_DEV_DEC_UTIL, gauge, decoder utilization.
+    DCGM_FI_DEV_POWER_USAGE, gauge, power usage.
+    DCGM_FI_DEV_POWER_MGMT_LIMIT_MAX, gauge, power management limit.
+    DCGM_FI_DEV_GPU_TEMP, gauge, gpu temperature.
+    DCGM_FI_DEV_SM_CLOCK, gauge, streaming multiprocessor clock.
+    DCGM_FI_DEV_MAX_SM_CLOCK, gauge, max streaming multiprocessor clock.
+    DCGM_FI_DEV_MEM_CLOCK, gauge, memory clock.
+    DCGM_FI_DEV_MAX_MEM_CLOCK, gauge, max memory clock.

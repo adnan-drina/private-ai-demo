@@ -1,0 +1,26 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: trustyai-service-operator-config
+  namespace: redhat-ods-applications
+  annotations:
+    opendatahub.io/managed: "false"
+data:
+  guardrails-built-in-detector-image: registry.redhat.io/rhoai/odh-built-in-detector-rhel9@sha256:05d6672d4276aa267b76bae2902feff05fc79c61dd670f52c5792cbd132bffd5
+  guardrails-orchestrator-image: registry.redhat.io/rhoai/odh-fms-guardrails-orchestrator-rhel9@sha256:15528ff509f953b050b235cff870199a9aae6ec8221019f260cb3c8a19efd34e
+  guardrails-sidecar-gateway-image: registry.redhat.io/rhoai/odh-trustyai-vllm-orchestrator-gateway-rhel9@sha256:7a5ca47490cd63ad4e9afcd476029a5ff7f3483ab3207e7baf1bd396f4d19c31
+  kServeServerless: disabled
+  lmes-allow-code-execution: "true"
+  lmes-allow-online: "true"
+  lmes-default-batch-size: "8"
+  lmes-default-timeout: "600"
+  lmes-detect-device: "true"
+  lmes-driver-image: registry.redhat.io/rhoai/odh-ta-lmes-driver-rhel9@sha256:6c0d0726f0acb117b831ba9484f7ce472b327db6ae0e04cb507f50de50979b36
+  lmes-image-pull-policy: Always
+  lmes-max-batch-size: "24"
+  lmes-pod-checking-interval: 10s
+  lmes-pod-image: registry.redhat.io/rhoai/odh-ta-lmes-job-rhel9@sha256:799535cf4a8393ed8423ea1cf8b33b4d8abdd01509af613e578fa88535ee6ec4
+  oauthProxyImage: registry.redhat.io/openshift4/ose-oauth-proxy-rhel9@sha256:c174c11374a52ddb7ecfa400bbd9fe0c0f46129bd27458991bec69237229ac7d
+  trustyaiOperatorImage: registry.redhat.io/rhoai/odh-trustyai-service-operator-rhel9@sha256:a5b3c1eae5e9055513d901541cec161a0aaf5d9a7f9827fa4f3ecc9a4667badb
+  trustyaiServiceImage: registry.redhat.io/rhoai/odh-trustyai-service-rhel9@sha256:4b94cca4bc4f5a7697ec567fce6ebf073afdc225f6286e1961fadd6151d92474

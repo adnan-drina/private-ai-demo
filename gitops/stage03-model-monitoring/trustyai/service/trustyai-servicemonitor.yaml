@@ -1,0 +1,22 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: trustyai-service
+  labels:
+    app.kubernetes.io/component: trustyai-monitoring
+    app.kubernetes.io/managed-by: gitops
+    observability.rh-ai/demo: "true"
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: trustyai-service
+  endpoints:
+    - port: http
+      path: /q/metrics
+      interval: 30s
+  namespaceSelector:
+    matchNames:
+      - private-ai-demo
+
+

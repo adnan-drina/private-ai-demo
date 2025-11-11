@@ -1,0 +1,122 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: guidellm-reports
+  namespace: private-ai-demo
+  labels:
+    app: guidellm-reports
+    app.kubernetes.io/name: guidellm-reports
+    app.kubernetes.io/component: web-server
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: guidellm-reports
+  template:
+    metadata:
+      labels:
+        app: guidellm-reports
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      
+      initContainers:
+      # Download reports from MinIO
+      - name: sync-minio-reports
+        image: quay.io/minio/mc:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "📦 Configuring MinIO client..."
+          mc alias set minio http://minio.model-storage.svc.cluster.local:9000 \
+            $MINIO_ACCESS_KEY $MINIO_SECRET_KEY --api S3v4
+          
+          echo "📥 Downloading reports from MinIO..."
+          mc cp --recursive minio/guidellm-results/ /usr/share/nginx/html/ || true
+          
+          echo "📋 Copying index.html..."
+          cp /config/index.html /usr/share/nginx/html/index.html
+          
+          echo "✅ Reports synced successfully"
+          ls -lh /usr/share/nginx/html/
+        env:
+        - name: HOME
+          value: "/tmp"
+        - name: MINIO_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: guidellm-s3-credentials
+              key: AWS_ACCESS_KEY_ID
+        - name: MINIO_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: guidellm-s3-credentials
+              key: AWS_SECRET_ACCESS_KEY
+        volumeMounts:
+        - name: index-html
+          mountPath: /config
+        - name: results
+          mountPath: /usr/share/nginx/html
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+      
+      containers:
+      - name: nginx
+        image: nginxinc/nginx-unprivileged:latest
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        volumeMounts:
+        - name: nginx-config
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
+          readOnly: true
+        - name: results
+          mountPath: /usr/share/nginx/html
+          readOnly: true
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          runAsNonRoot: true
+      
+      volumes:
+      - name: nginx-config
+        configMap:
+          name: guidellm-nginx-config
+      - name: index-html
+        configMap:
+          name: guidellm-index-html
+      - name: results
+        emptyDir: {}  # Synced from MinIO on pod start
+

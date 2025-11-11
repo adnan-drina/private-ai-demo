@@ -1,0 +1,113 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mirror-quantized-model-to-pvc
+  namespace: private-ai-demo
+  labels:
+    app: model-mirror
+    model: mistral-24b-quantized
+    app.kubernetes.io/part-of: serving
+  annotations:
+    argocd.argoproj.io/sync-options: "Prune=false"
+    description: "One-time Job to populate quantized PVC from MinIO"
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app: model-mirror
+        model: mistral-24b-quantized
+        app.kubernetes.io/part-of: serving
+    spec:
+      restartPolicy: Never
+      securityContext:
+        fsGroup: 1001130000
+      containers:
+      - name: mirror
+        image: quay.io/minio/mc:latest
+        command:
+          - /bin/sh
+          - -c
+          - |
+            set -e
+            echo "════════════════════════════════════════════════════════════"
+            echo "Mirroring Quantized Model from MinIO to PVC"
+            echo "════════════════════════════════════════════════════════════"
+            echo "Started at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo ""
+
+            export MC_CONFIG_DIR=/tmp/.mc
+            mkdir -p $MC_CONFIG_DIR
+
+            echo "Configuring MinIO client..."
+            mc alias set minio http://minio.model-storage.svc:9000 ${AWS_ACCESS_KEY_ID} ${AWS_SECRET_ACCESS_KEY}
+
+            echo ""
+            echo "Checking source..."
+            if ! mc ls minio/llm-models/Mistral-Small-24B-Instruct/quant-w4a16/ | head -5; then
+              echo "❌ ERROR: Source model not found in MinIO"
+              echo "   Expected: minio/llm-models/Mistral-Small-24B-Instruct/quant-w4a16/"
+              exit 1
+            fi
+
+            echo ""
+            echo "Checking destination PVC..."
+            if [ -f /mnt/models/config.json ]; then
+              echo "⚠️  WARNING: PVC already contains files. Using --overwrite flag."
+            else
+              echo "✅ PVC is empty or new. Proceeding with mirror."
+            fi
+
+            echo ""
+            echo "════════════════════════════════════════════════════════════"
+            echo "Starting mirror operation..."
+            echo "Source: minio/llm-models/Mistral-Small-24B-Instruct/quant-w4a16/"
+            echo "Target: /mnt/models/"
+            echo "════════════════════════════════════════════════════════════"
+            echo ""
+
+            mc mirror --overwrite --summary minio/llm-models/Mistral-Small-24B-Instruct/quant-w4a16/ /mnt/models/
+
+            echo ""
+            echo "════════════════════════════════════════════════════════════"
+            echo "✅ Mirror Complete!"
+            echo "════════════════════════════════════════════════════════════"
+            echo "Finished at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo ""
+
+            echo "Verifying PVC contents:"
+            ls -lh /mnt/models/ | head -20
+            echo ""
+            echo "Total size:"
+            du -sh /mnt/models/
+            echo ""
+            echo "✅ PVC populated successfully with quantized model weights!"
+
+        env:
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: s3-credentials-kserve
+              key: AWS_ACCESS_KEY_ID
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: s3-credentials-kserve
+              key: AWS_SECRET_ACCESS_KEY
+        volumeMounts:
+        - name: model-storage
+          mountPath: /mnt/models
+        resources:
+          requests:
+            cpu: "1"
+            memory: 1Gi
+          limits:
+            cpu: "2"
+            memory: 2Gi
+      volumes:
+      - name: model-storage
+        persistentVolumeClaim:
+          claimName: mistral-24b-quantized-pvc
+

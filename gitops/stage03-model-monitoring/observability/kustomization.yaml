@@ -11,46 +11,42 @@ metadata:
 # Reference: https://github.com/rh-ai-quickstart/lls-observability
 #
 # Architecture:
-#   Applications → OTLP → OTEL Collector → Prometheus endpoint → Grafana
+#   Applications → OTLP → OTEL Collector → Prometheus endpoint + Tempo → Grafana
 #
-# Components:
-#   Phase 1: Operators
-#     - OpenTelemetry Operator (Red Hat)
-#     - Grafana Operator (Community)
-#
-#   Phase 2: Observability Infrastructure
-#     - OTEL Collector (minimal config, Prometheus exporter)
-#     - Grafana instance (Operator-managed)
-#     - GrafanaDatasource (OTEL Collector endpoint)
-#     - GrafanaDashboard (Llama Stack Overview)
-#     - PodMonitor (metrics collection)
+# Components (phase ordering):
+#   1. Operators: OpenTelemetry, Tempo, Grafana
+#   2. Infrastructure: OTEL Collector, Tempo Stack, Grafana instance, datasources, dashboards
+#   3. Metrics/Tracing integrations: PodMonitors, Pushgateway
 #
 # Prerequisites:
-#   - OpenShift User Workload Monitoring must be enabled (see deploy.sh)
-#   - Operators must be installed first (via deploy.sh)
-#
-# Deployment Order:
-#   1. Operators (otel-operator.yaml, grafana-operator.yaml)
-#   2. OTEL Collector (otel-collector.yaml)
-#   3. Grafana + Datasource + Dashboard
-#   4. PodMonitor
+#   - OpenShift User Workload Monitoring enabled (Stage 0)
+#   - Operators installed before infrastructure (deploy.sh)
 
 resources:
-  # Phase 1: Operators (deployed via deploy.sh, documented here for reference)
-  # - otel-operator.yaml
-  # - grafana-operator.yaml
-  
-  # Phase 2: Observability Infrastructure
-  - otel-collector.yaml              # OpenTelemetry Collector (minimal config)
-  - grafana-instance.yaml            # Grafana instance + Route
-  - grafana-datasource.yaml          # Datasource pointing to OTEL Collector
-  - grafana-dashboard.yaml           # Llama Stack Overview dashboard (basic)
-  - grafana-dashboard-enhanced.yaml  # Llama Stack Overview - Enhanced (15 panels)
-  - grafana-dashboard-ai-metrics.yaml # AI/ML Performance - vLLM & GPU (14 panels)
-  - grafana-dashboard-eval-results.yaml # TrustyAI Model Quality - Evaluation Results (9 panels)
-  - podmonitor.yaml                  # Metrics collection for Llama Stack
-  - pushgateway.yaml                 # Prometheus Pushgateway for batch job metrics (eval, benchmark)
+  # Observability infrastructure
+  - tempo-storage-secret.yaml
+  - tempo-stack.yaml
+  - otel-collector.yaml
+  - servicemonitor-otel-collector.yaml
+  - grafana-instance.yaml
+  - grafana-serviceaccount.yaml
+  - grafana-proxy-config.yaml
+  - grafana-proxy-rbac.yaml
+  - network-policy-grafana-operator.yaml
+  - grafana-datasource.yaml
+  - grafana-datasource-tempo.yaml
+  - grafana-dashboard-enhanced.yaml
+  - grafana-dashboard-ai-metrics.yaml
+  - grafana-dashboard-eval-results.yaml
+  - grafana-dashboard-traces.yaml
+  - grafana-dashboard-guidellm.yaml
+  - console-dashboard-nvidia.yaml
+  - console-plugin-nvidia
+  - podmonitor.yaml
+  - podmonitor-dcgm.yaml
+  - pushgateway.yaml
+  - otel-targetallocator-rbac.yaml
 
-# Note: Operators are installed separately via deploy.sh to ensure proper sequencing
-# All other components are deployed via Kustomize for full reproducibility
+# Operators are applied first (deploy.sh orchestrates sequencing).
+# Kustomize applies the infrastructure + dashboards in a single pass for reproducibility.
 

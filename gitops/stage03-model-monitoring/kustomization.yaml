@@ -2,11 +2,11 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: private-ai-demo
-
 # Common labels applied to all resources
+# Note: includeSelectors=false to avoid modifying immutable Deployment selectors
+# Labels are still applied to metadata and pod templates, just not to selectors
 labels:
-  - includeSelectors: true
+  - includeSelectors: false
     pairs:
       app.kubernetes.io/part-of: private-ai-demo
       stage: "03"
@@ -14,13 +14,22 @@ labels:
 
 # Resources in deployment order
 resources:
+  # Operators and prerequisites
+  - operators
+
   # 1. TrustyAI Operator (LMEvalJobs)
   - trustyai
   
   # 2. Observability (Grafana, Prometheus)
   - observability
+
+  # 3. GuideLLM Benchmarking
+  - guidellm
+
+  # 4. Dashboard configuration (enable LM Eval menu)
+  - dashboard
   
-  # 3. Evaluation results notebooks
+  # 5. Evaluation results notebooks
   - notebooks
 
 # Configuration for all resources

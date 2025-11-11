@@ -1,0 +1,36 @@
+---
+apiVersion: guardrails.opendatahub.io/v1alpha1
+kind: GuardrailsOrchestrator
+metadata:
+  name: llama-guardrails
+  labels:
+    app.kubernetes.io/component: guardrails
+    app.kubernetes.io/managed-by: gitops
+spec:
+  serviceAccountName: guardrails-workload-sa
+  workload:
+    replicas: 1
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: 1
+        memory: 1Gi
+  detectorsConfigMap: guardrails-config
+  defaultDetectors:
+    - id: regex_detector
+    - id: prompt_injection
+  routes:
+    enabled: true
+  telemetry:
+    otlp:
+      endpoint: otel-collector-collector.private-ai-demo.svc.cluster.local:4317
+      insecure: true
+  services:
+    - id: llama-stack
+      type: llama-stack
+      config:
+        base_url: http://llama-stack-service.private-ai-demo.svc:8321
+
+

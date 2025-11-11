@@ -10,7 +10,7 @@ metadata:
     app: llama-stack
     app.kubernetes.io/name: llama-stack
     app.kubernetes.io/component: rag-stack
-    app.kubernetes.io/part-of: private-ai-demo
+    app.kubernetes.io/part-of: serving
   annotations:
     # Prometheus metrics scraping
     prometheus.io/scrape: "true"

@@ -76,7 +76,7 @@ cp .env.template .env
 | `run-model-import.sh` | Start model import pipeline |
 | `run-model-testing.sh` | Start model testing pipeline (lm-eval + benchmarks) |
 
-**Archived**: Obsolete scripts from previous architecture iterations are in `docs/archive/stage1-scripts/` with documentation.
+Legacy helper scripts from earlier architecture iterations were removed during repository cleanup. Use `git log` if historical references are needed.
 
 ## Model Import Pipeline
 

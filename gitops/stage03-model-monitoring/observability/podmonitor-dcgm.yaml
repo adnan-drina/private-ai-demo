@@ -3,18 +3,20 @@ apiVersion: monitoring.coreos.com/v1
 kind: PodMonitor
 metadata:
   name: nvidia-dcgm-metrics
-  namespace: nvidia-gpu-operator
+  namespace: private-ai-demo
   labels:
     app.kubernetes.io/name: nvidia-dcgm-exporter
+    observability.rh-ai/demo: "true"
+    openshift.io/user-monitoring: "true"
 spec:
-  selector:
-    matchLabels:
-      app: nvidia-dcgm-exporter
   podMetricsEndpoints:
     - port: metrics
       path: /metrics
       interval: 30s
       scheme: http
+  selector:
+    matchLabels:
+      app: nvidia-dcgm-exporter
   namespaceSelector:
     matchNames:
       - nvidia-gpu-operator

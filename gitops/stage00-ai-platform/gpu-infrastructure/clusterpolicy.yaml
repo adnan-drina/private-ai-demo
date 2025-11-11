@@ -19,22 +19,48 @@ spec:
     enabled: true
   dcgmExporter:
     enabled: true
+    config:
+      name: console-plugin-nvidia-gpu
+    serviceMonitor:
+      enabled: true
   devicePlugin:
     enabled: true
   driver:
     enabled: true
-    kernelModuleType: auto
-    version: latest
+    upgradePolicy:
+      autoUpgrade: true
+      drain:
+        enable: false
+        deleteEmptyDir: false
+        force: false
+        timeoutSeconds: 300
+      maxParallelUpgrades: 1
+      maxUnavailable: 25%
+      podDeletion:
+        deleteEmptyDir: false
+        force: false
+        timeoutSeconds: 300
+      waitForCompletion:
+        timeoutSeconds: 0
+  gds:
+    enabled: false
   gfd:
     enabled: true
   mig:
     strategy: single
+  migManager:
+    enabled: true
   nodeStatusExporter:
     enabled: true
   operator:
     defaultRuntime: crio
     runtimeClass: nvidia
     use_ocp_driver_toolkit: true
+  sandboxDevicePlugin:
+    enabled: true
+  sandboxWorkloads:
+    enabled: false
+    defaultWorkload: container
   toolkit:
     enabled: true
     installDir: /usr/local/nvidia
@@ -42,4 +68,10 @@ spec:
     plugin:
       env:
       - name: WITH_WORKLOAD
-        value: "true"
+        value: "false"
+  vfioManager:
+    enabled: true
+  vgpuDeviceManager:
+    enabled: true
+  vgpuManager:
+    enabled: false

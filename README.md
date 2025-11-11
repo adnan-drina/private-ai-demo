@@ -311,7 +311,7 @@ tkn pr list -n private-ai-demo
 oc get lmevaljob -n private-ai-demo
 
 # Check Grafana
-oc get route grafana-route -n grafana-system
+oc get route grafana -n private-ai-demo
 ```
 
 ---

@@ -15,7 +15,7 @@ This document tracks technical debt and areas for improvement that were deferred
 **Proper Solution:**
 Rewrite Containerfile to run entirely as non-root user (1001) or use multi-stage build.
 
-**Files:** `gitops/stage01-model-serving/serving/pipelines/01-tasks/task-build-runtime-image.yaml`
+**Files:** `gitops/stage01-model-serving/serving/pipelines/active/01-tasks/task-build-runtime.yaml`
 
 **Effort:** 2-4 hours
 

@@ -3,65 +3,124 @@ apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaDashboard
 metadata:
   name: llama-stack-dashboard-enhanced
-  namespace: grafana-system
+  namespace: private-ai-demo
 spec:
   instanceSelector:
     matchLabels:
       dashboards: "grafana"
   json: |
     {
-      "title": "Llama Stack Overview - Enhanced",
-      "uid": "llama-stack-overview-enhanced",
+      "title": "Llama Stack Operations",
+      "uid": "llama-ops",
       "timezone": "browser",
-      "schemaVersion": 16,
+      "schemaVersion": 38,
       "version": 1,
       "refresh": "30s",
+      "tags": ["llama-stack", "operations"],
       "panels": [
         {
-          "gridPos": {"h": 6, "w": 8, "x": 0, "y": 0},
+          "gridPos": {"h": 6, "w": 6, "x": 0, "y": 0},
           "id": 1,
-          "title": "Pod Status",
-          "type": "stat",
+          "title": "Pod Readiness",
+          "type": "gauge",
+          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
           "targets": [
             {
-              "expr": "kube_pod_status_phase{namespace=\"private-ai-demo\"}",
               "refId": "A",
-              "legendFormat": "{{pod}} - {{phase}}"
+              "expr": "sum(kube_pod_status_ready{namespace=\"private-ai-demo\",condition=\"true\"}) / sum(kube_pod_status_ready{namespace=\"private-ai-demo\"}) * 100"
             }
           ],
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
-          "options": {
-            "graphMode": "none",
-            "colorMode": "background"
-          },
           "fieldConfig": {
             "defaults": {
-              "mappings": [
-                {"type": "value", "value": "1", "text": "Running", "color": "green"},
-                {"type": "value", "value": "0", "text": "Not Running", "color": "red"}
-              ]
+              "unit": "percent",
+              "min": 0,
+              "max": 100,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {"value": 0, "color": "red"},
+                  {"value": 80, "color": "yellow"},
+                  {"value": 95, "color": "green"}
+                ]
+              }
             }
+          },
+          "options": {
+            "showThresholdMarkers": true,
+            "showThresholdLabels": false
           }
         },
         {
-          "gridPos": {"h": 6, "w": 8, "x": 8, "y": 0},
+          "gridPos": {"h": 6, "w": 6, "x": 6, "y": 0},
           "id": 2,
-          "title": "Pod Restarts (Last 24h)",
+          "title": "Pod Restarts (24h)",
           "type": "stat",
+          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
           "targets": [
             {
-              "expr": "sum by (pod) (increase(kube_pod_container_status_restarts_total{namespace=\"private-ai-demo\"}[24h]))",
               "refId": "A",
+              "expr": "sum by (pod) (increase(kube_pod_container_status_restarts_total{namespace=\"private-ai-demo\"}[24h]))",
               "legendFormat": "{{pod}}"
             }
           ],
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "options": {
             "colorMode": "background",
-            "graphMode": "none"
+            "graphMode": "none",
+            "orientation": "vertical",
+            "reduceOptions": {"calcs": ["lastNotNull"], "values": false},
+            "textMode": "value_and_name"
+          }
+        },
+        {
+          "gridPos": {"h": 6, "w": 6, "x": 12, "y": 0},
+          "id": 3,
+          "title": "Request Success Rate",
+          "type": "gauge",
+          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum(rate(istio_requests_total{destination_service_namespace=\"private-ai-demo\",response_code=~\"2..\"}[5m])) / sum(rate(istio_requests_total{destination_service_namespace=\"private-ai-demo\"}[5m])) * 100"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "min": 0,
+              "max": 100,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {"value": 0, "color": "red"},
+                  {"value": 95, "color": "yellow"},
+                  {"value": 99, "color": "green"}
+                ]
+              }
+            }
+          },
+          "options": {"showThresholdMarkers": true}
+        },
+        {
+          "gridPos": {"h": 6, "w": 6, "x": 18, "y": 0},
+          "id": 4,
+          "title": "Error Rate",
+          "type": "stat",
+          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "(1 - sum(rate(istio_requests_total{destination_service_namespace=\"private-ai-demo\",response_code=~\"2..\"}[5m])) / sum(rate(istio_requests_total{destination_service_namespace=\"private-ai-demo\"}[5m]))) * 100"
+            }
+          ],
+          "options": {
+            "colorMode": "background",
+            "graphMode": "area",
+            "reduceOptions": {"calcs": ["lastNotNull"], "values": false},
+            "textMode": "value"
           },
           "fieldConfig": {
             "defaults": {
+              "unit": "percent",
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
@@ -74,328 +133,189 @@ spec:
           }
         },
         {
-          "gridPos": {"h": 6, "w": 8, "x": 16, "y": 0},
-          "id": 3,
-          "title": "Ready Pods",
-          "type": "gauge",
-          "targets": [
-            {
-              "expr": "sum(kube_pod_status_ready{namespace=\"private-ai-demo\", condition=\"true\"}) / sum(kube_pod_status_ready{namespace=\"private-ai-demo\"}) * 100",
-              "refId": "A"
-            }
-          ],
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
-          "options": {
-            "showThresholdLabels": false,
-            "showThresholdMarkers": true
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "percent",
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {"value": 0, "color": "red"},
-                  {"value": 50, "color": "yellow"},
-                  {"value": 90, "color": "green"}
-                ]
-              }
-            }
-          }
-        },
-        {
           "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6},
-          "id": 4,
+          "id": 5,
           "title": "CPU Usage by Pod",
           "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
           "targets": [
             {
-              "expr": "rate(container_cpu_usage_seconds_total{namespace=\"private-ai-demo\", container!=\"\", container!=\"POD\"}[5m]) * 100",
               "refId": "A",
+              "expr": "rate(container_cpu_usage_seconds_total{namespace=\"private-ai-demo\",container!=\"\",container!=\"POD\"}[5m]) * 100",
               "legendFormat": "{{pod}}/{{container}}"
             }
           ],
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "fieldConfig": {
             "defaults": {
               "unit": "percent",
-              "custom": {
-                "drawStyle": "line",
-                "fillOpacity": 10
-              }
+              "custom": {"drawStyle": "line", "fillOpacity": 10}
             }
           }
         },
         {
           "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6},
-          "id": 5,
+          "id": 6,
           "title": "Memory Usage by Pod",
           "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
           "targets": [
             {
-              "expr": "container_memory_working_set_bytes{namespace=\"private-ai-demo\", container!=\"\", container!=\"POD\"} / 1024 / 1024 / 1024",
               "refId": "A",
+              "expr": "container_memory_working_set_bytes{namespace=\"private-ai-demo\",container!=\"\",container!=\"POD\"} / 1024 / 1024 / 1024",
               "legendFormat": "{{pod}}/{{container}}"
             }
           ],
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "fieldConfig": {
             "defaults": {
-              "unit": "gibytes",
-              "custom": {
-                "drawStyle": "line",
-                "fillOpacity": 10
-              }
+              "unit": "mebibytes",
+              "custom": {"drawStyle": "line", "fillOpacity": 10}
             }
           }
         },
         {
           "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14},
-          "id": 6,
-          "title": "Network I/O (Receive)",
+          "id": 7,
+          "title": "GPU Utilization",
           "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
           "targets": [
             {
-              "expr": "rate(container_network_receive_bytes_total{namespace=\"private-ai-demo\"}[5m]) / 1024",
               "refId": "A",
-              "legendFormat": "{{pod}} RX"
+              "expr": "DCGM_FI_DEV_GPU_UTIL{namespace=\"private-ai-demo\"}",
+              "legendFormat": "{{pod}} GPU {{gpu}}"
             }
           ],
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "fieldConfig": {
             "defaults": {
-              "unit": "KBs",
-              "custom": {
-                "drawStyle": "line",
-                "fillOpacity": 10
-              }
+              "unit": "percent",
+              "custom": {"drawStyle": "line", "fillOpacity": 10}
             }
           }
         },
         {
           "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14},
-          "id": 7,
-          "title": "Network I/O (Transmit)",
+          "id": 8,
+          "title": "GPU Memory Usage",
           "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
           "targets": [
             {
-              "expr": "rate(container_network_transmit_bytes_total{namespace=\"private-ai-demo\"}[5m]) / 1024",
               "refId": "A",
-              "legendFormat": "{{pod}} TX"
+              "expr": "DCGM_FI_DEV_FB_USED{namespace=\"private-ai-demo\"} / 1024 / 1024",
+              "legendFormat": "{{pod}} GPU {{gpu}}"
             }
           ],
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "fieldConfig": {
             "defaults": {
-              "unit": "KBs",
-              "custom": {
-                "drawStyle": "line",
-                "fillOpacity": 10
-              }
+              "unit": "decmbytes",
+              "custom": {"drawStyle": "line", "fillOpacity": 10}
             }
           }
         },
         {
           "gridPos": {"h": 8, "w": 12, "x": 0, "y": 22},
-          "id": 8,
-          "title": "Disk I/O (Read)",
+          "id": 9,
+          "title": "Request Rate (req/s)",
           "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
           "targets": [
             {
-              "expr": "rate(container_fs_reads_bytes_total{namespace=\"private-ai-demo\", container!=\"\"}[5m]) / 1024 / 1024",
               "refId": "A",
-              "legendFormat": "{{pod}}"
+              "expr": "sum(rate(istio_requests_total{destination_service_namespace=\"private-ai-demo\",destination_service=~\".*predictor.*\"}[5m]))",
+              "legendFormat": "All predictors"
             }
           ],
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "fieldConfig": {
             "defaults": {
-              "unit": "MBs",
-              "custom": {
-                "drawStyle": "line",
-                "fillOpacity": 10
-              }
+              "unit": "reqps",
+              "custom": {"drawStyle": "line", "fillOpacity": 20}
             }
           }
         },
         {
           "gridPos": {"h": 8, "w": 12, "x": 12, "y": 22},
-          "id": 9,
-          "title": "Disk I/O (Write)",
+          "id": 10,
+          "title": "Response Latency (P50/P95)",
           "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
           "targets": [
             {
-              "expr": "rate(container_fs_writes_bytes_total{namespace=\"private-ai-demo\", container!=\"\"}[5m]) / 1024 / 1024",
               "refId": "A",
-              "legendFormat": "{{pod}}"
+              "expr": "histogram_quantile(0.50, rate(istio_request_duration_milliseconds_bucket{destination_service_namespace=\"private-ai-demo\",destination_service=~\".*predictor.*\"}[5m]))",
+              "legendFormat": "P50"
+            },
+            {
+              "refId": "B",
+              "expr": "histogram_quantile(0.95, rate(istio_request_duration_milliseconds_bucket{destination_service_namespace=\"private-ai-demo\",destination_service=~\".*predictor.*\"}[5m]))",
+              "legendFormat": "P95"
             }
           ],
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "fieldConfig": {
             "defaults": {
-              "unit": "MBs",
-              "custom": {
-                "drawStyle": "line",
-                "fillOpacity": 10
-              }
+              "unit": "ms",
+              "custom": {"drawStyle": "line", "fillOpacity": 20}
             }
           }
         },
         {
           "gridPos": {"h": 8, "w": 12, "x": 0, "y": 30},
-          "id": 10,
-          "title": "Storage Usage (PVC)",
+          "id": 11,
+          "title": "Active Requests (vLLM)",
           "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
           "targets": [
             {
-              "expr": "kubelet_volume_stats_used_bytes{namespace=\"private-ai-demo\"} / kubelet_volume_stats_capacity_bytes{namespace=\"private-ai-demo\"} * 100",
               "refId": "A",
-              "legendFormat": "{{persistentvolumeclaim}}"
+              "expr": "avg(vllm:num_requests_running{pod=~\"mistral-24b.*\"})",
+              "legendFormat": "{{pod}}"
             }
           ],
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "fieldConfig": {
             "defaults": {
-              "unit": "percent",
-              "custom": {
-                "drawStyle": "line",
-                "fillOpacity": 10
-              },
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {"value": 0, "color": "green"},
-                  {"value": 70, "color": "yellow"},
-                  {"value": 85, "color": "red"}
-                ]
-              }
+              "unit": "short",
+              "custom": {"drawStyle": "line", "fillOpacity": 20}
             }
           }
         },
         {
           "gridPos": {"h": 8, "w": 12, "x": 12, "y": 30},
-          "id": 11,
-          "title": "GPU Utilization",
+          "id": 12,
+          "title": "GPU Power Usage (W)",
           "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
           "targets": [
             {
-              "expr": "DCGM_FI_DEV_GPU_UTIL{namespace=\"private-ai-demo\"}",
               "refId": "A",
-              "legendFormat": "{{pod}} GPU {{gpu}}"
+              "expr": "avg(DCGM_FI_DEV_POWER_USAGE{namespace=\"private-ai-demo\"})",
+              "legendFormat": "{{pod}}"
             }
           ],
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "fieldConfig": {
             "defaults": {
-              "unit": "percent",
-              "custom": {
-                "drawStyle": "line",
-                "fillOpacity": 10
-              }
+              "unit": "watt",
+              "custom": {"drawStyle": "line", "fillOpacity": 20}
             }
           }
         },
         {
           "gridPos": {"h": 8, "w": 12, "x": 0, "y": 38},
-          "id": 12,
-          "title": "GPU Memory Usage",
-          "type": "timeseries",
-          "targets": [
-            {
-              "expr": "DCGM_FI_DEV_FB_USED{namespace=\"private-ai-demo\"} / 1024 / 1024",
-              "refId": "A",
-              "legendFormat": "{{pod}} GPU {{gpu}}"
-            }
-          ],
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
-          "fieldConfig": {
-            "defaults": {
-              "unit": "decmbytes",
-              "custom": {
-                "drawStyle": "line",
-                "fillOpacity": 10
-              }
-            }
-          }
-        },
-        {
-          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 38},
           "id": 13,
-          "title": "InferenceService Request Rate",
+          "title": "Tokens Generated per Second",
           "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
           "targets": [
             {
-              "expr": "rate(istio_requests_total{destination_service_namespace=\"private-ai-demo\", destination_service=~\".*predictor.*\"}[5m])",
               "refId": "A",
-              "legendFormat": "{{destination_service}}"
+              "expr": "sum(rate(vllm:generation_tokens_total{pod=~\"mistral-24b-.*predictor.*\"}[5m]))",
+              "legendFormat": "Tokens/s"
             }
           ],
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "fieldConfig": {
             "defaults": {
-              "unit": "reqps",
-              "custom": {
-                "drawStyle": "line",
-                "fillOpacity": 10
-              }
+              "unit": "ops",
+              "custom": {"drawStyle": "line", "fillOpacity": 20}
             }
           }
-        },
-        {
-          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 46},
-          "id": 14,
-          "title": "InferenceService Response Time (P95)",
-          "type": "timeseries",
-          "targets": [
-            {
-              "expr": "histogram_quantile(0.95, rate(istio_request_duration_milliseconds_bucket{destination_service_namespace=\"private-ai-demo\", destination_service=~\".*predictor.*\"}[5m]))",
-              "refId": "A",
-              "legendFormat": "{{destination_service}}"
-            }
-          ],
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
-          "fieldConfig": {
-            "defaults": {
-              "unit": "ms",
-              "custom": {
-                "drawStyle": "line",
-                "fillOpacity": 10
-              }
-            }
-          }
-        },
-        {
-          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 46},
-          "id": 15,
-          "title": "Top Pods by CPU",
-          "type": "table",
-          "targets": [
-            {
-              "expr": "topk(10, rate(container_cpu_usage_seconds_total{namespace=\"private-ai-demo\", container!=\"\", container!=\"POD\"}[5m]) * 100)",
-              "refId": "A",
-              "format": "table",
-              "instant": true
-            }
-          ],
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
-          "transformations": [
-            {
-              "id": "organize",
-              "options": {
-                "excludeByName": {
-                  "Time": true,
-                  "container": false,
-                  "pod": false,
-                  "Value": false
-                },
-                "renameByName": {
-                  "pod": "Pod",
-                  "container": "Container",
-                  "Value": "CPU %"
-                }
-              }
-            }
-          ]
         }
       ]
     }

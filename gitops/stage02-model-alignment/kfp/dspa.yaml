@@ -5,7 +5,7 @@ metadata:
   name: dspa
   namespace: private-ai-demo
   labels:
-    app.kubernetes.io/part-of: private-ai-demo
+    app.kubernetes.io/part-of: pipeline
     stage: "02"
     opendatahub.io/dashboard: "true"  # Makes DSPA discoverable in RHOAI project UI
 spec:

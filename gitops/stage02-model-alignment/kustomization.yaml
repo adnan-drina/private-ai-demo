@@ -19,13 +19,16 @@ resources:
   # 1. Llama Stack distribution
   - llama-stack
   
-  # 2. Milvus vector database
+  # 2. Guardrails orchestrator
+  - guardrails
+  
+  # 3. Milvus vector database
   - milvus
   
-  # 3. Docling operator (for PDF processing)
+  # 4. Docling operator (for PDF processing)
   - docling
   
-  # 4. Kubeflow Pipelines (DSPA)
+  # 5. Kubeflow Pipelines (DSPA)
   - kfp
   
 

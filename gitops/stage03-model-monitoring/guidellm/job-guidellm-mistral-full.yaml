@@ -1,0 +1,165 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: guidellm-benchmark-mistral-full
+  namespace: private-ai-demo
+  labels:
+    app: guidellm
+    model: mistral-24b
+    benchmark-type: standard
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+    argocd.argoproj.io/hook: Skip  # Manual job, don't auto-create on sync
+    description: "GuideLLM benchmark for Mistral 24B Full Precision model"
+spec:
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 86400  # Keep completed jobs for 24 hours
+  template:
+    metadata:
+      labels:
+        app: guidellm
+        model: mistral-24b
+    spec:
+      restartPolicy: Never
+      serviceAccountName: guidellm-runner
+      
+      initContainers:
+      # Wait for model to be ready and get external URL
+      - name: get-inference-url
+        image: registry.redhat.io/openshift4/ose-cli:latest
+        command:
+        - /bin/bash
+        - -c
+        - |
+          echo "🔍 Waiting for mistral-24b InferenceService to be READY..."
+          until oc get isvc mistral-24b -n private-ai-demo \
+            -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' | grep -q "True"; do
+            echo "Model not ready yet, waiting 10 seconds..."
+            sleep 10
+          done
+          echo "✅ Model is READY!"
+          
+          echo "🔍 Getting latest revision service URL (bypasses Knative routing)"
+          
+          # Get the latest ready revision from Knative Service
+          LATEST_REV=$(oc get ksvc mistral-24b-predictor -n private-ai-demo \
+            -o jsonpath='{.status.latestReadyRevisionName}')
+          
+          if [ -z "$LATEST_REV" ]; then
+            echo "❌ ERROR: Could not find latest ready revision"
+            exit 1
+          fi
+          
+          # Use revision-specific private service on port 80 (direct to vLLM, bypasses Knative routing)
+          INTERNAL_URL="http://${LATEST_REV}-private.private-ai-demo.svc.cluster.local"
+          
+          echo "✅ Latest Revision: ${LATEST_REV}"
+          echo "✅ Direct Service URL: ${INTERNAL_URL}"
+          echo -n "${INTERNAL_URL}" > /shared/inference-url.txt
+        volumeMounts:
+        - name: shared
+          mountPath: /shared
+      
+      containers:
+      # Main GuideLLM benchmark container
+      - name: guidellm
+        image: ghcr.io/vllm-project/guidellm:latest
+        command:
+        - /bin/bash
+        - -c
+        - |
+          MODEL_URL=$(cat /shared/inference-url.txt)
+          echo "🚀 Running GuideLLM Benchmark"
+          echo "Target: ${MODEL_URL}"
+          echo "Model: mistral-24b"
+          
+          # Use synthetic data with Mistral tokenizer
+          # This generates test prompts with specified token counts
+          guidellm benchmark \
+            --target "${MODEL_URL}" \
+            --model "mistral-24b" \
+            --backend-type openai_http \
+            --processor "mistralai/Mistral-Small-Instruct-2409" \
+            --rate-type synchronous \
+            --max-requests 10 \
+            --data "prompt_tokens=128,output_tokens=64,samples=10" \
+            --output-path /results/mistral-full-$(date +%Y%m%d-%H%M%S).html
+          
+          echo "✅ Benchmark complete! HTML report generated with embedded GuideLLM UI"
+        env:
+        - name: TZ
+          value: "America/New_York"
+        - name: PYTHONHTTPSVERIFY
+          value: "0"  # Disable SSL verification for self-signed OpenShift certs
+        - name: CURL_CA_BUNDLE
+          value: ""  # Disable SSL bundle verification
+        - name: HOME
+          value: "/tmp"  # Writable directory for cache
+        - name: HF_HOME
+          value: "/tmp/hf"  # HuggingFace cache directory
+        volumeMounts:
+        - name: shared
+          mountPath: /shared
+        - name: results
+          mountPath: /results
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "512Mi"
+          limits:
+            cpu: "1"
+            memory: "2Gi"
+      
+      # S3 Upload Sidecar - uploads HTML reports to MinIO
+      - name: s3-uploader
+        image: quay.io/minio/mc:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "⏰ Waiting for benchmark to complete..."
+          while [ ! -f /results/*.html ]; do
+            sleep 5
+          done
+          sleep 5  # Extra time to ensure file is fully written
+          
+          echo "📦 Configuring MinIO client..."
+          mc alias set minio http://minio.model-storage.svc.cluster.local:9000 \
+            $MINIO_ACCESS_KEY $MINIO_SECRET_KEY --api S3v4
+          
+          echo "📤 Uploading report to MinIO..."
+          mc cp /results/*.html minio/guidellm-results/
+          
+          echo "✅ Upload complete!"
+          mc ls minio/guidellm-results/
+        env:
+        - name: HOME
+          value: "/tmp"  # Writable directory for mc config
+        - name: MINIO_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: guidellm-s3-credentials
+              key: AWS_ACCESS_KEY_ID
+        - name: MINIO_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: guidellm-s3-credentials
+              key: AWS_SECRET_ACCESS_KEY
+        volumeMounts:
+        - name: results
+          mountPath: /results
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+      
+      volumes:
+      - name: shared
+        emptyDir: {}  # Shared volume for passing URL between containers
+      - name: results
+        emptyDir: {}  # Ephemeral storage, results uploaded to MinIO S3
+

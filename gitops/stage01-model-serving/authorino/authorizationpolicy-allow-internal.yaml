@@ -1,0 +1,20 @@
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: kserve-predictor-internal-allow
+  namespace: istio-system
+  labels:
+    app.kubernetes.io/component: authorization
+    app.kubernetes.io/part-of: stage01-model-serving
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  action: ALLOW
+  selector:
+    matchLabels:
+      component: predictor
+  rules:
+    - from:
+        - source:
+            namespaces:
+              - private-ai-demo

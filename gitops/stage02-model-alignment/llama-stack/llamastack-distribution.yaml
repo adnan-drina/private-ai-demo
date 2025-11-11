@@ -10,7 +10,7 @@ metadata:
     app: llama-stack
     app.kubernetes.io/name: llama-stack
     app.kubernetes.io/component: rag-stack
-    app.kubernetes.io/part-of: private-ai-demo
+    app.kubernetes.io/part-of: serving
     app.openshift.io/runtime: python
   annotations:
     app.openshift.io/connects-to: '[{"apiVersion":"apps/v1","kind":"Deployment","name":"milvus-standalone"},{"apiVersion":"apps/v1","kind":"Deployment","name":"docling"}]'

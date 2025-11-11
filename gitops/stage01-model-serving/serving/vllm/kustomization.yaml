@@ -3,6 +3,10 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: private-ai-demo
 
+# Shared grouping labels for topology
+commonLabels:
+  app.kubernetes.io/part-of: serving
+
 # ArgoCD tracking labels (must match parent app)
 labels:
   - includeSelectors: true
@@ -14,10 +18,11 @@ commonAnnotations:
   app.kubernetes.io/managed-by: argocd
 
 resources:
-  # Shared ServingRuntime (ONE for all models)
+  # Shared vLLM ServingRuntime (single-model template)
   - servingruntime-vllm-cuda.yaml
-  # PVC for full model (large models use PVC to avoid node ephemeral-storage pressure)
+  # PVCs for models (large models use PVC to avoid node ephemeral-storage pressure)
   - pvc-mistral-24b.yaml
+  - pvc-mistral-24b-quantized.yaml
   # InferenceServices (quantized uses S3, full uses PVC)
   - inferenceservice-mistral-24b.yaml
   - inferenceservice-mistral-24b-quantized.yaml

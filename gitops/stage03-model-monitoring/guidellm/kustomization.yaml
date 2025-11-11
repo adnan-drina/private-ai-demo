@@ -1,0 +1,48 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: guidellm
+  annotations:
+    config.kubernetes.io/local-config: "true"
+
+# GuideLLM Integration
+# Using official container image: ghcr.io/vllm-project/guidellm:latest
+# Reference: https://github.com/vllm-project/guidellm
+
+namespace: private-ai-demo
+
+resources:
+  # RBAC
+  - rbac-guidellm.yaml
+  
+  # Storage
+  - pvc-guidellm-results.yaml
+  
+  # Configuration
+  - configmap-guidellm-config.yaml
+  - configmap-nginx-config.yaml
+  - configmap-index-html.yaml
+  - configmap-metrics-exporter.yaml
+  - secret-s3-credentials.yaml
+  
+  # Jobs (manual benchmarks)
+  - job-guidellm-mistral-quantized.yaml
+  - job-guidellm-mistral-full.yaml
+  
+  # CronJobs (scheduled benchmarks)
+  - cronjob-guidellm-daily.yaml
+  - cronjob-guidellm-weekly.yaml
+  
+  # Web server for reports
+  - deployment-nginx-reports.yaml
+  - service-guidellm-reports.yaml
+  - route-guidellm-reports.yaml
+
+labels:
+  - includeSelectors: false
+    pairs:
+      app.kubernetes.io/part-of: evaluation
+      app.kubernetes.io/component: benchmarking
+      managed-by: argocd

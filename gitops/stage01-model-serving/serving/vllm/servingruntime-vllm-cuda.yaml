@@ -5,55 +5,79 @@ metadata:
   name: vllm-cuda-runtime
   namespace: private-ai-demo
   annotations:
-    opendatahub.io/accelerator-name: ""
     opendatahub.io/apiProtocol: REST
     opendatahub.io/recommended-accelerators: '["nvidia.com/gpu"]'
     opendatahub.io/runtime-version: v0.10.1.1
+    opendatahub.io/serving-runtime-component: single-model
     opendatahub.io/serving-runtime-scope: global
     opendatahub.io/template-display-name: vLLM NVIDIA GPU ServingRuntime for KServe
     opendatahub.io/template-name: vllm-cuda-runtime
+    opendatahub.io/accelerator-name: nvidia-l4-4gpu
     openshift.io/display-name: vLLM NVIDIA GPU ServingRuntime for KServe
   labels:
     opendatahub.io/dashboard: "true"
-    app.kubernetes.io/part-of: private-ai-demo
 spec:
   annotations:
     prometheus.io/path: /metrics
     prometheus.io/port: "8080"
   containers:
-  - name: kserve-container
-    # Official Red Hat OpenShift AI vLLM image (v0.10.1.1)
-    image: registry.redhat.io/rhoai/odh-vllm-cuda-rhel9@sha256:fb84fbf103bf450ef5b060fc5f21a9cf16b166dba207a3c50aa91bccd919d604
-    command:
-    - python
-    - -m
-    - vllm.entrypoints.openai.api_server
-    args:
-    - --port=8080
-    - --model=/mnt/models
-    - --served-model-name={{.Name}}
-    env:
-    - name: HF_HOME
-      value: /tmp/hf_home
-    ports:
-    - containerPort: 8080
-      protocol: TCP
-    volumeMounts:
-    - name: shm
-      mountPath: /dev/shm
+    - name: kserve-container
+      image: registry.redhat.io/rhoai/odh-vllm-cuda-rhel9@sha256:fb84fbf103bf450ef5b060fc5f21a9cf16b166dba207a3c50aa91bccd919d604
+      command:
+        - python
+        - -m
+        - vllm.entrypoints.openai.api_server
+      args:
+        - --port=8080
+        - --model=/mnt/models
+        - --served-model-name={{.Name}}
+      env:
+        - name: HF_HOME
+          value: /tmp/hf_home
+      ports:
+        - containerPort: 8080
+          protocol: TCP
+      readinessProbe:
+        httpGet:
+          path: /health
+          port: 8080
+        initialDelaySeconds: 180
+        periodSeconds: 10
+        timeoutSeconds: 5
+        failureThreshold: 30
+      livenessProbe:
+        httpGet:
+          path: /health
+          port: 8080
+        initialDelaySeconds: 600
+        periodSeconds: 30
+        timeoutSeconds: 5
+        failureThreshold: 5
+      resources:
+        requests:
+          cpu: "2"
+          memory: 6Gi
+          nvidia.com/gpu: "1"
+        limits:
+          cpu: "8"
+          memory: 16Gi
+          nvidia.com/gpu: "1"
+      volumeMounts:
+        - name: shm
+          mountPath: /dev/shm
   volumes:
-  - name: shm
-    emptyDir:
-      medium: Memory
-      sizeLimit: 2Gi  # Aligned with Model Registry default
+    - name: shm
+      emptyDir:
+        medium: Memory
+        sizeLimit: 2Gi
   multiModel: false
-  supportedModelFormats:
-  - name: vLLM
-    autoSelect: true
-    version: "1"
   protocolVersions:
-  - v2
-  - grpc-v2
+    - v2
+    - grpc-v2
+  supportedModelFormats:
+    - name: vLLM
+      autoSelect: true
+      version: "1"
   grpcDataEndpoint: port:8001
   grpcEndpoint: port:8085
 
