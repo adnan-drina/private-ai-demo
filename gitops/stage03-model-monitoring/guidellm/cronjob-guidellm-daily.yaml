@@ -178,13 +178,13 @@ spec:
             - name: MINIO_ACCESS_KEY
               valueFrom:
                 secretKeyRef:
-                  name: minio-root-credentials
-                  key: MINIO_ROOT_USER
+                  name: minio-credentials
+                  key: accesskey
             - name: MINIO_SECRET_KEY
               valueFrom:
                 secretKeyRef:
-                  name: minio-root-credentials
-                  key: MINIO_ROOT_PASSWORD
+                  name: minio-credentials
+                  key: secretkey
             volumeMounts:
             - name: results
               mountPath: /results

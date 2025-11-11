@@ -58,7 +58,7 @@ spec:
         "panels": [
             {
                 "id": 1,
-                "title": "Active GPUs",
+                "title": "Total GPUs",
                 "type": "stat",
                 "gridPos": {
                     "h": 4,
@@ -84,7 +84,7 @@ spec:
                 },
                 "targets": [
                     {
-                        "expr": "sum(max_over_time((DCGM_FI_DEV_GPU_UTIL{instance=~\"$instance\",gpu=~\"$gpu\",UUID!~\"MIG.*\"} > bool 0)[5m]))",
+                        "expr": "count(count by (UUID, GPU_I_ID) (DCGM_FI_PROF_GR_ENGINE_ACTIVE{UUID!~\"MIG.*\"})) or vector(0)",
                         "refId": "A"
                     }
                 ],
@@ -98,14 +98,6 @@ spec:
                                 {
                                     "color": "green",
                                     "value": null
-                                },
-                                {
-                                    "color": "#EAB839",
-                                    "value": 4
-                                },
-                                {
-                                    "color": "red",
-                                    "value": 6
                                 }
                             ]
                         }
@@ -180,9 +172,9 @@ spec:
                 "type": "timeseries",
                 "gridPos": {
                     "h": 8,
-                    "w": 12,
-                    "x": 0,
-                    "y": 4
+                    "w": 9,
+                    "x": 6,
+                    "y": 8
                 },
                 "datasource": {
                     "type": "prometheus",
@@ -226,14 +218,61 @@ spec:
                 ]
             },
             {
+                "id": 9,
+                "title": "Allocated GPUs",
+                "type": "stat",
+                "gridPos": {
+                    "h": 4,
+                    "w": 6,
+                    "x": 0,
+                    "y": 4
+                },
+                "datasource": {
+                    "type": "prometheus",
+                    "uid": "otel-prometheus"
+                },
+                "options": {
+                    "reduceOptions": {
+                        "calcs": [
+                            "lastNotNull"
+                        ],
+                        "fields": ""
+                    },
+                    "colorMode": "value",
+                    "graphMode": "area",
+                    "justifyMode": "auto"
+                },
+                "targets": [
+                    {
+                        "expr": "count(count by (UUID, GPU_I_ID) (DCGM_FI_PROF_GR_ENGINE_ACTIVE{UUID!~\"MIG.*\", exported_pod=~\".+\"})) or vector(0)",
+                        "refId": "A"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "unit": "none",
+                        "thresholds": {
+                            "mode": "off",
+                            "steps": [
+                                {
+                                    "color": "green",
+                                    "value": null
+                                }
+                            ]
+                        }
+                    },
+                    "overrides": []
+                }
+            },
+            {
                 "id": 4,
                 "title": "Tensor Core Utilization",
                 "type": "timeseries",
                 "gridPos": {
                     "h": 8,
-                    "w": 12,
-                    "x": 12,
-                    "y": 4
+                    "w": 9,
+                    "x": 15,
+                    "y": 8
                 },
                 "datasource": {
                     "type": "prometheus",
@@ -292,9 +331,9 @@ spec:
                 "type": "timeseries",
                 "gridPos": {
                     "h": 8,
-                    "w": 12,
-                    "x": 0,
-                    "y": 12
+                    "w": 9,
+                    "x": 6,
+                    "y": 16
                 },
                 "datasource": {
                     "type": "prometheus",
@@ -343,9 +382,9 @@ spec:
                 "type": "timeseries",
                 "gridPos": {
                     "h": 8,
-                    "w": 12,
-                    "x": 12,
-                    "y": 12
+                    "w": 9,
+                    "x": 15,
+                    "y": 16
                 },
                 "datasource": {
                     "type": "prometheus",
@@ -402,9 +441,9 @@ spec:
                 "type": "timeseries",
                 "gridPos": {
                     "h": 8,
-                    "w": 12,
-                    "x": 0,
-                    "y": 20
+                    "w": 9,
+                    "x": 6,
+                    "y": 24
                 },
                 "datasource": {
                     "type": "prometheus",
@@ -454,9 +493,9 @@ spec:
                 "type": "timeseries",
                 "gridPos": {
                     "h": 8,
-                    "w": 12,
-                    "x": 12,
-                    "y": 20
+                    "w": 9,
+                    "x": 15,
+                    "y": 24
                 },
                 "datasource": {
                     "type": "prometheus",
@@ -499,159 +538,6 @@ spec:
                         "legendFormat": "GPU {{gpu}}"
                     }
                 ]
-            },
-            {
-                "title": "Reference: Total GPUs",
-                "type": "stat",
-                "gridPos": {
-                    "h": 4,
-                    "w": 6,
-                    "x": 0,
-                    "y": 28
-                },
-                "datasource": {
-                    "type": "prometheus",
-                    "uid": "otel-prometheus"
-                },
-                "options": {
-                    "reduceOptions": {
-                        "calcs": [
-                            "lastNotNull"
-                        ],
-                        "fields": ""
-                    },
-                    "colorMode": "value",
-                    "graphMode": "area",
-                    "justifyMode": "auto"
-                },
-                "targets": [
-                    {
-                        "expr": "count(count by (UUID, GPU_I_ID) (DCGM_FI_PROF_GR_ENGINE_ACTIVE{UUID!~\"MIG.*\"})) or vector(0)",
-                        "refId": "A"
-                    }
-                ],
-                "fieldConfig": {
-                    "defaults": {
-                        "unit": "none"
-                    },
-                    "overrides": []
-                },
-                "id": 9
-            },
-            {
-                "title": "Reference: Allocated GPUs",
-                "type": "stat",
-                "gridPos": {
-                    "h": 4,
-                    "w": 6,
-                    "x": 6,
-                    "y": 28
-                },
-                "datasource": {
-                    "type": "prometheus",
-                    "uid": "otel-prometheus"
-                },
-                "options": {
-                    "reduceOptions": {
-                        "calcs": [
-                            "lastNotNull"
-                        ],
-                        "fields": ""
-                    },
-                    "colorMode": "value",
-                    "graphMode": "area",
-                    "justifyMode": "auto"
-                },
-                "targets": [
-                    {
-                        "expr": "count(count by (UUID, GPU_I_ID) (DCGM_FI_PROF_GR_ENGINE_ACTIVE{UUID!~\"MIG.*\", exported_pod=~\".+\"})) or vector(0)",
-                        "refId": "A"
-                    }
-                ],
-                "fieldConfig": {
-                    "defaults": {
-                        "unit": "none"
-                    },
-                    "overrides": []
-                },
-                "id": 10
-            },
-            {
-                "title": "Reference: Memory Activity",
-                "type": "stat",
-                "gridPos": {
-                    "h": 4,
-                    "w": 6,
-                    "x": 12,
-                    "y": 28
-                },
-                "datasource": {
-                    "type": "prometheus",
-                    "uid": "otel-prometheus"
-                },
-                "options": {
-                    "reduceOptions": {
-                        "calcs": [
-                            "lastNotNull"
-                        ],
-                        "fields": ""
-                    },
-                    "colorMode": "value",
-                    "graphMode": "area",
-                    "justifyMode": "auto"
-                },
-                "targets": [
-                    {
-                        "expr": "count(count by (UUID, GPU_I_ID) (DCGM_FI_DEV_MEM_COPY_UTIL{UUID!~\"MIG.*\"})) or vector(0)",
-                        "refId": "A"
-                    }
-                ],
-                "fieldConfig": {
-                    "defaults": {
-                        "unit": "none"
-                    },
-                    "overrides": []
-                },
-                "id": 11
-            },
-            {
-                "title": "Reference: Power Usage",
-                "type": "timeseries",
-                "gridPos": {
-                    "h": 6,
-                    "w": 18,
-                    "x": 0,
-                    "y": 32
-                },
-                "datasource": {
-                    "type": "prometheus",
-                    "uid": "otel-prometheus"
-                },
-                "fieldConfig": {
-                    "defaults": {
-                        "unit": "watt"
-                    },
-                    "overrides": []
-                },
-                "options": {
-                    "legend": {
-                        "displayMode": "table",
-                        "placement": "bottom",
-                        "calcs": [
-                            "lastNotNull"
-                        ]
-                    },
-                    "tooltip": {
-                        "mode": "multi"
-                    }
-                },
-                "targets": [
-                    {
-                        "expr": "sum(max by (UUID) (DCGM_FI_DEV_POWER_USAGE{UUID!~\"MIG.*\"}))",
-                        "refId": "A"
-                    }
-                ],
-                "id": 12
             }
         ]
     }

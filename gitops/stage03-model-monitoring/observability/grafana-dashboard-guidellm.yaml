@@ -30,18 +30,39 @@ spec:
           "title": "📊 Overview",
           "type": "stat",
           "gridPos": {"h": 4, "w": 24, "x": 0, "y": 0},
-          "targets": [],
+          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
+          "targets": [
+            {
+              "expr": "clamp_min(sum(max_over_time(guidellm_total_requests{job=\"guidellm\",model=~\"$model\",benchmark_type=~\"$benchmark_type\"}[7d])) or vector(0), 0)",
+              "refId": "A"
+            }
+          ],
           "options": {
             "textMode": "value_and_name",
-            "colorMode": "background"
+            "colorMode": "background",
+            "reduceOptions": {
+              "calcs": ["lastNotNull"],
+              "values": false
+            }
           },
           "fieldConfig": {
             "defaults": {
-              "mappings": [],
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {
+                      "text": "Awaiting benchmark data (last 7d)",
+                      "color": "red"
+                    }
+                  }
+                }
+              ],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
-                  {"value": null, "color": "green"}
+                  {"value": null, "color": "red"},
+                  {"value": 1, "color": "green"}
                 ]
               }
             }
@@ -87,7 +108,7 @@ spec:
           "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
           "targets": [
             {
-              "expr": "clamp_min(guidellm_request_latency_p95_seconds or vector(0), 0)",
+              "expr": "clamp_min(max_over_time(guidellm_request_latency_p95_seconds{job=\"guidellm\",model=~\"$model\",benchmark_type=~\"$benchmark_type\"}[1h]) or vector(0), 0)",
               "legendFormat": "{{model}} ({{benchmark_type}})",
               "refId": "A"
             }
@@ -128,7 +149,7 @@ spec:
           "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
           "targets": [
             {
-              "expr": "clamp_min(guidellm_throughput_requests_per_second or vector(0), 0)",
+              "expr": "clamp_min(max_over_time(guidellm_throughput_requests_per_second{job=\"guidellm\",model=~\"$model\",benchmark_type=~\"$benchmark_type\"}[1h]) or vector(0), 0)",
               "legendFormat": "{{model}} ({{benchmark_type}})",
               "refId": "A"
             }
@@ -161,7 +182,7 @@ spec:
           "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
           "targets": [
             {
-              "expr": "clamp_min(guidellm_ttft_p95_seconds or vector(0), 0)",
+              "expr": "clamp_min(max_over_time(guidellm_ttft_p95_seconds{job=\"guidellm\",model=~\"$model\",benchmark_type=~\"$benchmark_type\"}[1h]) or vector(0), 0)",
               "legendFormat": "{{model}} ({{benchmark_type}})",
               "refId": "A"
             }
@@ -190,7 +211,7 @@ spec:
           "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
           "targets": [
             {
-              "expr": "clamp_min(guidellm_request_success_rate or vector(0), 0)",
+              "expr": "clamp_min(max_over_time(guidellm_request_success_rate{job=\"guidellm\",model=~\"$model\",benchmark_type=~\"$benchmark_type\"}[1h]) or vector(0), 0)",
               "legendFormat": "{{model}} ({{benchmark_type}})",
               "refId": "A"
             }
@@ -229,7 +250,7 @@ spec:
           "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
           "targets": [
             {
-              "expr": "clamp_min(guidellm_request_latency_p95_seconds or vector(0), 0)",
+              "expr": "clamp_min(max_over_time(guidellm_request_latency_p95_seconds{job=\"guidellm\",model=~\"$model\",benchmark_type=~\"$benchmark_type\"}[24h]) or vector(0), 0)",
               "legendFormat": "{{model}}",
               "refId": "A",
               "instant": true
@@ -261,7 +282,7 @@ spec:
           "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
           "targets": [
             {
-              "expr": "clamp_min(guidellm_throughput_requests_per_second or vector(0), 0)",
+              "expr": "clamp_min(max_over_time(guidellm_throughput_requests_per_second{job=\"guidellm\",model=~\"$model\",benchmark_type=~\"$benchmark_type\"}[24h]) or vector(0), 0)",
               "legendFormat": "{{model}}",
               "refId": "A",
               "instant": true
@@ -285,7 +306,7 @@ spec:
           "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
           "targets": [
             {
-              "expr": "clamp_min(guidellm_total_requests or vector(0), 0)",
+              "expr": "clamp_min(max_over_time(guidellm_total_requests{job=\"guidellm\",model=~\"$model\",benchmark_type=~\"$benchmark_type\"}[30d]) or vector(0), 0)",
               "format": "table",
               "instant": true,
               "refId": "A"
@@ -395,7 +416,7 @@ spec:
             "name": "model",
             "type": "query",
             "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
-            "query": "label_values(guidellm_request_latency_p95_seconds, model)",
+            "query": "label_values(guidellm_request_latency_p95_seconds{job=\"guidellm\"}, model)",
             "multi": true,
             "includeAll": true,
             "refresh": 1
@@ -404,7 +425,7 @@ spec:
             "name": "benchmark_type",
             "type": "query",
             "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
-            "query": "label_values(guidellm_request_latency_p95_seconds, benchmark_type)",
+            "query": "label_values(guidellm_request_latency_p95_seconds{job=\"guidellm\"}, benchmark_type)",
             "multi": true,
             "includeAll": true,
             "refresh": 1
