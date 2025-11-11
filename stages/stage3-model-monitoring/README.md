@@ -50,6 +50,7 @@ OpenTelemetry Collector ──► Prometheus endpoint (metrics)
   - Monitoring CRDs: `podmonitor.yaml`, `podmonitor-dcgm.yaml`, `pushgateway.yaml`
 - Metrics jobs: `trustyai/metrics/` CronJob pushing `lm_eval_*` to Pushgateway
 - Dashboard integration: `dashboard/odh-dashboard-config-patch.yaml` enables the **Model evaluations** navigation item by setting `disableLMEval: false` in the `OdhDashboardConfig` CR ([Red Hat guidance](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_cloud_service/1/html/managing_resources/customizing-the-dashboard#ref-dashboard-configuration-options_dashboard)).
+- 🔎 **Guardrails note**: Safety enforcement (GuardrailsOrchestrator, detectors, and their secrets) lives in Stage 2 alongside ingestion/serving so responses can be filtered before hitting observability. Stage 3 only consumes the guardrails telemetry exposed via OTEL.
 
 ## Prerequisites
 
