@@ -10,8 +10,14 @@ labels:
       app.kubernetes.io/part-of: stage00-ai-platform
 
 resources:
-- machineset-cluster-gmgrr-j2lhd-gpu-g6-4xlarge-us-east-2c.yaml
-- machineset-cluster-gmgrr-j2lhd-gpu-g6-12xlarge-us-east-2c.yaml
-- nodefeaturediscovery.yaml
-- clusterpolicy.yaml
+  # Dynamic GPU MachineSet Generation (replaces hardcoded MachineSet YAMLs)
+  # This Job will clone existing worker MachineSets and modify them for GPU use
+  # ensuring compatibility with any OpenShift cluster
+  - rbac-machineset-job.yaml
+  - configmap-machineset-script.yaml
+  - job-generate-gpu-machineset.yaml
+  
+  # GPU Operator Configuration
+  - nodefeaturediscovery.yaml
+  - clusterpolicy.yaml
 

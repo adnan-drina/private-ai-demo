@@ -1,0 +1,55 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: gpu-machineset-generator
+  namespace: openshift-machine-api
+  labels:
+    app.kubernetes.io/name: gpu-machineset-generator
+    app.kubernetes.io/part-of: stage00-ai-platform
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "5"
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: gpu-machineset-generator
+        app.kubernetes.io/part-of: stage00-ai-platform
+    spec:
+      serviceAccountName: gpu-machineset-generator
+      restartPolicy: Never
+      containers:
+        - name: generator
+          image: registry.redhat.io/openshift4/ose-cli:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/bash
+            - -c
+            - |
+              # Install yq for YAML manipulation
+              curl -sL https://github.com/mikefarah/yq/releases/download/v4.35.1/yq_linux_amd64 -o /tmp/yq
+              chmod +x /tmp/yq
+              export PATH="/tmp:$PATH"
+              
+              # Run the generation script
+              /scripts/generate-gpu-machinesets.sh
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: scripts
+          configMap:
+            name: gpu-machineset-generator-script
+            defaultMode: 0755
+
