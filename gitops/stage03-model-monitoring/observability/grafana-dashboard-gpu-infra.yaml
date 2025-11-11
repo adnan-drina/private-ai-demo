@@ -84,7 +84,7 @@ spec:
                 },
                 "targets": [
                     {
-                        "expr": "sum(max_over_time(DCGM_FI_DEV_GPU_UTIL{instance=~\"$instance\",gpu=~\"$gpu\",UUID!~\"MIG.*\",exported_pod=~\".+\"}[5m]) > bool 0)",
+                        "expr": "sum(max_over_time((DCGM_FI_DEV_GPU_UTIL{instance=~\"$instance\",gpu=~\"$gpu\",UUID!~\"MIG.*\"} > bool 0)[5m]))",
                         "refId": "A"
                     }
                 ],
@@ -168,7 +168,7 @@ spec:
                 },
                 "targets": [
                     {
-                        "expr": "avg(DCGM_FI_DEV_GPU_UTIL{instance=~\"$instance\",gpu=~\"$gpu\",UUID!~\"MIG.*\",exported_pod=~\".+\"})",
+                        "expr": "avg(DCGM_FI_DEV_GPU_UTIL{instance=~\"$instance\",gpu=~\"$gpu\",UUID!~\"MIG.*\"})",
                         "refId": "A",
                         "legendFormat": "GPU {{gpu}}"
                     }
@@ -191,7 +191,7 @@ spec:
                 "fieldConfig": {
                     "defaults": {
                         "mappings": [],
-                        "unit": "bytes",
+                        "unit": "gibibytes",
                         "thresholds": {
                             "mode": "off",
                             "steps": [
@@ -219,7 +219,7 @@ spec:
                 },
                 "targets": [
                     {
-                        "expr": "avg(DCGM_FI_DEV_FB_USED{instance=~\"$instance\",gpu=~\"$gpu\",UUID!~\"MIG.*\",exported_pod=~\".+\"}) * 1048576",
+                        "expr": "avg(DCGM_FI_DEV_FB_USED{instance=~\"$instance\",gpu=~\"$gpu\",UUID!~\"MIG.*\"}) / 1024",
                         "refId": "A",
                         "legendFormat": "GPU {{gpu}}"
                     }
@@ -280,7 +280,7 @@ spec:
                 },
                 "targets": [
                     {
-                        "expr": "avg(DCGM_FI_PROF_PIPE_TENSOR_ACTIVE{instance=~\"$instance\",gpu=~\"$gpu\",UUID!~\"MIG.*\",exported_pod=~\".+\"}) * 100",
+                        "expr": "avg(DCGM_FI_PROF_PIPE_TENSOR_ACTIVE{instance=~\"$instance\",gpu=~\"$gpu\",UUID!~\"MIG.*\"}) * 100",
                         "refId": "A",
                         "legendFormat": "GPU {{gpu}}"
                     }
@@ -442,7 +442,7 @@ spec:
                 },
                 "targets": [
                     {
-                        "expr": "100 * avg(DCGM_FI_DEV_FB_USED{instance=~\"$instance\",gpu=~\"$gpu\",UUID!~\"MIG.*\",exported_pod=~\".+\"}) / ignoring(gpu) group_left() label_replace(kube_node_labels{label_nvidia_com_gpu_memory!\"\"}, \"Hostname\", \"$1\", \"node\", \"(.*)\")",
+                        "expr": "100 * avg(DCGM_FI_DEV_FB_USED{instance=~\"$instance\",gpu=~\"$gpu\",UUID!~\"MIG.*\"}) / 24576",
                         "refId": "A",
                         "legendFormat": "GPU {{gpu}}"
                     }
@@ -499,6 +499,159 @@ spec:
                         "legendFormat": "GPU {{gpu}}"
                     }
                 ]
+            },
+            {
+                "title": "Reference: Total GPUs",
+                "type": "stat",
+                "gridPos": {
+                    "h": 4,
+                    "w": 6,
+                    "x": 0,
+                    "y": 28
+                },
+                "datasource": {
+                    "type": "prometheus",
+                    "uid": "otel-prometheus"
+                },
+                "options": {
+                    "reduceOptions": {
+                        "calcs": [
+                            "lastNotNull"
+                        ],
+                        "fields": ""
+                    },
+                    "colorMode": "value",
+                    "graphMode": "area",
+                    "justifyMode": "auto"
+                },
+                "targets": [
+                    {
+                        "expr": "count(count by (UUID, GPU_I_ID) (DCGM_FI_PROF_GR_ENGINE_ACTIVE{UUID!~\"MIG.*\"})) or vector(0)",
+                        "refId": "A"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "unit": "none"
+                    },
+                    "overrides": []
+                },
+                "id": 9
+            },
+            {
+                "title": "Reference: Allocated GPUs",
+                "type": "stat",
+                "gridPos": {
+                    "h": 4,
+                    "w": 6,
+                    "x": 6,
+                    "y": 28
+                },
+                "datasource": {
+                    "type": "prometheus",
+                    "uid": "otel-prometheus"
+                },
+                "options": {
+                    "reduceOptions": {
+                        "calcs": [
+                            "lastNotNull"
+                        ],
+                        "fields": ""
+                    },
+                    "colorMode": "value",
+                    "graphMode": "area",
+                    "justifyMode": "auto"
+                },
+                "targets": [
+                    {
+                        "expr": "count(count by (UUID, GPU_I_ID) (DCGM_FI_PROF_GR_ENGINE_ACTIVE{UUID!~\"MIG.*\", exported_pod=~\".+\"})) or vector(0)",
+                        "refId": "A"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "unit": "none"
+                    },
+                    "overrides": []
+                },
+                "id": 10
+            },
+            {
+                "title": "Reference: Memory Activity",
+                "type": "stat",
+                "gridPos": {
+                    "h": 4,
+                    "w": 6,
+                    "x": 12,
+                    "y": 28
+                },
+                "datasource": {
+                    "type": "prometheus",
+                    "uid": "otel-prometheus"
+                },
+                "options": {
+                    "reduceOptions": {
+                        "calcs": [
+                            "lastNotNull"
+                        ],
+                        "fields": ""
+                    },
+                    "colorMode": "value",
+                    "graphMode": "area",
+                    "justifyMode": "auto"
+                },
+                "targets": [
+                    {
+                        "expr": "count(count by (UUID, GPU_I_ID) (DCGM_FI_DEV_MEM_COPY_UTIL{UUID!~\"MIG.*\"})) or vector(0)",
+                        "refId": "A"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "unit": "none"
+                    },
+                    "overrides": []
+                },
+                "id": 11
+            },
+            {
+                "title": "Reference: Power Usage",
+                "type": "timeseries",
+                "gridPos": {
+                    "h": 6,
+                    "w": 18,
+                    "x": 0,
+                    "y": 32
+                },
+                "datasource": {
+                    "type": "prometheus",
+                    "uid": "otel-prometheus"
+                },
+                "fieldConfig": {
+                    "defaults": {
+                        "unit": "watt"
+                    },
+                    "overrides": []
+                },
+                "options": {
+                    "legend": {
+                        "displayMode": "table",
+                        "placement": "bottom",
+                        "calcs": [
+                            "lastNotNull"
+                        ]
+                    },
+                    "tooltip": {
+                        "mode": "multi"
+                    }
+                },
+                "targets": [
+                    {
+                        "expr": "sum(max by (UUID) (DCGM_FI_DEV_POWER_USAGE{UUID!~\"MIG.*\"}))",
+                        "refId": "A"
+                    }
+                ],
+                "id": 12
             }
         ]
     }
