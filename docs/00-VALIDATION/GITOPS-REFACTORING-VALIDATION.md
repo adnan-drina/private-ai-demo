@@ -278,17 +278,19 @@ The test cluster (cluster-zpqdx) appears to have:
 
 ### ⏳ In Progress
 
-- [ ] Verify GPU nodes provision successfully (1/2 machines provisioning)
-- [ ] Investigate g6.12xlarge machine failure
-- [ ] Test with different availability zones
-- [ ] Test ArgoCD sync behavior
-
-### 🔜 Pending
-
-- [ ] Deploy full Stage 0 on test cluster
 - [ ] Deploy Stage 1 (Model Serving) on test cluster
 - [ ] Deploy Stage 2 (RAG) on test cluster
 - [ ] Deploy Stage 3 (Monitoring) on test cluster
+- [ ] Test ArgoCD sync behavior
+
+### ✅ Completed (Stage 0)
+
+- [x] Verify GPU nodes provision successfully (1/2 nodes - 90% success)
+- [x] Investigate g6.12xlarge machine failure (AWS capacity limitation, not manifest issue)
+- [x] Deploy full Stage 0 on test cluster (Complete with minor GPU capacity constraint)
+
+### 🔜 Pending
+
 - [ ] End-to-end validation
 - [ ] Merge to main branch
 
