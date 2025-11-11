@@ -303,8 +303,8 @@ create_secrets() {
   
   # Internal Registry Connection - REMOVED
   # NOTE: Pipelines now push directly to Quay.io, not internal registry
-  # ImageStreams are archived in gitops/stage01-model-serving/serving/archive/imagestreams/
-  # See docs/03-REFERENCE/secrets/connection-internal-registry.yaml for reference
+  # Legacy ImageStream manifests were removed during cleanup.
+  # See docs/03-REFERENCE/secrets/connection-internal-registry.yaml if registry integration is needed again.
   
   log_success "All secrets created successfully"
   log_warning "Remember: Secrets are NOT in Git (managed imperatively)"

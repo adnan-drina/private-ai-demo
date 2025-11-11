@@ -19,6 +19,8 @@ spec:
     enabled: true
   dcgmExporter:
     enabled: true
+    config:
+      name: console-plugin-nvidia-gpu
   devicePlugin:
     enabled: true
   driver:

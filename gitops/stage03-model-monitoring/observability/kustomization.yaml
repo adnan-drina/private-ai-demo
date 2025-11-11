@@ -38,6 +38,8 @@ resources:
   - grafana-dashboard-eval-results.yaml
   - grafana-dashboard-traces.yaml
   - grafana-dashboard-guidellm.yaml
+  - console-dashboard-nvidia.yaml
+  - console-plugin-nvidia
   - podmonitor.yaml
   - podmonitor-dcgm.yaml
   - pushgateway.yaml
