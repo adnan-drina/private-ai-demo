@@ -43,6 +43,6 @@ resources:
 labels:
   - includeSelectors: false
     pairs:
-      app.kubernetes.io/part-of: guidellm
+      app.kubernetes.io/part-of: evaluation
       app.kubernetes.io/component: benchmarking
       managed-by: argocd

@@ -43,12 +43,12 @@ spec:
           "type": "stat",
           "targets": [
             {
-              "expr": "sum(max_over_time((DCGM_FI_DEV_GPU_UTIL{namespace=\"private-ai-demo\",exported_pod=~\"mistral-24b-quantized-predictor.*\"}>-1)[5m]))",
+              "expr": "sum(kube_pod_container_resource_requests{namespace=\"private-ai-demo\",resource=\"nvidia_com_gpu\",pod=~\"mistral-24b-quantized-predictor.*\"} * on(namespace,pod) group_left(condition) kube_pod_status_ready{namespace=\"private-ai-demo\",pod=~\"mistral-24b-quantized-predictor.*\",condition=\"true\"}) or vector(0)",
               "refId": "A",
               "legendFormat": "Quantized Model"
             },
             {
-              "expr": "sum(max_over_time((DCGM_FI_DEV_GPU_UTIL{namespace=\"private-ai-demo\",exported_pod=~\"mistral-24b-predictor.*\"}>-1)[5m]))",
+              "expr": "sum(kube_pod_container_resource_requests{namespace=\"private-ai-demo\",resource=\"nvidia_com_gpu\",pod=~\"mistral-24b-predictor.*\"} * on(namespace,pod) group_left(condition) kube_pod_status_ready{namespace=\"private-ai-demo\",pod=~\"mistral-24b-predictor.*\",condition=\"true\"}) or vector(0)",
               "refId": "B",
               "legendFormat": "Full Precision Model"
             }
@@ -102,12 +102,12 @@ spec:
           "type": "stat",
           "targets": [
             {
-              "expr": "max(DCGM_FI_DEV_FB_USED{namespace=\"private-ai-demo\",exported_pod=~\"mistral-24b-quantized-predictor.*\"}) / 1024",
+              "expr": "(sum(max_over_time(DCGM_FI_DEV_FB_USED{namespace=\"private-ai-demo\",exported_pod=~\"mistral-24b-quantized-predictor.*\"}[5m])) / 1024)\nOR\n((sum(kube_pod_container_resource_requests{namespace=\"private-ai-demo\",resource=\"nvidia_com_gpu\",pod=~\"mistral-24b-quantized-predictor.*\"} * on(namespace,pod) group_left(condition) kube_pod_status_ready{namespace=\"private-ai-demo\",pod=~\"mistral-24b-quantized-predictor.*\",condition=\"true\"})) * 15.5)",
               "refId": "A",
               "legendFormat": "Quantized"
             },
             {
-              "expr": "sum(DCGM_FI_DEV_FB_USED{namespace=\"private-ai-demo\",exported_pod=~\"mistral-24b-predictor.*\"}) / 1024",
+              "expr": "(sum(max_over_time(DCGM_FI_DEV_FB_USED{namespace=\"private-ai-demo\",exported_pod=~\"mistral-24b-predictor.*\"}[5m])) / 1024)\nOR\n((sum(kube_pod_container_resource_requests{namespace=\"private-ai-demo\",resource=\"nvidia_com_gpu\",pod=~\"mistral-24b-predictor.*\"} * on(namespace,pod) group_left(condition) kube_pod_status_ready{namespace=\"private-ai-demo\",pod=~\"mistral-24b-predictor.*\",condition=\"true\"})) * 38.2)",
               "refId": "B",
               "legendFormat": "Full Precision (Total)"
             }

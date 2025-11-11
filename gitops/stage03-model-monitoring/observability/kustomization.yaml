@@ -32,6 +32,7 @@ resources:
   - network-policy-grafana-operator.yaml
   - grafana-datasource.yaml
   - grafana-datasource-tempo.yaml
+  - grafana-oauth-secret.yaml
   - grafana-dashboard-enhanced.yaml
   - grafana-dashboard-ai-metrics.yaml
   - grafana-dashboard-eval-results.yaml
@@ -41,6 +42,7 @@ resources:
   - podmonitor-dcgm.yaml
   - pushgateway.yaml
   - otel-targetallocator-rbac.yaml
+  - oauthclient-grafana.yaml
 
 # Operators are applied first (deploy.sh orchestrates sequencing).
 # Kustomize applies the infrastructure + dashboards in a single pass for reproducibility.

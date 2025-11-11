@@ -4,6 +4,8 @@ kind: OpenTelemetryCollector
 metadata:
   name: otel-collector
   namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/part-of: observability
 spec:
   mode: statefulset
   config: |

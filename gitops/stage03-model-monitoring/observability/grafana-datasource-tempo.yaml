@@ -4,6 +4,8 @@ kind: GrafanaDatasource
 metadata:
   name: tempo-datasource
   namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/part-of: observability
 spec:
   instanceSelector:
     matchLabels:

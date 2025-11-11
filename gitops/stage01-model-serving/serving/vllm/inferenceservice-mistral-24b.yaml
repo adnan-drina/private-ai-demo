@@ -5,7 +5,7 @@ metadata:
   name: mistral-24b
   namespace: private-ai-demo
   labels:
-    app.kubernetes.io/part-of: vllm-serving
+    app.kubernetes.io/part-of: serving
     app.kubernetes.io/component: inference
     app.kubernetes.io/name: mistral-24b
     app.openshift.io/runtime: python

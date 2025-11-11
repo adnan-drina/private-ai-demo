@@ -1,0 +1,15 @@
+---
+apiVersion: oauth.openshift.io/v1
+kind: OAuthClient
+metadata:
+  name: grafana-private-ai-demo
+  labels:
+    app.kubernetes.io/name: grafana-oauth-client
+    app.kubernetes.io/part-of: observability
+secret: f4824a7d5c4948c6815f582ad3e49c9a
+redirectURIs:
+  - https://grafana-private-ai-demo.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com/oauth2/callback
+grantMethod: prompt
+scopeRestrictions:
+  - literals:
+      - user:full

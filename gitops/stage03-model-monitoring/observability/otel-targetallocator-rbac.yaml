@@ -4,11 +4,15 @@ kind: ServiceAccount
 metadata:
   name: otel-collector-targetallocator
   namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/part-of: observability
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: otel-collector-targetallocator
+  labels:
+    app.kubernetes.io/part-of: observability
 rules:
   - apiGroups: [""]
     resources:
@@ -41,6 +45,8 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: otel-collector-targetallocator
+  labels:
+    app.kubernetes.io/part-of: observability
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole

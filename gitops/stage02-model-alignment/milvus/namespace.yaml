@@ -4,7 +4,7 @@ metadata:
   name: ai-infrastructure
   labels:
     opendatahub.io/dashboard: "true"
-    app.kubernetes.io/part-of: red-hat-ai-demo
+    app.kubernetes.io/part-of: pipeline
     app.kubernetes.io/component: infrastructure
   annotations:
     openshift.io/description: "Shared AI infrastructure components (Milvus, Docling, etc.)"

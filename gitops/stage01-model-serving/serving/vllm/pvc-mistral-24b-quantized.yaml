@@ -5,7 +5,7 @@ metadata:
   name: mistral-24b-quantized-pvc
   namespace: private-ai-demo
   labels:
-    app.kubernetes.io/part-of: vllm-serving
+    app.kubernetes.io/part-of: serving
     app.kubernetes.io/component: storage
     app.kubernetes.io/name: mistral-24b-quantized
 spec:

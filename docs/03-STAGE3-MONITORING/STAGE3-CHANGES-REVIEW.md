@@ -302,6 +302,7 @@ storage:
 **Recommendation**: 
 - Consider if this should be in Stage 3 observability
 - Or document as Stage 2 safety enhancement
+- ✅ Resolution (Nov 2025): documented explicit note in Stage 3 monitoring README that guardrails remain in Stage 2 by design so platform engineers know telemetry originates there.
 
 ---
 

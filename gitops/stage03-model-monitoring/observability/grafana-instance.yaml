@@ -6,19 +6,27 @@ metadata:
   namespace: private-ai-demo
   labels:
     dashboards: "grafana"
+    app.kubernetes.io/part-of: observability
 spec:
   config:
     log:
       mode: "console"
     auth:
-      disable_login_form: "false"
-    # Allow anonymous access to frontend settings (for operator health checks)
+      disable_login_form: "true"
     auth.anonymous:
+      enabled: "false"
+    auth.generic_oauth:
       enabled: "true"
-      org_role: "Viewer"
-    security:
-      admin_user: admin
-      admin_password: admin123
+      name: "OpenShift OAuth"
+      allow_sign_up: "true"
+      client_id: "grafana-private-ai-demo"
+      client_secret: "f4824a7d5c4948c6815f582ad3e49c9a"
+      scopes: "user:full"
+      auth_url: "https://oauth-openshift.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com/oauth/authorize"
+      token_url: "https://oauth-openshift.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com/oauth/token"
+      api_url: "https://oauth-openshift.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com/oauth/token"
+      login_attribute_path: "preferred_username"
+      role_attribute_path: "contains(groups[*], 'system:cluster-admins') && 'Admin' || 'Viewer'"
 ---
 apiVersion: route.openshift.io/v1
 kind: Route
@@ -26,6 +34,7 @@ metadata:
   name: grafana
   namespace: private-ai-demo
 spec:
+  host: grafana-private-ai-demo.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com
   to:
     kind: Service
     name: grafana-service

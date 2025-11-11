@@ -7,6 +7,7 @@ metadata:
   labels:
     app: model-mirror
     model: mistral-24b-quantized
+    app.kubernetes.io/part-of: serving
   annotations:
     argocd.argoproj.io/sync-options: "Prune=false"
     description: "One-time Job to populate quantized PVC from MinIO"
@@ -18,6 +19,7 @@ spec:
       labels:
         app: model-mirror
         model: mistral-24b-quantized
+        app.kubernetes.io/part-of: serving
     spec:
       restartPolicy: Never
       securityContext:

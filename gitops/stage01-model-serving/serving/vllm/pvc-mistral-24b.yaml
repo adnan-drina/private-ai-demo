@@ -7,7 +7,7 @@ metadata:
   labels:
     app.kubernetes.io/name: mistral-24b
     app.kubernetes.io/component: model-storage
-    app.kubernetes.io/part-of: vllm-serving
+    app.kubernetes.io/part-of: serving
   annotations:
     argocd.argoproj.io/sync-wave: "3"
     description: "Persistent storage for Mistral 24B full-precision model (48GB weights)"

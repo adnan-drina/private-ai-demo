@@ -4,6 +4,8 @@ kind: TempoStack
 metadata:
   name: tempo
   namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/part-of: observability
 spec:
   managementState: Managed
   # Single-tenant mode (default) - no complex OIDC authentication needed
