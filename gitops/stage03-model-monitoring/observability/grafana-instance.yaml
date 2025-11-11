@@ -21,12 +21,15 @@ spec:
       allow_sign_up: "true"
       client_id: "grafana-private-ai-demo"
       client_secret: "f4824a7d5c4948c6815f582ad3e49c9a"
-      scopes: "user:full"
+      scopes: "user:info user:check-access"
       auth_url: "https://oauth-openshift.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com/oauth/authorize"
       token_url: "https://oauth-openshift.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com/oauth/token"
-      api_url: "https://oauth-openshift.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com/oauth/token"
-      login_attribute_path: "preferred_username"
+      api_url: "https://oauth-openshift.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com/apis/user.openshift.io/v1/users/~"
+      login_attribute_path: "metadata.name"
+      groups_attribute_path: "groups"
       role_attribute_path: "contains(groups[*], 'system:cluster-admins') && 'Admin' || 'Viewer'"
+      use_pkce: "false"
+      tls_skip_verify_insecure: "false"
 ---
 apiVersion: route.openshift.io/v1
 kind: Route
