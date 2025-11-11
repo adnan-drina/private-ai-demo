@@ -2,16 +2,15 @@ apiVersion: nfd.openshift.io/v1
 kind: NodeFeatureDiscovery
 metadata:
   name: nfd-instance
-  namespace: openshift-machine-api
+  namespace: openshift-nfd
   labels:
     app.kubernetes.io/instance: stage00-gpu-infrastructure
     app.kubernetes.io/part-of: stage00-ai-platform
 spec:
+  enableTaints: false
   instance: ""
   operand:
-    # Let operator use its default image (with valid digest)
-    imagePullPolicy: Always
-  enableTaints: false
+    imagePullPolicy: IfNotPresent
   prunerOnDelete: false
   topologyUpdater: false
   workerConfig:
@@ -26,16 +25,3 @@ spec:
             - "12"
           deviceLabelFields:
             - "vendor"
-            # Removed "device" to emit vendor-level labels (pci-10de.present)
-            # This is required for GPU Operator to recognize NVIDIA nodes
-        usb:
-          deviceClassWhitelist:
-            - "0e"
-            - "ef"
-            - "fe"
-            - "ff"
-          deviceLabelFields:
-            - "serial"
-            - "vendor"
-            - "device"
-

@@ -1,0 +1,173 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: console-plugin-nvidia-manifest
+  namespace: nvidia-gpu-operator
+data:
+  plugin-manifest.json: |
+    {
+      "name": "console-plugin-nvidia-gpu",
+      "version": "0.0.0",
+      "displayName": "Console GPU Plugin",
+      "description": "GPU plugin for OpenShift Console",
+      "dependencies": {
+        "@console/pluginAPI": "*"
+      },
+      "extensions": [
+        {
+          "type": "console.flag/model",
+          "properties": {
+            "flag": "GPU_OPERATOR",
+            "model": {
+              "group": "nvidia.com",
+              "version": "v1",
+              "kind": "ClusterPolicy"
+            }
+          }
+        },
+        {
+          "type": "console.cluster-overview/utilization-item",
+          "properties": {
+            "title": "%plugin__console-plugin-nvidia-gpu~GPU%",
+            "getUtilizationQuery": {
+              "$codeRef": "clusterOverview.getGPUUtilizationQuery"
+            },
+            "getTotalQuery": {
+              "$codeRef": "clusterOverview.getGPUTotalUtilizationQuery"
+            },
+            "humanize": {
+              "$codeRef": "units.humanizeGPU"
+            }
+          },
+          "flags": {
+            "required": [
+              "GPU_OPERATOR"
+            ]
+          }
+        },
+        {
+          "type": "console.cluster-overview/utilization-item",
+          "properties": {
+            "title": "%plugin__console-plugin-nvidia-gpu~GPU Memory%",
+            "getUtilizationQuery": {
+              "$codeRef": "clusterOverview.getMemoryQuery"
+            },
+            "humanize": {
+              "$codeRef": "units.humanizePercentage"
+            }
+          },
+          "flags": {
+            "required": [
+              "GPU_OPERATOR"
+            ]
+          }
+        },
+        {
+          "type": "console.cluster-overview/utilization-item",
+          "properties": {
+            "title": "%plugin__console-plugin-nvidia-gpu~GPU Power usage%",
+            "getUtilizationQuery": {
+              "$codeRef": "clusterOverview.getPowerUsageUtilizationQuery"
+            },
+            "humanize": {
+              "$codeRef": "units.humanizeWatts"
+            }
+          },
+          "flags": {
+            "required": [
+              "GPU_OPERATOR"
+            ]
+          }
+        },
+        {
+          "type": "console.cluster-overview/inventory-item",
+          "properties": {
+            "component": {
+              "$codeRef": "clusterInventory.default"
+            }
+          },
+          "flags": {
+            "required": [
+              "GPU_OPERATOR"
+            ]
+          }
+        },
+        {
+          "type": "console.dashboards/overview/detail/item",
+          "properties": {
+            "component": {
+              "$codeRef": "overviewDetailItem.default"
+            }
+          },
+          "flags": {
+            "required": [
+              "GPU_OPERATOR"
+            ]
+          }
+        },
+        {
+          "type": "console.navigation/href",
+          "properties": {
+            "id": "gpu-dashboard",
+            "perspective": "admin",
+            "section": "compute",
+            "name": "%plugin__console-plugin-nvidia-gpu~GPUs%",
+            "href": "/gpu-dashboard",
+            "namespaced": false
+          },
+          "flags": {
+            "required": [
+              "GPU_OPERATOR"
+            ]
+          }
+        },
+        {
+          "type": "console.page/route",
+          "properties": {
+            "exact": true,
+            "path": [
+              "/gpu-dashboard"
+            ],
+            "component": {
+              "$codeRef": "gpuDashboard.default"
+            }
+          },
+          "flags": {
+            "required": [
+              "GPU_OPERATOR"
+            ]
+          }
+        },
+        {
+          "type": "console.project-overview/utilization-item",
+          "properties": {
+            "title": "%plugin__console-plugin-nvidia-gpu~GPU pod count%",
+            "getUtilizationQuery": {
+              "$codeRef": "projectOverview.getGPUPodsQuery"
+            },
+            "humanize": {
+              "$codeRef": "units.humanizeNumber"
+            }
+          },
+          "flags": {
+            "required": [
+              "GPU_OPERATOR"
+            ]
+          }
+        },
+        {
+          "type": "console.project-overview/inventory-item",
+          "properties": {
+            "component": {
+              "$codeRef": "projectInventory.default"
+            }
+          },
+          "flags": {
+            "required": [
+              "GPU_OPERATOR"
+            ]
+          }
+        }
+      ]
+    }
+

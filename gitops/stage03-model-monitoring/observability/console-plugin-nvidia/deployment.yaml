@@ -29,8 +29,15 @@ spec:
             - mountPath: /var/serving-cert
               name: plugin-serving-cert
               readOnly: true
+            - mountPath: /opt/app-root/src/plugin-manifest.json
+              name: plugin-manifest
+              readOnly: true
+              subPath: plugin-manifest.json
       volumes:
         - name: plugin-serving-cert
           secret:
             secretName: plugin-serving-cert
+        - name: plugin-manifest
+          configMap:
+            name: console-plugin-nvidia-manifest
 

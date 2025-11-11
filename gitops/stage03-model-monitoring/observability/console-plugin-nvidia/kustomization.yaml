@@ -12,4 +12,5 @@ resources:
   - service.yaml
   - configmap-metrics.yaml
   - console-enable.yaml
+  - configmap-manifest.yaml
 
