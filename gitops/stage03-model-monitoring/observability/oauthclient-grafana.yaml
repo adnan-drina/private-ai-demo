@@ -8,7 +8,7 @@ metadata:
     app.kubernetes.io/part-of: observability
 secret: f4824a7d5c4948c6815f582ad3e49c9a
 redirectURIs:
-  - https://grafana-private-ai-demo.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com/oauth2/callback
+  - https://grafana-private-ai-demo.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com/login/generic_oauth
 grantMethod: prompt
 scopeRestrictions:
   - literals:
