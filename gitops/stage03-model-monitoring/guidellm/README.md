@@ -55,7 +55,7 @@ User / CronJob
 - **`configmap-guidellm-config.yaml`**: Benchmark configuration presets (quick-test, standard, comprehensive)
 - **`configmap-nginx-config.yaml`**: nginx server configuration
 - **`configmap-index-html.yaml`**: Index page for listing benchmark reports
-- **`configmap-metrics-exporter.yaml`**: Python script for exporting metrics to Prometheus
+- **Metrics export** – CronJobs push benchmark metrics to the Prometheus Pushgateway directly after each run
 - **`secret-s3-credentials.yaml`**: MinIO S3 credentials
 
 ### 3. Jobs

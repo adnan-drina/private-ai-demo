@@ -34,7 +34,7 @@ OpenTelemetry Collector ──► Prometheus endpoint (metrics)
 - LMEvalJobs: `arc_easy`, `hellaswag`, optional `gsm8k`, `truthfulqa_mc2`
 - LMEval metrics exporter CronJob → Pushgateway
 - Evaluation notebook for deeper analysis
-- **Service Mesh routing** – LM-Eval pods keep Istio sidecars but call the revision-private Knative services directly (`http://mistral-24b(-quantized)-predictor-00001-private.private-ai-demo.svc.cluster.local`). Update the suffix when a new revision becomes ready; no additional TLS overrides are required.
+- **Service Mesh routing** – LM-Eval pods keep Istio sidecars but call the canonical Knative services directly (`https://mistral-24b(-quantized).private-ai-demo.svc.cluster.local`). No revision suffix management is needed; KServe swaps revisions transparently.
 
 ### Observability Stack
 - **Operators (phase 1)** – see `gitops/stage03-model-monitoring/operators/`

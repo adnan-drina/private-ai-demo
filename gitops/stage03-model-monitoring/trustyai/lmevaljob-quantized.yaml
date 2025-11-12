@@ -20,7 +20,7 @@ spec:
     - name: model
       value: "mistral-24b-quantized"
     - name: base_url
-      value: "http://mistral-24b-quantized-predictor-00039-private.private-ai-demo.svc.cluster.local/v1/completions"
+      value: "http://mistral-24b-quantized.private-ai-demo.svc.cluster.local/v1/completions"
     - name: tokenizer
       value: "RedHatAI/Mistral-Small-24B-Instruct-2501-quantized.w4a16"
     - name: num_concurrent

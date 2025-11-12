@@ -17,14 +17,9 @@ resources:
   # RBAC
   - rbac-guidellm.yaml
   
-  # Storage
-  - pvc-guidellm-results.yaml
-  
   # Configuration
-  - configmap-guidellm-config.yaml
-  - configmap-nginx-config.yaml
-  - configmap-index-html.yaml
-  - configmap-metrics-exporter.yaml
+  - configmap-guidellm-benchmark.yaml
+  - configmap-guidellm-profiles.yaml
   - secret-s3-credentials.yaml
   
   # Jobs (manual benchmarks)
@@ -35,10 +30,17 @@ resources:
   - cronjob-guidellm-daily.yaml
   - cronjob-guidellm-weekly.yaml
   
-  # Web server for reports
-  - deployment-nginx-reports.yaml
-  - service-guidellm-reports.yaml
-  - route-guidellm-reports.yaml
+  # Interactive workbench UI
+  - deployment-guidellm-workbench.yaml
+  - service-guidellm-workbench.yaml
+  - route-guidellm-workbench.yaml
+
+configMapGenerator:
+  - name: guidellm-workbench-app
+    files:
+      - app.py=workbench-app.py
+    options:
+      disableNameSuffixHash: true
 
 labels:
   - includeSelectors: false

@@ -17,6 +17,8 @@ spec:
   ttlSecondsAfterFinished: 86400  # Keep completed jobs for 24 hours
   template:
     metadata:
+      annotations:
+        sidecar.istio.io/inject: "true"
       labels:
         app: guidellm
         model: mistral-24b
@@ -40,22 +42,9 @@ spec:
           done
           echo "✅ Model is READY!"
           
-          echo "🔍 Getting latest revision service URL (bypasses Knative routing)"
-          
-          # Get the latest ready revision from Knative Service
-          LATEST_REV=$(oc get ksvc mistral-24b-predictor -n private-ai-demo \
-            -o jsonpath='{.status.latestReadyRevisionName}')
-          
-          if [ -z "$LATEST_REV" ]; then
-            echo "❌ ERROR: Could not find latest ready revision"
-            exit 1
-          fi
-          
-          # Use revision-specific private service on port 80 (direct to vLLM, bypasses Knative routing)
-          INTERNAL_URL="http://${LATEST_REV}-private.private-ai-demo.svc.cluster.local"
-          
-          echo "✅ Latest Revision: ${LATEST_REV}"
-          echo "✅ Direct Service URL: ${INTERNAL_URL}"
+          echo "🔍 Using canonical internal service endpoint"
+          INTERNAL_URL="http://mistral-24b.private-ai-demo.svc.cluster.local"
+          echo "✅ Service URL: ${INTERNAL_URL}"
           echo -n "${INTERNAL_URL}" > /shared/inference-url.txt
         volumeMounts:
         - name: shared
@@ -73,7 +62,7 @@ spec:
           echo "🚀 Running GuideLLM Benchmark"
           echo "Target: ${MODEL_URL}"
           echo "Model: mistral-24b"
-          
+
           # Use synthetic data with Mistral tokenizer
           # This generates test prompts with specified token counts
           guidellm benchmark \
@@ -90,10 +79,10 @@ spec:
         env:
         - name: TZ
           value: "America/New_York"
+        - name: GUIDELLM__OPENAI__VERIFY
+          value: "false"
         - name: PYTHONHTTPSVERIFY
           value: "0"  # Disable SSL verification for self-signed OpenShift certs
-        - name: CURL_CA_BUNDLE
-          value: ""  # Disable SSL bundle verification
         - name: HOME
           value: "/tmp"  # Writable directory for cache
         - name: HF_HOME

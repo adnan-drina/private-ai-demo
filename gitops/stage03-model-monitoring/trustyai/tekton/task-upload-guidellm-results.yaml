@@ -1,0 +1,81 @@
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: upload-guidellm-results
+  labels:
+    app.kubernetes.io/name: upload-guidellm-results
+    app.kubernetes.io/part-of: evaluation
+    app.kubernetes.io/component: benchmarking
+spec:
+  description: >
+    Upload packaged GuideLLM benchmark artifacts to MinIO / S3-compatible storage.
+  params:
+    - name: endpoint
+      description: MinIO/S3 endpoint (scheme://host:port).
+      type: string
+      default: "http://minio.private-ai-demo.svc.cluster.local:9000"
+    - name: bucket
+      description: Bucket to store benchmark artifacts.
+      type: string
+      default: "guidellm-results"
+    - name: artifact-prefix
+      description: Artifact prefix produced by the benchmark task.
+      type: string
+    - name: timestamp
+      description: Timestamp produced by the benchmark task.
+      type: string
+  workspaces:
+    - name: shared-workspace
+      description: Shared workspace containing benchmark outputs
+  steps:
+    - name: upload
+      image: quay.io/minio/mc:latest
+      workingDir: "$(workspaces.shared-workspace.path)"
+      env:
+        - name: MINIO_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: minio-credentials
+              key: accesskey
+        - name: MINIO_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: minio-credentials
+              key: secretkey
+      script: |
+        #!/bin/sh
+        set -eu
+
+        ENDPOINT="$(params.endpoint)"
+        BUCKET="$(params.bucket)"
+        PREFIX="$(params.artifact-prefix)"
+        TIMESTAMP="$(params.timestamp)"
+
+        echo "▶ Configuring mc client for ${ENDPOINT}"
+        mc alias set guidellm "${ENDPOINT}" "${MINIO_ACCESS_KEY}" "${MINIO_SECRET_KEY}" --api S3v4
+
+        if ! mc ls guidellm "${BUCKET}" >/dev/null 2>&1; then
+          echo "Bucket ${BUCKET} not found. Creating…"
+          mc mb guidellm/"${BUCKET}" || true
+        fi
+
+        TAR_FILE="${PREFIX}.tar.gz"
+        if [ -f "${TAR_FILE}" ]; then
+          echo "Uploading ${TAR_FILE}"
+          mc cp "${TAR_FILE}" guidellm/"${BUCKET}"/
+        else
+          echo "WARNING: ${TAR_FILE} not found; skipping archive upload."
+        fi
+
+        if [ -d "${PREFIX}" ]; then
+          echo "Uploading directory ${PREFIX}"
+          mc cp --recursive "${PREFIX}" guidellm/"${BUCKET}"/"${PREFIX}"/
+        else
+          echo "WARNING: directory ${PREFIX} not found; skipping directory upload."
+        fi
+
+        # Surface metadata for observability
+        ls -alh
+        echo "Uploaded artifacts for timestamp ${TIMESTAMP}"
+

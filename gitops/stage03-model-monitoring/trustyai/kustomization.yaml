@@ -22,6 +22,9 @@ resources:
   - lmevaljob-quantized.yaml
   - lmevaljob-full.yaml
 
+  # GuideLLM Tekton benchmark pipeline
+  - tekton
+
 # Note: includeSelectors=false to avoid modifying immutable Deployment selectors
 # Labels are still applied to metadata and pod templates, just not to selectors
 labels:

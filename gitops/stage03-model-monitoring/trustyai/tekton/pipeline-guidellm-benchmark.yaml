@@ -1,0 +1,95 @@
+---
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: guidellm-benchmark-pipeline
+  labels:
+    app.kubernetes.io/name: guidellm-benchmark-pipeline
+    app.kubernetes.io/part-of: evaluation
+    app.kubernetes.io/component: benchmarking
+spec:
+  description: >
+    Run a GuideLLM benchmark against a vLLM endpoint and upload the packaged
+    artifacts to MinIO for long-term storage.
+  params:
+    - name: target
+      type: string
+      description: Base URL of the model endpoint (internal service URL).
+      default: "http://mistral-24b.private-ai-demo.svc.cluster.local"
+    - name: model-name
+      type: string
+      description: Logical model identifier (used for artifact naming).
+      default: "mistral-24b"
+    - name: processor
+      type: string
+      description: Hugging Face tokenizer / processor repo ID.
+      default: "mistralai/Mistral-Small-24B-Instruct-2501"
+    - name: data-config
+      type: string
+      description: GuideLLM data configuration string.
+      default: "prompt_tokens=256,output_tokens=128,samples=100"
+    - name: rate-type
+      type: string
+      description: Rate type passed to GuideLLM.
+      default: "sweep"
+    - name: rate
+      type: string
+      description: Request rate passed to GuideLLM (ignored when rate-type=throughput).
+      default: "10"
+    - name: max-seconds
+      type: string
+      description: Maximum runtime for the benchmark.
+      default: "1800"
+    - name: minio-endpoint
+      type: string
+      description: MinIO/S3 endpoint for artifact upload.
+      default: "http://minio.private-ai-demo.svc.cluster.local:9000"
+    - name: minio-bucket
+      type: string
+      description: MinIO/S3 bucket for artifact upload.
+      default: "guidellm-results"
+  workspaces:
+    - name: shared-workspace
+      description: Shared workspace for benchmark outputs
+  tasks:
+    - name: benchmark
+      taskRef:
+        kind: Task
+        name: guidellm-benchmark
+      params:
+        - name: target
+          value: "$(params.target)"
+        - name: model-name
+          value: "$(params.model-name)"
+        - name: processor
+          value: "$(params.processor)"
+        - name: data-config
+          value: "$(params.data-config)"
+        - name: rate-type
+          value: "$(params.rate-type)"
+        - name: rate
+          value: "$(params.rate)"
+        - name: max-seconds
+          value: "$(params.max-seconds)"
+      workspaces:
+        - name: shared-workspace
+          workspace: shared-workspace
+    - name: upload-results
+      runAfter:
+        - benchmark
+      taskRef:
+        kind: Task
+        name: upload-guidellm-results
+      params:
+        - name: endpoint
+          value: "$(params.minio-endpoint)"
+        - name: bucket
+          value: "$(params.minio-bucket)"
+        - name: artifact-prefix
+          value: "$(tasks.benchmark.results.artifact-prefix)"
+        - name: timestamp
+          value: "$(tasks.benchmark.results.timestamp)"
+      workspaces:
+        - name: shared-workspace
+          workspace: shared-workspace
+

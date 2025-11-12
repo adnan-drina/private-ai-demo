@@ -2,21 +2,20 @@
 apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
-  name: guidellm-reports
+  name: guidellm-workbench
   namespace: private-ai-demo
   labels:
-    app: guidellm-reports
-  annotations:
-    argocd.argoproj.io/sync-wave: "2"
+    app: guidellm-workbench
+    app.kubernetes.io/name: guidellm-workbench
+    app.kubernetes.io/part-of: evaluation
+    app.kubernetes.io/component: benchmarking
 spec:
   to:
     kind: Service
-    name: guidellm-reports
-    weight: 100
+    name: guidellm-workbench
   port:
     targetPort: http
   tls:
     termination: edge
     insecureEdgeTerminationPolicy: Redirect
-  wildcardPolicy: None
 

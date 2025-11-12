@@ -1,0 +1,33 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: guidellm-daily-config
+  namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/part-of: evaluation
+    app.kubernetes.io/component: benchmarking
+data:
+  GUIDELLM_RATE: "10"
+  GUIDELLM_RATE_TYPE: "sweep"
+  GUIDELLM_PROMPT_TOKENS: "256"
+  GUIDELLM_OUTPUT_TOKENS: "128"
+  GUIDELLM_SAMPLES: "100"
+  GUIDELLM_MAX_SECONDS: "1800"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: guidellm-weekly-config
+  namespace: private-ai-demo
+  labels:
+    app.kubernetes.io/part-of: evaluation
+    app.kubernetes.io/component: benchmarking
+data:
+  GUIDELLM_RATE: "20"
+  GUIDELLM_RATE_TYPE: "sweep"
+  GUIDELLM_PROMPT_TOKENS: "512"
+  GUIDELLM_OUTPUT_TOKENS: "256"
+  GUIDELLM_SAMPLES: "500"
+  GUIDELLM_MAX_SECONDS: "3600"
+

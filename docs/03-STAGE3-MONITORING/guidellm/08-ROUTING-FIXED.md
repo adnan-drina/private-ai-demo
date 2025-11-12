@@ -174,20 +174,20 @@ GuideLLM → http://mistral-24b-quantized-predictor.svc.cluster.local
 
 **After**:
 ```
-GuideLLM → http://mistral-24b-quantized-predictor-00039-private.svc.cluster.local
-            ↓ (Direct to Pod Service - no gateway)
-            ✅ 400 Bad Request (connection works, just parameter mismatch)
+GuideLLM → http://mistral-24b-quantized.private-ai-demo.svc.cluster.local
+            ↓ (Knative service handles revision switching)
+            ✅ 200 OK (connection works with canonical service DNS)
 ```
 
 ### **Key Configuration Changes**
 
-1. **URL Pattern Changed**:
+1. **URL Pattern Standardised**:
    ```yaml
    # Before
    http://mistral-24b-quantized-predictor.svc.cluster.local
    
    # After  
-   http://mistral-24b-quantized-predictor-00039-private.svc.cluster.local
+   http://mistral-24b-quantized.private-ai-demo.svc.cluster.local
    ```
 
 2. **Discovery Method Changed**:

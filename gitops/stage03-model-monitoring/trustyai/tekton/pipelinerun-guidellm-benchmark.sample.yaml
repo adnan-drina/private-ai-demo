@@ -1,0 +1,43 @@
+---
+# Sample PipelineRun for ad-hoc GuideLLM benchmarks.
+# Apply manually when you want to execute the pipeline:
+#   oc create -f pipelinerun-guidellm-benchmark.sample.yaml
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  name: guidellm-benchmark-manual
+  namespace: private-ai-demo
+  annotations:
+    argocd.argoproj.io/managed-by: manual
+spec:
+  serviceAccountName: guidellm-runner
+  pipelineRef:
+    name: guidellm-benchmark-pipeline
+  podTemplate:
+    metadata:
+      annotations:
+        sidecar.istio.io/inject: "true"
+  params:
+    - name: target
+      value: "http://mistral-24b.private-ai-demo.svc.cluster.local"
+    - name: model-name
+      value: "mistral-24b"
+    - name: processor
+      value: "mistralai/Mistral-Small-24B-Instruct-2501"
+    - name: data-config
+      value: "prompt_tokens=128,output_tokens=64,samples=25"
+    - name: rate-type
+      value: "sweep"
+    - name: rate
+      value: "10"
+    - name: max-seconds
+      value: "600"
+    - name: minio-endpoint
+      value: "http://minio.private-ai-demo.svc.cluster.local:9000"
+    - name: minio-bucket
+      value: "guidellm-results"
+  workspaces:
+    - name: shared-workspace
+      persistentVolumeClaim:
+        claimName: guidellm-results
+

@@ -20,7 +20,7 @@ spec:
     - name: model
       value: "mistral-24b"
     - name: base_url
-      value: "http://mistral-24b-predictor-00043-private.private-ai-demo.svc.cluster.local/v1/completions"
+      value: "http://mistral-24b.private-ai-demo.svc.cluster.local/v1/completions"
     - name: tokenizer
       value: "mistralai/Mistral-Small-24B-Instruct-2501"
     - name: num_concurrent

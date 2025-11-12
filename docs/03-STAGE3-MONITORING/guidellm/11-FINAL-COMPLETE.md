@@ -161,7 +161,7 @@ stages/stage3-model-monitoring/deploy.sh  # Updated with MinIO buckets
 
 ### **Job Parameters**
 ```yaml
-Target: http://{revision}-private.private-ai-demo.svc.cluster.local
+Target: https://mistral-24b(-quantized).private-ai-demo.svc.cluster.local
 Model: mistral-24b-quantized | mistral-24b
 Backend: openai_http
 Rate: 5 requests/sec (sweep)

@@ -14,6 +14,7 @@ This directory contains **TrustyAI runtime resources** plus **LMEvalJob Custom R
 
 - `service/` – Declarative manifests for the TrustyAI runtime (`TrustyAIService` CR, PVC, ServiceMonitor)
 - `metrics/` – Pushgateway exporter CronJob that publishes `lm_eval_*` metrics
+- `tekton/` – Tekton Tasks + Pipeline for running GuideLLM benchmarks and uploading packaged artifacts to MinIO
 - **`lmevaljob-quantized.yaml`**: Evaluation job for Mistral 24B Quantized (W4A16, 1 GPU)
 - **`lmevaljob-full.yaml`**: Evaluation job for Mistral 24B Full Precision (FP16, 4 GPUs)
 - **`kustomization.yaml`**: Kustomize configuration for deployment
@@ -31,11 +32,10 @@ model: local-completions  # Required for loglikelihood support (arc_easy, hellas
 ```yaml
 modelArgs:
   - name: base_url
-    value: "http://mistral-24b-predictor-00001-private.private-ai-demo.svc.cluster.local/v1/completions"
+    value: "http://mistral-24b.private-ai-demo.svc.cluster.local/v1/completions"
 ```
 
-**Why**: The `local-completions` model type uses the base_url **verbatim**. It does NOT append paths automatically like `openai-completions` does.  
-**Revision updates**: when KServe rolls out a new revision, bump the `-00001-` suffix to match the latest ready revision before re-running evaluations.
+**Why**: The `local-completions` model type uses the base_url **verbatim**. It does NOT append paths automatically like `openai-completions` does, so always point to the canonical service DNS rather than a revision-specific host.
 
 ### 3. Tokenizer (HuggingFace Repo IDs)
 ```yaml
@@ -156,6 +156,9 @@ oc apply -k gitops/components/trustyai-eval-operator/
 
 # Verify deployment
 oc get lmevaljob -n private-ai-demo
+
+# (Optional) deploy the GuideLLM Tekton pipeline + tasks
+oc apply -k gitops/stage03-model-monitoring/trustyai/tekton
 ```
 
 ### Manual Deployment

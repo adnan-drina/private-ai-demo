@@ -1,0 +1,302 @@
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: guidellm-benchmark
+  labels:
+    app.kubernetes.io/name: guidellm-benchmark
+    app.kubernetes.io/part-of: evaluation
+    app.kubernetes.io/component: benchmarking
+spec:
+  description: >
+    Execute a GuideLLM benchmark against a target endpoint, package the
+    results together with run metadata, and emit the artifact prefix +
+    timestamp for downstream steps.
+  params:
+    - name: target
+      description: Base URL of the model endpoint (no /v1 suffix required).
+      type: string
+      default: "http://mistral-24b.private-ai-demo.svc.cluster.local"
+    - name: model-name
+      description: Logical name used for artifacts (e.g. mistral-24b).
+      type: string
+      default: "mistral-24b"
+    - name: processor
+      description: Hugging Face tokenizer / processor repository ID.
+      type: string
+      default: "mistralai/Mistral-Small-24B-Instruct-2501"
+    - name: data-config
+      description: >
+        GuideLLM data arguments (prompt/output tokens, samples). Example:
+        prompt_tokens=256,output_tokens=128,samples=100
+      type: string
+      default: "prompt_tokens=256,output_tokens=128,samples=100"
+    - name: rate-type
+      description: Benchmark rate type (sweep, synchronous, throughput, …).
+      type: string
+      default: "sweep"
+    - name: rate
+      description: Benchmark request rate (ignored when rate-type=throughput).
+      type: string
+      default: "10"
+    - name: max-seconds
+      description: Maximum benchmark duration in seconds.
+      type: string
+      default: "1800"
+    - name: guidellm-image
+      description: Container image providing the GuideLLM CLI.
+      type: string
+      default: "ghcr.io/vllm-project/guidellm:latest"
+  results:
+    - name: timestamp
+      description: Timestamp used for artifact naming (YYYYMMDD_HHMMSS).
+    - name: artifact-prefix
+      description: Prefix used for packaged artifacts (e.g. mistral-24b_20251111_101010).
+  workspaces:
+    - name: shared-workspace
+      description: Shared workspace for benchmark outputs
+  stepTemplate:
+    env:
+      - name: HF_TOKEN
+        valueFrom:
+          secretKeyRef:
+            name: huggingface-token
+            key: HF_TOKEN
+      - name: HOME
+        value: /tmp
+      - name: HF_HOME
+        value: /tmp/hf
+      - name: GUIDELLM__ENV
+        value: prod
+      - name: GUIDELLM__OPENAI__VERIFY
+        value: "false"
+      - name: PYTHONHTTPSVERIFY
+        value: "0"
+      - name: PUSHGATEWAY_URL
+        value: "http://prometheus-pushgateway.private-ai-demo.svc.cluster.local:9091"
+  steps:
+    - name: run-benchmark
+      image: "$(params.guidellm-image)"
+      workingDir: "$(workspaces.shared-workspace.path)"
+      script: |
+        #!/bin/bash
+        set -euo pipefail
+
+        export HF_TOKEN
+        export GUIDELLM__ENV
+        export GUIDELLM__OPENAI__VERIFY
+        export PYTHONHTTPSVERIFY
+
+        TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
+        MODEL_NAME="$(params.model-name)"
+        TARGET="$(params.target)"
+        PROCESSOR="$(params.processor)"
+        DATA_CFG="$(params.data-config)"
+        RATE_TYPE="$(params.rate-type)"
+        RATE_VALUE="$(params.rate)"
+        MAX_SECONDS="$(params.max-seconds)"
+
+        ARTIFACT_PREFIX="${MODEL_NAME}_${TIMESTAMP}"
+        RESULT_DIR="${ARTIFACT_PREFIX}"
+        mkdir -p "${RESULT_DIR}"
+
+        OUTPUT_JSON="${RESULT_DIR}/benchmark.json"
+        OUTPUT_HTML="${RESULT_DIR}/benchmark.html"
+        LOG_FILE="${RESULT_DIR}/benchmark.log"
+
+        echo "▶ Running GuideLLM benchmark against ${TARGET}"
+        echo "  model          : ${MODEL_NAME}"
+        echo "  processor      : ${PROCESSOR}"
+        echo "  data config    : ${DATA_CFG}"
+        echo "  rate type      : ${RATE_TYPE}"
+        echo "  rate           : ${RATE_VALUE}"
+        echo "  max seconds    : ${MAX_SECONDS}"
+
+        GUIDELLM_ARGS=(
+          --target "${TARGET}"
+          --model "${MODEL_NAME}"
+          --backend-type "openai_http"
+          --processor "${PROCESSOR}"
+          --data "${DATA_CFG}"
+          --output-path "${OUTPUT_JSON}"
+          --rate-type "${RATE_TYPE}"
+          --max-seconds "${MAX_SECONDS}"
+        )
+
+        if [[ "${RATE_TYPE}" != "throughput" ]]; then
+          GUIDELLM_ARGS+=(--rate "${RATE_VALUE}")
+        fi
+
+        COLUMNS=500 guidellm benchmark "${GUIDELLM_ARGS[@]}" 2>&1 | tee "${LOG_FILE}"
+
+        if [[ ! -s "${OUTPUT_JSON}" ]]; then
+          echo "❌ Benchmark output ${OUTPUT_JSON} not found or empty."
+          exit 1
+        fi
+
+        BENCHMARK_FILE="${OUTPUT_JSON}" \
+        BENCHMARK_MODEL="${MODEL_NAME}" \
+        BENCHMARK_TYPE="pipeline" \
+        BENCHMARK_TIMESTAMP="${TIMESTAMP}" \
+        HTML_FILE="${OUTPUT_HTML}" \
+        python - <<'PY'
+        import textwrap
+
+        exec(
+            textwrap.dedent(
+                """
+                import json
+                import os
+                import pathlib
+                import subprocess
+                import sys
+                from datetime import datetime
+                from html import escape
+                from textwrap import dedent
+
+                benchmark_file = os.environ["BENCHMARK_FILE"]
+                model = os.environ.get("BENCHMARK_MODEL", "unknown")
+                bench_type = os.environ.get("BENCHMARK_TYPE", "manual")
+                timestamp = os.environ.get("BENCHMARK_TIMESTAMP", "")
+                html_file = os.environ.get("HTML_FILE")
+                pushgateway_url = os.environ.get("PUSHGATEWAY_URL")
+
+                try:
+                    with open(benchmark_file, "r", encoding="utf-8") as fh:
+                        data = json.load(fh)
+                except Exception as exc:  # noqa: BLE001
+                    print(f"Unable to read benchmark output {benchmark_file}: {exc}")
+                    sys.exit(0)
+
+                benchmarks = data.get("benchmarks") or []
+                if not benchmarks:
+                    print(f"No benchmarks found in {benchmark_file}, skipping metrics export and HTML generation.")
+                    sys.exit(0)
+
+                metrics = benchmarks[0].get("metrics", {})
+
+                if pushgateway_url:
+                    try:
+                        from prometheus_client import CollectorRegistry, Gauge, push_to_gateway
+                    except ImportError:  # pragma: no cover
+                        subprocess.check_call([sys.executable, "-m", "pip", "install", "--quiet", "prometheus-client"])
+                        from prometheus_client import CollectorRegistry, Gauge, push_to_gateway
+
+                    registry = CollectorRegistry()
+
+                    def record(name: str, description: str, value):
+                        gauge = Gauge(name, description, ["model", "benchmark_type"], registry=registry)
+                        gauge.labels(model=model, benchmark_type=bench_type).set(value if value is not None else 0)
+
+                    metric_map = [
+                        ("guidellm_request_latency_p50_seconds", "P50 request latency", "request_latency_p50"),
+                        ("guidellm_request_latency_p95_seconds", "P95 request latency", "request_latency_p95"),
+                        ("guidellm_request_latency_p99_seconds", "P99 request latency", "request_latency_p99"),
+                        ("guidellm_ttft_p50_seconds", "P50 time to first token", "time_to_first_token_p50"),
+                        ("guidellm_ttft_p95_seconds", "P95 time to first token", "time_to_first_token_p95"),
+                        ("guidellm_throughput_requests_per_second", "Requests per second", "request_throughput"),
+                        ("guidellm_throughput_tokens_per_second", "Tokens per second", "token_throughput"),
+                        ("guidellm_request_success_rate", "Request success rate", "success_rate"),
+                        ("guidellm_total_requests", "Total requests", "total_requests"),
+                    ]
+
+                    for metric_name, desc, key in metric_map:
+                        record(metric_name, desc, metrics.get(key))
+
+                    try:
+                        push_to_gateway(pushgateway_url, job="guidellm", registry=registry)
+                        print(f"✅ Exported metrics for {model} ({bench_type}) to {pushgateway_url}")
+                    except Exception as exc:  # noqa: BLE001
+                        print(f"⚠️ Failed to push metrics to {pushgateway_url}: {exc}")
+
+                else:
+                    metric_map = [
+                        ("guidellm_request_latency_p50_seconds", "P50 request latency", "request_latency_p50"),
+                        ("guidellm_request_latency_p95_seconds", "P95 request latency", "request_latency_p95"),
+                        ("guidellm_request_latency_p99_seconds", "P99 request latency", "request_latency_p99"),
+                        ("guidellm_ttft_p50_seconds", "P50 time to first token", "time_to_first_token_p50"),
+                        ("guidellm_ttft_p95_seconds", "P95 time to first token", "time_to_first_token_p95"),
+                        ("guidellm_throughput_requests_per_second", "Requests per second", "request_throughput"),
+                        ("guidellm_throughput_tokens_per_second", "Tokens per second", "token_throughput"),
+                        ("guidellm_request_success_rate", "Request success rate", "success_rate"),
+                        ("guidellm_total_requests", "Total requests", "total_requests"),
+                    ]
+
+                if html_file:
+                    rows = []
+                    for _metric_name, friendly, key in metric_map:
+                        value = metrics.get(key)
+                        if isinstance(value, float):
+                            value_str = f"{value:.4f}"
+                        else:
+                            value_str = "-" if value in (None, \"\") else str(value)
+                        rows.append(f\"<tr><th>{escape(friendly)}</th><td>{escape(value_str)}</td></tr>\")
+
+                    timestamp_display = timestamp or datetime.utcnow().strftime(\"%Y-%m-%d %H:%M:%SZ\")
+                    html_doc = dedent(
+                        f\"\"\"\\
+                        <!DOCTYPE html>
+                        <html lang=\"en\">
+                          <head>
+                            <meta charset=\"utf-8\" />
+                            <title>GuideLLM Benchmark Report - {escape(model)}</title>
+                            <style>
+                              body {{ font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif; margin: 2rem; }}
+                              h1 {{ margin-bottom: 0.25rem; }}
+                              table {{ border-collapse: collapse; margin-top: 1.5rem; width: 100%; max-width: 640px; }}
+                              th, td {{ border: 1px solid #444; padding: 0.4rem 0.6rem; text-align: left; }}
+                              th {{ background: #f0f0f0; width: 60%; }}
+                              pre {{ background: #f8f8f8; padding: 1rem; overflow-x: auto; }}
+                              footer {{ margin-top: 2rem; font-size: 0.85rem; color: #666; }}
+                            </style>
+                          </head>
+                          <body>
+                            <h1>GuideLLM Benchmark Report</h1>
+                            <p><strong>Model:</strong> {escape(model)}</p>
+                            <p><strong>Benchmark Type:</strong> {escape(bench_type)}</p>
+                            <p><strong>Timestamp:</strong> {escape(timestamp_display)}</p>
+
+                            <table>
+                              <tbody>
+                                {"".join(rows)}
+                              </tbody>
+                            </table>
+
+                            <h2>Raw Benchmark Payload</h2>
+                            <pre>{escape(json.dumps(data, indent=2))}</pre>
+
+                            <footer>Generated automatically by the GuideLLM automation pipeline.</footer>
+                          </body>
+                        </html>
+                        \"\"\"
+                    )
+                    pathlib.Path(html_file).write_text(html_doc, encoding=\"utf-8\")
+                    print(f\"📄 HTML report written to {html_file}\")
+                \"\"\"),
+        )
+        PY
+
+        if [[ ! -s "${OUTPUT_HTML}" ]]; then
+          echo "❌ HTML report ${OUTPUT_HTML} not found or empty."
+          exit 1
+        fi
+
+        cat <<EOF > "${RESULT_DIR}/benchmark_info.txt"
+        Model: ${MODEL_NAME}
+        Target: ${TARGET}
+        Processor: ${PROCESSOR}
+        Data Config: ${DATA_CFG}
+        Rate Type: ${RATE_TYPE}
+        Rate: ${RATE_VALUE}
+        Max Seconds: ${MAX_SECONDS}
+        Timestamp: ${TIMESTAMP}
+        EOF
+
+        tar czf "${ARTIFACT_PREFIX}.tar.gz" "${RESULT_DIR}"
+
+        ls -alh
+
+        # Publish results for downstream tasks
+        printf "%s" "${TIMESTAMP}" > "$(results.timestamp.path)"
+        printf "%s" "${ARTIFACT_PREFIX}" > "$(results.artifact-prefix.path)"
+

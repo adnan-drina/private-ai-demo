@@ -1,0 +1,19 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: guidellm-workbench
+  namespace: private-ai-demo
+  labels:
+    app: guidellm-workbench
+    app.kubernetes.io/name: guidellm-workbench
+    app.kubernetes.io/part-of: evaluation
+    app.kubernetes.io/component: benchmarking
+spec:
+  selector:
+    app: guidellm-workbench
+  ports:
+    - name: http
+      port: 8501
+      targetPort: 8501
+
