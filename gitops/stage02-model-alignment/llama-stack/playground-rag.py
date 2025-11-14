@@ -98,6 +98,76 @@ def _list_shield_ids() -> List[str]:
     return ids
 
 
+def _filter_guardrail_messages(messages: list[dict]) -> list[dict]:
+    """Remove system messages to avoid false positives (e.g. 'You are a helpful assistant')."""
+    filtered = [msg for msg in messages if (msg or {}).get("role") != "system"]
+    # If everything was filtered out, fall back to the original payload to avoid empty requests
+    return filtered if filtered else messages
+
+
+def _extract_attr(candidate: object, attr: str, default=None):
+    if candidate is None:
+        return default
+    if isinstance(candidate, dict):
+        return candidate.get(attr, default)
+    value = getattr(candidate, attr, default)
+    if callable(value):
+        try:
+            return value()
+        except Exception:  # noqa: BLE001
+            return default
+    return value
+
+
+def _normalize_violation(payload: object) -> Optional[object]:
+    if payload is None:
+        return None
+
+    # Check violation_level first - "info" level indicates informational messages, not actual violations
+    violation_level = _extract_attr(payload, "violation_level")
+    if violation_level and str(violation_level).lower() in {"info", "informational"}:
+        # For info-level messages, still check if there are actual violations
+        pass  # Continue to status/summary checks below
+
+    # Extract metadata (TrustyAI provider returns status/summary nested in metadata)
+    metadata = _extract_attr(payload, "metadata")
+    
+    # Try to get status from metadata first, then fallback to top-level
+    status_raw = _extract_attr(metadata, "status") if metadata else None
+    if status_raw is None:
+        status_raw = _extract_attr(payload, "status")
+    
+    status_value = None
+    if isinstance(status_raw, str):
+        status_value = status_raw.lower()
+    elif hasattr(status_raw, "value"):
+        status_value = str(status_raw.value).lower()
+    elif status_raw is not None:
+        status_value = str(status_raw).lower()
+    if status_value in {"pass", "passed", "verified", "ok"}:
+        return None
+
+    # Try to get summary from metadata first, then fallback to top-level
+    summary = _extract_attr(metadata, "summary") if metadata else None
+    if summary is None:
+        summary = _extract_attr(payload, "summary")
+    
+    if summary is not None:
+        messages_with_violations = _extract_attr(summary, "messages_with_violations", 0)
+        total_violations = _extract_attr(summary, "total_violations_found", 0)
+
+        def _to_int(value):
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return value
+
+        if _to_int(messages_with_violations) in (0, "0") and _to_int(total_violations) in (0, "0"):
+            return None
+
+    return payload
+
+
 def _run_guardrail(
     shield_id: str,
     messages: Iterable[dict],
@@ -105,13 +175,14 @@ def _run_guardrail(
     try:
         result = llama_stack_api.client.safety.run_shield(
             shield_id=shield_id,
-            messages=list(messages),
+            messages=_filter_guardrail_messages(list(messages)),
             params={},
         )
     except Exception as exc:  # noqa: BLE001
         return None, exc
 
-    return getattr(result, "violation", None), None
+    violation = getattr(result, "violation", None)
+    return _normalize_violation(violation), None
 
 
 def _guardrail_block_message(violation: object, shield_id: str) -> str:
