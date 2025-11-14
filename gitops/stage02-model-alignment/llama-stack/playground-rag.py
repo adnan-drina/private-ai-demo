@@ -99,8 +99,18 @@ def _list_shield_ids() -> List[str]:
 
 
 def _filter_guardrail_messages(messages: list[dict]) -> list[dict]:
-    """Remove system messages to avoid false positives (e.g. 'You are a helpful assistant')."""
-    filtered = [msg for msg in messages if (msg or {}).get("role") != "system"]
+    """Remove system messages and ensure assistant messages have required fields."""
+    filtered = []
+    for msg in messages:
+        if (msg or {}).get("role") == "system":
+            continue
+        
+        # Add required stop_reason field for assistant messages
+        if msg.get("role") == "assistant" and "stop_reason" not in msg:
+            msg = {**msg, "stop_reason": "end_of_turn"}
+        
+        filtered.append(msg)
+    
     # If everything was filtered out, fall back to the original payload to avoid empty requests
     return filtered if filtered else messages
 
