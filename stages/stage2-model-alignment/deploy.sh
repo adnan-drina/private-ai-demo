@@ -527,9 +527,8 @@ echo ""
 
 echo "7. Run RAG ingestion pipelines:"
 echo "   cd ${SCRIPT_DIR}"
-echo "   ./run-batch-redhat.sh     # Scenario 1"
-echo "   ./run-batch-acme.sh        # Scenario 2"
-echo "   ./run-batch-euaiact.sh     # Scenario 3"
+echo "   ./run-batch-ingestion.sh <scenario>"
+echo "     # e.g. ./run-batch-ingestion.sh acme"
 echo ""
 
 echo "══════════════════════════════════════════════════════════════════"

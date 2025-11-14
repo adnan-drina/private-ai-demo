@@ -15,35 +15,32 @@ metadata:
 # See: datasciencecluster-patch.yaml for reference
 # This is a ONE-TIME cluster-level operation, not a component deployment.
 
+generatorOptions:
+  disableNameSuffixHash: true
+
+configMapGenerator:
+  - name: llama-stack-playground-chat
+    namespace: private-ai-demo
+    files:
+      - chat.py=playground-chat.py
+  - name: llama-stack-playground-rag
+    namespace: private-ai-demo
+    files:
+      - rag.py=playground-rag.py
+
 resources:
   - serviceaccount.yaml  # RBAC for Llama Stack pods
   - configmap.yaml
   - pvc.yaml
+  - configmap-sitecustomize.yaml
   - llamastack-distribution.yaml
   - service.yaml
   - route.yaml
   - servicemonitor.yaml  # Prometheus metrics collection
   - playground-deployment.yaml  # Streamlit UI for LlamaStack (no default vector_db)
-
-# Llama Stack Component for RAG
-# Official Red Hat OpenShift AI RAG runtime
-#
-# Features:
-#   - Integration with existing Mistral vLLM model from Stage 1
-#   - Milvus vector database connection
-#   - Sentence-transformers embeddings
-#   - Unified RAG API
-#
-# Reference:
-#   https://docs.redhat.com/en/documentation/red_hat_openshift_ai_cloud_service/1/html/working_with_rag
-#
-# Important Notes:
-#   - Llama Stack is Technology Preview in OpenShift AI
-#   - Operator must be activated in OpenShift AI dashboard first
-#   - Depends on Milvus component
-#   - Integrates with Stage 1 vLLM models
-#
-# API Endpoint:
-#   http://llama-stack.private-ai-demo.svc:8321
-#   External: https://llama-stack-rag-private-ai-demo.apps.<cluster>
+patches:
+  - target:
+      kind: Deployment
+      name: llama-stack
+    path: patch-llama-stack-recreate.yaml
 

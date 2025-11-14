@@ -14,110 +14,64 @@ spec:
       "uid": "llama-ops",
       "timezone": "browser",
       "schemaVersion": 38,
-      "version": 1,
+      "version": 2,
       "refresh": "30s",
       "tags": ["llama-stack", "operations"],
       "panels": [
         {
-          "gridPos": {"h": 6, "w": 6, "x": 0, "y": 0},
           "id": 1,
-          "title": "Pod Readiness",
-          "type": "gauge",
-          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "sum(kube_pod_status_ready{namespace=\"private-ai-demo\",condition=\"true\"}) / sum(kube_pod_status_ready{namespace=\"private-ai-demo\"}) * 100"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "percent",
-              "min": 0,
-              "max": 100,
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {"value": 0, "color": "red"},
-                  {"value": 80, "color": "yellow"},
-                  {"value": 95, "color": "green"}
-                ]
-              }
-            }
-          },
-          "options": {
-            "showThresholdMarkers": true,
-            "showThresholdLabels": false
-          }
-        },
-        {
-          "gridPos": {"h": 6, "w": 6, "x": 6, "y": 0},
-          "id": 2,
-          "title": "Pod Restarts (24h)",
           "type": "stat",
+          "title": "Request Rate (req/s)",
           "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
+          "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
           "targets": [
             {
               "refId": "A",
-              "expr": "sum by (pod) (increase(kube_pod_container_status_restarts_total{namespace=\"private-ai-demo\"}[24h]))",
-              "legendFormat": "{{pod}}"
+              "expr": "sum(rate(http_request_duration_highr_seconds_count{job=\"private-ai-demo/vllm-predictor-metrics\"}[$__rate_interval]))"
             }
           ],
+          "fieldConfig": {"defaults": {"unit": "reqps", "decimals": 2}},
           "options": {
-            "colorMode": "background",
+            "reduceOptions": {"calcs": ["lastNotNull"], "values": false},
+            "orientation": "horizontal",
+            "colorMode": "value",
             "graphMode": "none",
-            "orientation": "vertical",
-            "reduceOptions": {"calcs": ["lastNotNull"], "values": false},
-            "textMode": "value_and_name"
+            "textMode": "value"
           }
         },
         {
-          "gridPos": {"h": 6, "w": 6, "x": 12, "y": 0},
-          "id": 3,
-          "title": "Request Success Rate",
-          "type": "gauge",
+          "id": 2,
+          "type": "stat",
+          "title": "Tokens / second",
           "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
+          "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
           "targets": [
             {
               "refId": "A",
-              "expr": "sum(rate(istio_requests_total{destination_service_namespace=\"private-ai-demo\",response_code=~\"2..\"}[5m])) / sum(rate(istio_requests_total{destination_service_namespace=\"private-ai-demo\"}[5m])) * 100"
+              "expr": "sum(rate(vllm:generation_tokens_total{job=\"private-ai-demo/vllm-predictor-metrics\"}[$__rate_interval]))"
             }
           ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "percent",
-              "min": 0,
-              "max": 100,
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {"value": 0, "color": "red"},
-                  {"value": 95, "color": "yellow"},
-                  {"value": 99, "color": "green"}
-                ]
-              }
-            }
-          },
-          "options": {"showThresholdMarkers": true}
+          "fieldConfig": {"defaults": {"unit": "ops", "decimals": 1}},
+          "options": {
+            "reduceOptions": {"calcs": ["lastNotNull"], "values": false},
+            "orientation": "horizontal",
+            "colorMode": "value",
+            "graphMode": "none",
+            "textMode": "value"
+          }
         },
         {
-          "gridPos": {"h": 6, "w": 6, "x": 18, "y": 0},
-          "id": 4,
-          "title": "Error Rate",
+          "id": 3,
           "type": "stat",
+          "title": "Guardrail Error Rate",
           "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
+          "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
           "targets": [
             {
               "refId": "A",
-              "expr": "(1 - sum(rate(istio_requests_total{destination_service_namespace=\"private-ai-demo\",response_code=~\"2..\"}[5m])) / sum(rate(istio_requests_total{destination_service_namespace=\"private-ai-demo\"}[5m]))) * 100"
+              "expr": "100 * sum(sum_over_time(client_request_duration_count{job=\"fms_guardrails_orchestr8\",status!=\"200 OK\"}[5m])) / clamp_min(sum(sum_over_time(client_request_duration_count{job=\"fms_guardrails_orchestr8\"}[5m])), 1)"
             }
           ],
-          "options": {
-            "colorMode": "background",
-            "graphMode": "area",
-            "reduceOptions": {"calcs": ["lastNotNull"], "values": false},
-            "textMode": "value"
-          },
           "fieldConfig": {
             "defaults": {
               "unit": "percent",
@@ -125,197 +79,175 @@ spec:
                 "mode": "absolute",
                 "steps": [
                   {"value": 0, "color": "green"},
-                  {"value": 1, "color": "yellow"},
+                  {"value": 2, "color": "yellow"},
                   {"value": 5, "color": "red"}
                 ]
               }
             }
+          },
+          "options": {
+            "reduceOptions": {"calcs": ["lastNotNull"], "values": false},
+            "orientation": "horizontal",
+            "colorMode": "value",
+            "graphMode": "none",
+            "textMode": "value"
           }
         },
         {
-          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6},
+          "id": 4,
+          "type": "stat",
+          "title": "Guardrail Throughput",
+          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
+          "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum(sum_over_time(client_request_duration_count{job=\"fms_guardrails_orchestr8\"}[5m])) / 300"
+            }
+          ],
+          "fieldConfig": {"defaults": {"unit": "reqps", "decimals": 2}},
+          "options": {
+            "reduceOptions": {"calcs": ["lastNotNull"], "values": false},
+            "orientation": "horizontal",
+            "colorMode": "value",
+            "graphMode": "none",
+            "textMode": "value"
+          }
+        },
+        {
           "id": 5,
-          "title": "CPU Usage by Pod",
           "type": "timeseries",
+          "title": "Prefill Latency (ms)",
           "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
           "targets": [
             {
               "refId": "A",
-              "expr": "rate(container_cpu_usage_seconds_total{namespace=\"private-ai-demo\",container!=\"\",container!=\"POD\"}[5m]) * 100",
-              "legendFormat": "{{pod}}/{{container}}"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "percent",
-              "custom": {"drawStyle": "line", "fillOpacity": 10}
-            }
-          }
-        },
-        {
-          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6},
-          "id": 6,
-          "title": "Memory Usage by Pod",
-          "type": "timeseries",
-          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "container_memory_working_set_bytes{namespace=\"private-ai-demo\",container!=\"\",container!=\"POD\"} / 1024 / 1024 / 1024",
-              "legendFormat": "{{pod}}/{{container}}"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "mebibytes",
-              "custom": {"drawStyle": "line", "fillOpacity": 10}
-            }
-          }
-        },
-        {
-          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14},
-          "id": 7,
-          "title": "GPU Utilization",
-          "type": "timeseries",
-          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "DCGM_FI_DEV_GPU_UTIL{namespace=\"private-ai-demo\"}",
-              "legendFormat": "{{pod}} GPU {{gpu}}"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "percent",
-              "custom": {"drawStyle": "line", "fillOpacity": 10}
-            }
-          }
-        },
-        {
-          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14},
-          "id": 8,
-          "title": "GPU Memory Usage",
-          "type": "timeseries",
-          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "DCGM_FI_DEV_FB_USED{namespace=\"private-ai-demo\"} / 1024 / 1024",
-              "legendFormat": "{{pod}} GPU {{gpu}}"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "decmbytes",
-              "custom": {"drawStyle": "line", "fillOpacity": 10}
-            }
-          }
-        },
-        {
-          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 22},
-          "id": 9,
-          "title": "Request Rate (req/s)",
-          "type": "timeseries",
-          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "sum(rate(istio_requests_total{destination_service_namespace=\"private-ai-demo\",destination_service=~\".*predictor.*\"}[5m]))",
-              "legendFormat": "All predictors"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "reqps",
-              "custom": {"drawStyle": "line", "fillOpacity": 20}
-            }
-          }
-        },
-        {
-          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 22},
-          "id": 10,
-          "title": "Response Latency (P50/P95)",
-          "type": "timeseries",
-          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "histogram_quantile(0.50, rate(istio_request_duration_milliseconds_bucket{destination_service_namespace=\"private-ai-demo\",destination_service=~\".*predictor.*\"}[5m]))",
+              "expr": "histogram_quantile(0.50, sum(rate(vllm:request_prefill_time_seconds_bucket{job=\"private-ai-demo/vllm-predictor-metrics\"}[$__rate_interval])) by (le)) * 1000",
               "legendFormat": "P50"
             },
             {
               "refId": "B",
-              "expr": "histogram_quantile(0.95, rate(istio_request_duration_milliseconds_bucket{destination_service_namespace=\"private-ai-demo\",destination_service=~\".*predictor.*\"}[5m]))",
+              "expr": "histogram_quantile(0.95, sum(rate(vllm:request_prefill_time_seconds_bucket{job=\"private-ai-demo/vllm-predictor-metrics\"}[$__rate_interval])) by (le)) * 1000",
               "legendFormat": "P95"
             }
           ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "ms",
-              "custom": {"drawStyle": "line", "fillOpacity": 20}
-            }
-          }
+          "fieldConfig": {"defaults": {"unit": "ms", "custom": {"drawStyle": "line", "fillOpacity": 15}}}
         },
         {
-          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 30},
+          "id": 6,
+          "type": "timeseries",
+          "title": "Time to First Token (ms)",
+          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "histogram_quantile(0.50, sum(rate(vllm:time_to_first_token_seconds_bucket{job=\"private-ai-demo/vllm-predictor-metrics\"}[$__rate_interval])) by (le)) * 1000",
+              "legendFormat": "P50"
+            },
+            {
+              "refId": "B",
+              "expr": "histogram_quantile(0.95, sum(rate(vllm:time_to_first_token_seconds_bucket{job=\"private-ai-demo/vllm-predictor-metrics\"}[$__rate_interval])) by (le)) * 1000",
+              "legendFormat": "P95"
+            }
+          ],
+          "fieldConfig": {"defaults": {"unit": "ms", "custom": {"drawStyle": "line", "fillOpacity": 15}}}
+        },
+        {
+          "id": 7,
+          "type": "timeseries",
+          "title": "Queue Time (P95)",
+          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "histogram_quantile(0.95, sum(rate(vllm:request_queue_time_seconds_bucket{job=\"private-ai-demo/vllm-predictor-metrics\"}[$__rate_interval])) by (le)) * 1000",
+              "legendFormat": "P95"
+            }
+          ],
+          "fieldConfig": {"defaults": {"unit": "ms"}}
+        },
+        {
+          "id": 8,
+          "type": "timeseries",
+          "title": "Tokens / s (per model)",
+          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (model_name) (rate(vllm:generation_tokens_total{job=\"private-ai-demo/vllm-predictor-metrics\"}[$__rate_interval]))",
+              "legendFormat": "{{model_name}}"
+            }
+          ],
+          "fieldConfig": {"defaults": {"unit": "ops", "custom": {"drawStyle": "line", "fillOpacity": 10}}}
+        },
+        {
+          "id": 9,
+          "type": "timeseries",
+          "title": "Per-Pod Request Rate",
+          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 20},
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (pod) (rate(http_request_duration_highr_seconds_count{job=\"private-ai-demo/vllm-predictor-metrics\"}[$__rate_interval]))",
+              "legendFormat": "{{pod}}"
+            }
+          ],
+          "fieldConfig": {"defaults": {"unit": "reqps", "custom": {"drawStyle": "line", "fillOpacity": 10}}}
+        },
+        {
+          "id": 10,
+          "type": "timeseries",
+          "title": "Guardrail Latency (ms)",
+          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 20},
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "quantile_over_time(0.50, (client_request_duration_sum{job=\"fms_guardrails_orchestr8\"}/client_request_duration_count{job=\"fms_guardrails_orchestr8\"})[5m])",
+              "legendFormat": "P50"
+            },
+            {
+              "refId": "B",
+              "expr": "quantile_over_time(0.95, (client_request_duration_sum{job=\"fms_guardrails_orchestr8\"}/client_request_duration_count{job=\"fms_guardrails_orchestr8\"})[5m])",
+              "legendFormat": "P95"
+            }
+          ],
+          "fieldConfig": {"defaults": {"unit": "ms", "custom": {"drawStyle": "line", "fillOpacity": 10}}}
+        },
+        {
           "id": 11,
-          "title": "Active Requests (vLLM)",
           "type": "timeseries",
+          "title": "GPU Utilization",
           "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 28},
           "targets": [
             {
               "refId": "A",
-              "expr": "avg(vllm:num_requests_running{pod=~\"mistral-24b.*\"})",
-              "legendFormat": "{{pod}}"
+              "expr": "DCGM_FI_DEV_GPU_UTIL{job=\"private-ai-demo/nvidia-dcgm-metrics\",exported_namespace=\"private-ai-demo\"}",
+              "legendFormat": "{{exported_pod}} GPU {{gpu}}"
             }
           ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "short",
-              "custom": {"drawStyle": "line", "fillOpacity": 20}
-            }
-          }
+          "fieldConfig": {"defaults": {"unit": "percent", "custom": {"drawStyle": "line", "fillOpacity": 8}}}
         },
         {
-          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 30},
           "id": 12,
-          "title": "GPU Power Usage (W)",
           "type": "timeseries",
+          "title": "GPU Memory (MiB)",
           "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 28},
           "targets": [
             {
               "refId": "A",
-              "expr": "avg(DCGM_FI_DEV_POWER_USAGE{namespace=\"private-ai-demo\"})",
-              "legendFormat": "{{pod}}"
+              "expr": "DCGM_FI_DEV_FB_USED{job=\"private-ai-demo/nvidia-dcgm-metrics\",exported_namespace=\"private-ai-demo\"} / 1024",
+              "legendFormat": "{{exported_pod}} GPU {{gpu}}"
             }
           ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "watt",
-              "custom": {"drawStyle": "line", "fillOpacity": 20}
-            }
-          }
-        },
-        {
-          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 38},
-          "id": 13,
-          "title": "Tokens Generated per Second",
-          "type": "timeseries",
-          "datasource": {"type": "prometheus", "uid": "otel-prometheus"},
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "sum(rate(vllm:generation_tokens_total{pod=~\"mistral-24b-.*predictor.*\"}[5m]))",
-              "legendFormat": "Tokens/s"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "ops",
-              "custom": {"drawStyle": "line", "fillOpacity": 20}
-            }
-          }
+          "fieldConfig": {"defaults": {"unit": "mebibytes", "custom": {"drawStyle": "line", "fillOpacity": 8}}}
         }
       ]
     }

@@ -26,6 +26,8 @@ spec:
       ttlSecondsAfterFinished: 604800  # Keep completed jobs for 7 days
       template:
         metadata:
+          annotations:
+            sidecar.istio.io/inject: "true"
           labels:
             app: guidellm
         spec:
@@ -40,29 +42,13 @@ spec:
             - /bin/bash
             - -c
             - |
-              echo "🔍 Getting latest revision service URLs (bypasses Knative routing)"
-              
-              # Quantized model - get latest revision from Knative Service
-              QUANTIZED_REV=$(oc get ksvc mistral-24b-quantized-predictor -n private-ai-demo \
-                -o jsonpath='{.status.latestReadyRevisionName}')
-              if [ -z "$QUANTIZED_REV" ]; then
-                echo "❌ ERROR: Could not find latest quantized revision"
-                exit 1
-              fi
-              QUANTIZED_URL="http://${QUANTIZED_REV}-private.private-ai-demo.svc.cluster.local"
-              echo "✅ Quantized: ${QUANTIZED_REV} -> ${QUANTIZED_URL}"
-              echo -n "${QUANTIZED_URL}" > /shared/quantized-url.txt
-              
-              # Full precision model - get latest revision from Knative Service
-              FULL_REV=$(oc get ksvc mistral-24b-predictor -n private-ai-demo \
-                -o jsonpath='{.status.latestReadyRevisionName}')
-              if [ -z "$FULL_REV" ]; then
-                echo "❌ ERROR: Could not find latest full revision"
-                exit 1
-              fi
-              FULL_URL="http://${FULL_REV}-private.private-ai-demo.svc.cluster.local"
-              echo "✅ Full: ${FULL_REV} -> ${FULL_URL}"
-              echo -n "${FULL_URL}" > /shared/full-url.txt
+                echo "🔍 Writing canonical service URLs for GuideLLM benchmarks"
+                QUANTIZED_URL="http://mistral-24b-quantized.private-ai-demo.svc.cluster.local"
+                FULL_URL="http://mistral-24b.private-ai-demo.svc.cluster.local"
+                echo "✅ Quantized: ${QUANTIZED_URL}"
+                echo -n "${QUANTIZED_URL}" > /shared/quantized-url.txt
+                echo "✅ Full: ${FULL_URL}"
+                echo -n "${FULL_URL}" > /shared/full-url.txt
             volumeMounts:
             - name: shared
               mountPath: /shared
@@ -75,26 +61,262 @@ spec:
             - /bin/bash
             - -c
             - |
+              RATE_LIST=${GUIDELLM_RATE:-10}
+              RATE_TYPE=${GUIDELLM_RATE_TYPE:-sweep}
+              PROMPT_TOKENS=${GUIDELLM_PROMPT_TOKENS:-256}
+              OUTPUT_TOKENS=${GUIDELLM_OUTPUT_TOKENS:-128}
+              SAMPLES=${GUIDELLM_SAMPLES:-100}
+              MAX_SECONDS=${GUIDELLM_MAX_SECONDS:-900}
+
               MODEL_URL=$(cat /shared/quantized-url.txt)
               echo "🚀 Running GuideLLM Benchmark (Quantized)"
               echo "Target: ${MODEL_URL}"
-              
+              IFS=',' read -ra RATE_VALUES <<< "${RATE_LIST}"
+              if [ ${#RATE_VALUES[@]} -eq 0 ]; then
+                RATE_VALUES=("${RATE_LIST}")
+              fi
+              for RAW_RATE in "${RATE_VALUES[@]}"; do
+                RATE="$(echo "${RAW_RATE}" | xargs)"
+                if [ -z "${RATE}" ]; then
+                  continue
+                fi
+
+                echo "➡️ Sweep rate: ${RATE}"
               TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+                OUTPUT_FILE="/results/daily-quantized-${RATE}-${TIMESTAMP}.json"
               guidellm benchmark \
                 --target "${MODEL_URL}" \
                 --model "mistral-24b-quantized" \
-                --rate-type sweep \
-                --rate 10 \
-                --max-seconds 1800 \
-                --data "prompt_tokens=256,output_tokens=128,samples=100" \
-                --output-path "/results/daily-quantized-${TIMESTAMP}.html"
+                  --backend-type openai_http \
+                  --processor "mistralai/Mistral-Small-Instruct-2409" \
+                  --rate-type "${RATE_TYPE}" \
+                  --rate "${RATE}" \
+                  --max-seconds "${MAX_SECONDS}" \
+                  --data "prompt_tokens=${PROMPT_TOKENS},output_tokens=${OUTPUT_TOKENS},samples=${SAMPLES}" \
+                  --output-path "${OUTPUT_FILE}"
+
+                HTML_FILE="/results/daily-quantized-${RATE}-${TIMESTAMP}.html"
+                BENCHMARK_FILE="${OUTPUT_FILE}" \
+                BENCHMARK_MODEL="mistral-24b-quantized" \
+                BENCHMARK_TYPE="daily" \
+                BENCHMARK_TIMESTAMP="${TIMESTAMP}" \
+                HTML_FILE="${HTML_FILE}" \
+                python - <<'PY'
+                import json
+                import os
+                import pathlib
+                import subprocess
+                import sys
+                from datetime import datetime
+                from html import escape
+                from textwrap import dedent
+                from textwrap import dedent
+
+                benchmark_file = os.environ["BENCHMARK_FILE"]
+                model = os.environ.get("BENCHMARK_MODEL", "unknown")
+                bench_type = os.environ.get("BENCHMARK_TYPE", "manual")
+                timestamp = os.environ.get("BENCHMARK_TIMESTAMP", "")
+                html_file = os.environ.get("HTML_FILE")
+                pushgateway_url = os.environ.get(
+                    "PUSHGATEWAY_URL",
+                    "http://prometheus-pushgateway.private-ai-demo.svc.cluster.local:9091",
+                )
+
+                try:
+                    with open(benchmark_file, "r", encoding="utf-8") as fh:
+                        data = json.load(fh)
+                except Exception as exc:  # noqa: BLE001
+                    print(f"Unable to read benchmark output {benchmark_file}: {exc}")
+                    sys.exit(0)
+
+                benchmarks = data.get("benchmarks") or []
+                if not benchmarks:
+                    print(f"No benchmarks found in {benchmark_file}, skipping metrics export and HTML generation.")
+                    sys.exit(0)
+
+                metrics = benchmarks[0].get("metrics", {}) or {}
+
+                def select_section(metric_dict):
+                    if not isinstance(metric_dict, dict):
+                        return None
+                    section = metric_dict.get("total")
+                    if isinstance(section, dict):
+                        return section
+                    section = metric_dict.get("successful")
+                    if isinstance(section, dict):
+                        return section
+                    return metric_dict if isinstance(metric_dict, dict) else None
+
+                def get_metric(key, percentile=None, scale=1.0):
+                    metric = metrics.get(key)
+                    section = select_section(metric)
+                    if not section:
+                        return None
+                    value = None
+                    if percentile:
+                        percentiles = section.get("percentiles")
+                        if isinstance(percentiles, dict):
+                            value = percentiles.get(percentile)
+                        if value is None:
+                            value = section.get(percentile)
+                    if value is None:
+                        value = section.get("mean")
+                    if value is None:
+                        return None
+                    try:
+                        return float(value) * scale
+                    except (TypeError, ValueError):
+                        return None
+
+                def compute_success_rate():
+                    metric = metrics.get("requests_per_second")
+                    if not isinstance(metric, dict):
+                        return None
+                    total = metric.get("total")
+                    successful = metric.get("successful")
+                    if isinstance(total, dict) and isinstance(successful, dict):
+                        total_count = total.get("count")
+                        success_count = successful.get("count")
+                        if total_count:
+                            return (success_count or 0) / total_count * 100.0
+                    return None
+
+                def compute_total_requests():
+                    for candidate in ("request_latency", "requests_per_second"):
+                        metric = metrics.get(candidate)
+                        section = select_section(metric)
+                        if isinstance(section, dict):
+                            count = section.get("count")
+                            if isinstance(count, (int, float)):
+                                return int(count)
+                    return None
+
+                def fmt(value, decimals=4):
+                    if value is None:
+                        return None
+                    if isinstance(value, (int, float)):
+                        return float(value)
+                    try:
+                        return float(value)
+                    except Exception:
+                        return None
+
+                try:
+                    from prometheus_client import CollectorRegistry, Gauge, push_to_gateway
+                except ImportError:  # pragma: no cover
+                    subprocess.check_call(
+                        [sys.executable, "-m", "pip", "install", "--quiet", "prometheus-client"]
+                    )
+                    from prometheus_client import CollectorRegistry, Gauge, push_to_gateway
+
+                registry = CollectorRegistry()
+
+                def record(name: str, description: str, value):
+                    gauge = Gauge(name, description, ["model", "benchmark_type"], registry=registry)
+                    gauge.labels(model=model, benchmark_type=bench_type).set(value if value is not None else 0)
+
+                prom_metrics = [
+                    ("guidellm_request_latency_p50_seconds", "P50 request latency", get_metric("request_latency", "p50")),
+                    ("guidellm_request_latency_p95_seconds", "P95 request latency", get_metric("request_latency", "p95")),
+                    ("guidellm_request_latency_p99_seconds", "P99 request latency", get_metric("request_latency", "p99")),
+                    ("guidellm_ttft_p50_seconds", "P50 time to first token", get_metric("time_to_first_token_ms", "p50", scale=0.001)),
+                    ("guidellm_ttft_p95_seconds", "P95 time to first token", get_metric("time_to_first_token_ms", "p95", scale=0.001)),
+                    ("guidellm_throughput_requests_per_second", "Requests per second", get_metric("requests_per_second")),
+                    ("guidellm_throughput_tokens_per_second", "Tokens per second", get_metric("tokens_per_second") or get_metric("output_tokens_per_second")),
+                    ("guidellm_request_success_rate", "Request success rate", compute_success_rate()),
+                    ("guidellm_total_requests", "Total requests", compute_total_requests()),
+                ]
+
+                for metric_name, desc, value in prom_metrics:
+                    record(metric_name, desc, value)
+
+                try:
+                    push_to_gateway(pushgateway_url, job="guidellm", registry=registry)
+                    print(f"✅ Exported metrics for {model} ({bench_type}) to {pushgateway_url}")
+                except Exception as exc:  # noqa: BLE001
+                    print(f"⚠️ Failed to push metrics to {pushgateway_url}: {exc}")
+
+                token_rate = get_metric("tokens_per_second") or get_metric("output_tokens_per_second")
+
+                table_rows = [
+                    ("P50 request latency (s)", get_metric("request_latency", "p50")),
+                    ("P95 request latency (s)", get_metric("request_latency", "p95")),
+                    ("P99 request latency (s)", get_metric("request_latency", "p99")),
+                    ("P50 time to first token (s)", get_metric("time_to_first_token_ms", "p50", scale=0.001)),
+                    ("P95 time to first token (s)", get_metric("time_to_first_token_ms", "p95", scale=0.001)),
+                    ("Requests per second", get_metric("requests_per_second")),
+                    ("Tokens per second", token_rate),
+                    ("Request success rate (%)", compute_success_rate()),
+                    ("Total requests", compute_total_requests()),
+                ]
+
+                if html_file:
+                    timestamp_display = timestamp or datetime.utcnow().strftime("%Y-%m-%d %H:%M:%SZ")
+                    rows_html = "".join(
+                        f"<tr><th>{escape(label)}</th><td>{escape('-' if value is None else f'{value:.4f}' if isinstance(value, float) else str(value))}</td></tr>"
+                        for label, value in table_rows
+                    )
+                    html_doc = dedent(
+                        f"""\
+                        <!DOCTYPE html>
+                        <html lang="en">
+                          <head>
+                            <meta charset="utf-8" />
+                            <title>GuideLLM Benchmark Report - {escape(model)}</title>
+                            <style>
+                              body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 2rem; }}
+                              h1 {{ margin-bottom: 0.25rem; }}
+                              table {{ border-collapse: collapse; margin-top: 1.5rem; width: 100%; max-width: 640px; }}
+                              th, td {{ border: 1px solid #444; padding: 0.4rem 0.6rem; text-align: left; }}
+                              th {{ background: #f0f0f0; width: 60%; }}
+                              pre {{ background: #f8f8f8; padding: 1rem; overflow-x: auto; }}
+                              footer {{ margin-top: 2rem; font-size: 0.85rem; color: #666; }}
+                            </style>
+                          </head>
+                          <body>
+                            <h1>GuideLLM Benchmark Report</h1>
+                            <p><strong>Model:</strong> {escape(model)}</p>
+                            <p><strong>Benchmark Type:</strong> {escape(bench_type)}</p>
+                            <p><strong>Timestamp:</strong> {escape(timestamp_display)}</p>
+                            <table>
+                              <tbody>
+                                {rows_html}
+                              </tbody>
+                            </table>
+                            <h2>Raw Benchmark Payload</h2>
+                            <pre>{escape(json.dumps(data, indent=2))}</pre>
+                            <footer>Generated automatically by the GuideLLM automation pipeline.</footer>
+                          </body>
+                        </html>
+                        """
+                    )
+                    pathlib.Path(html_file).write_text(html_doc, encoding="utf-8")
+                    print(f"📄 HTML report written to {html_file}")
+              PY
+              done
             env:
             - name: GUIDELLM__ENV
               value: "prod"
+            - name: GUIDELLM__OPENAI__VERIFY
+              value: "false"
+            - name: GUIDELLM__LOGGING__CONSOLE_LOG_LEVEL
+              value: "INFO"
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: huggingface-token
+                  key: HF_TOKEN
             - name: PYTHONHTTPSVERIFY
               value: "0"
-            - name: CURL_CA_BUNDLE
-              value: ""
+            - name: HOME
+              value: "/tmp"
+            - name: HF_HOME
+              value: "/tmp/hf"
+            - name: PUSHGATEWAY_URL
+              value: "http://prometheus-pushgateway.private-ai-demo.svc.cluster.local:9091"
+            envFrom:
+            - configMapRef:
+                name: guidellm-daily-config
             volumeMounts:
             - name: shared
               mountPath: /shared
@@ -115,29 +337,263 @@ spec:
             - /bin/bash
             - -c
             - |
+              RATE_LIST=${GUIDELLM_RATE:-10}
+              RATE_TYPE=${GUIDELLM_RATE_TYPE:-sweep}
+              PROMPT_TOKENS=${GUIDELLM_PROMPT_TOKENS:-256}
+              OUTPUT_TOKENS=${GUIDELLM_OUTPUT_TOKENS:-128}
+              SAMPLES=${GUIDELLM_SAMPLES:-100}
+              MAX_SECONDS=${GUIDELLM_MAX_SECONDS:-900}
+
               # Wait for quantized benchmark to finish
               sleep 60
               
               MODEL_URL=$(cat /shared/full-url.txt)
               echo "🚀 Running GuideLLM Benchmark (Full Precision)"
               echo "Target: ${MODEL_URL}"
-              
+              IFS=',' read -ra RATE_VALUES <<< "${RATE_LIST}"
+              if [ ${#RATE_VALUES[@]} -eq 0 ]; then
+                RATE_VALUES=("${RATE_LIST}")
+              fi
+              for RAW_RATE in "${RATE_VALUES[@]}"; do
+                RATE="$(echo "${RAW_RATE}" | xargs)"
+                if [ -z "${RATE}" ]; then
+                  continue
+                fi
+
+                echo "➡️ Sweep rate: ${RATE}"
               TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+                OUTPUT_FILE="/results/daily-full-${RATE}-${TIMESTAMP}.json"
               guidellm benchmark \
                 --target "${MODEL_URL}" \
                 --model "mistral-24b" \
-                --rate-type sweep \
-                --rate 10 \
-                --max-seconds 1800 \
-                --data "prompt_tokens=256,output_tokens=128,samples=100" \
-                --output-path "/results/daily-full-${TIMESTAMP}.html"
+                  --backend-type openai_http \
+                  --processor "mistralai/Mistral-Small-Instruct-2409" \
+                  --rate-type "${RATE_TYPE}" \
+                  --rate "${RATE}" \
+                  --max-seconds "${MAX_SECONDS}" \
+                  --data "prompt_tokens=${PROMPT_TOKENS},output_tokens=${OUTPUT_TOKENS},samples=${SAMPLES}" \
+                  --output-path "${OUTPUT_FILE}"
+
+                HTML_FILE="/results/daily-full-${RATE}-${TIMESTAMP}.html"
+                BENCHMARK_FILE="${OUTPUT_FILE}" \
+                BENCHMARK_MODEL="mistral-24b" \
+                BENCHMARK_TYPE="daily" \
+                BENCHMARK_TIMESTAMP="${TIMESTAMP}" \
+                HTML_FILE="${HTML_FILE}" \
+                python - <<'PY'
+                import json
+                import os
+                import pathlib
+                import subprocess
+                import sys
+                from datetime import datetime
+                from html import escape
+
+                benchmark_file = os.environ["BENCHMARK_FILE"]
+                model = os.environ.get("BENCHMARK_MODEL", "unknown")
+                bench_type = os.environ.get("BENCHMARK_TYPE", "manual")
+                timestamp = os.environ.get("BENCHMARK_TIMESTAMP", "")
+                html_file = os.environ.get("HTML_FILE")
+                pushgateway_url = os.environ.get(
+                    "PUSHGATEWAY_URL",
+                    "http://prometheus-pushgateway.private-ai-demo.svc.cluster.local:9091",
+                )
+
+                try:
+                    with open(benchmark_file, "r", encoding="utf-8") as fh:
+                        data = json.load(fh)
+                except Exception as exc:  # noqa: BLE001
+                    print(f"Unable to read benchmark output {benchmark_file}: {exc}")
+                    sys.exit(0)
+
+                benchmarks = data.get("benchmarks") or []
+                if not benchmarks:
+                    print(f"No benchmarks found in {benchmark_file}, skipping metrics export and HTML generation.")
+                    sys.exit(0)
+
+                metrics = benchmarks[0].get("metrics", {}) or {}
+
+                def select_section(metric_dict):
+                    if not isinstance(metric_dict, dict):
+                        return None
+                    section = metric_dict.get("total")
+                    if isinstance(section, dict):
+                        return section
+                    section = metric_dict.get("successful")
+                    if isinstance(section, dict):
+                        return section
+                    return metric_dict if isinstance(metric_dict, dict) else None
+
+                def get_metric(key, percentile=None, scale=1.0):
+                    metric = metrics.get(key)
+                    section = select_section(metric)
+                    if not section:
+                        return None
+                    value = None
+                    if percentile:
+                        percentiles = section.get("percentiles")
+                        if isinstance(percentiles, dict):
+                            value = percentiles.get(percentile)
+                        if value is None:
+                            value = section.get(percentile)
+                    if value is None:
+                        value = section.get("mean")
+                    if value is None:
+                        return None
+                    try:
+                        return float(value) * scale
+                    except (TypeError, ValueError):
+                        return None
+
+                def compute_success_rate():
+                    metric = metrics.get("requests_per_second")
+                    if not isinstance(metric, dict):
+                        return None
+                    total = metric.get("total")
+                    successful = metric.get("successful")
+                    if isinstance(total, dict) and isinstance(successful, dict):
+                        total_count = total.get("count")
+                        success_count = successful.get("count")
+                        if total_count:
+                            return (success_count or 0) / total_count * 100.0
+                    return None
+
+                def compute_total_requests():
+                    for candidate in ("request_latency", "requests_per_second"):
+                        metric = metrics.get(candidate)
+                        section = select_section(metric)
+                        if isinstance(section, dict):
+                            count = section.get("count")
+                            if isinstance(count, (int, float)):
+                                return int(count)
+                    return None
+
+                def fmt(value, decimals=4):
+                    if value is None:
+                        return None
+                    if isinstance(value, (int, float)):
+                        return float(value)
+                    try:
+                        return float(value)
+                    except Exception:
+                        return None
+
+                try:
+                    from prometheus_client import CollectorRegistry, Gauge, push_to_gateway
+                except ImportError:  # pragma: no cover
+                    subprocess.check_call(
+                        [sys.executable, "-m", "pip", "install", "--quiet", "prometheus-client"]
+                    )
+                    from prometheus_client import CollectorRegistry, Gauge, push_to_gateway
+
+                registry = CollectorRegistry()
+
+                def record(name: str, description: str, value):
+                    gauge = Gauge(name, description, ["model", "benchmark_type"], registry=registry)
+                    gauge.labels(model=model, benchmark_type=bench_type).set(value if value is not None else 0)
+
+                prom_metrics = [
+                    ("guidellm_request_latency_p50_seconds", "P50 request latency", get_metric("request_latency", "p50")),
+                    ("guidellm_request_latency_p95_seconds", "P95 request latency", get_metric("request_latency", "p95")),
+                    ("guidellm_request_latency_p99_seconds", "P99 request latency", get_metric("request_latency", "p99")),
+                    ("guidellm_ttft_p50_seconds", "P50 time to first token", get_metric("time_to_first_token_ms", "p50", scale=0.001)),
+                    ("guidellm_ttft_p95_seconds", "P95 time to first token", get_metric("time_to_first_token_ms", "p95", scale=0.001)),
+                    ("guidellm_throughput_requests_per_second", "Requests per second", get_metric("requests_per_second")),
+                    ("guidellm_throughput_tokens_per_second", "Tokens per second", get_metric("tokens_per_second") or get_metric("output_tokens_per_second")),
+                    ("guidellm_request_success_rate", "Request success rate", compute_success_rate()),
+                    ("guidellm_total_requests", "Total requests", compute_total_requests()),
+                ]
+
+                for metric_name, desc, value in prom_metrics:
+                    record(metric_name, desc, value)
+
+                try:
+                    push_to_gateway(pushgateway_url, job="guidellm", registry=registry)
+                    print(f"✅ Exported metrics for {model} ({bench_type}) to {pushgateway_url}")
+                except Exception as exc:  # noqa: BLE001
+                    print(f"⚠️ Failed to push metrics to {pushgateway_url}: {exc}")
+
+                token_rate = get_metric("tokens_per_second") or get_metric("output_tokens_per_second")
+
+                table_rows = [
+                    ("P50 request latency (s)", get_metric("request_latency", "p50")),
+                    ("P95 request latency (s)", get_metric("request_latency", "p95")),
+                    ("P99 request latency (s)", get_metric("request_latency", "p99")),
+                    ("P50 time to first token (s)", get_metric("time_to_first_token_ms", "p50", scale=0.001)),
+                    ("P95 time to first token (s)", get_metric("time_to_first_token_ms", "p95", scale=0.001)),
+                    ("Requests per second", get_metric("requests_per_second")),
+                    ("Tokens per second", token_rate),
+                    ("Request success rate (%)", compute_success_rate()),
+                    ("Total requests", compute_total_requests()),
+                ]
+
+                if html_file:
+                    timestamp_display = timestamp or datetime.utcnow().strftime("%Y-%m-%d %H:%M:%SZ")
+                    rows_html = "".join(
+                        f"<tr><th>{escape(label)}</th><td>{escape('-' if value is None else f'{value:.4f}' if isinstance(value, float) else str(value))}</td></tr>"
+                        for label, value in table_rows
+                    )
+                    html_doc = dedent(
+                        f"""\
+                        <!DOCTYPE html>
+                        <html lang="en">
+                          <head>
+                            <meta charset="utf-8" />
+                            <title>GuideLLM Benchmark Report - {escape(model)}</title>
+                            <style>
+                              body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 2rem; }}
+                              h1 {{ margin-bottom: 0.25rem; }}
+                              table {{ border-collapse: collapse; margin-top: 1.5rem; width: 100%; max-width: 640px; }}
+                              th, td {{ border: 1px solid #444; padding: 0.4rem 0.6rem; text-align: left; }}
+                              th {{ background: #f0f0f0; width: 60%; }}
+                              pre {{ background: #f8f8f8; padding: 1rem; overflow-x: auto; }}
+                              footer {{ margin-top: 2rem; font-size: 0.85rem; color: #666; }}
+                            </style>
+                          </head>
+                          <body>
+                            <h1>GuideLLM Benchmark Report</h1>
+                            <p><strong>Model:</strong> {escape(model)}</p>
+                            <p><strong>Benchmark Type:</strong> {escape(bench_type)}</p>
+                            <p><strong>Timestamp:</strong> {escape(timestamp_display)}</p>
+                            <table>
+                              <tbody>
+                                {rows_html}
+                              </tbody>
+                            </table>
+                            <h2>Raw Benchmark Payload</h2>
+                            <pre>{escape(json.dumps(data, indent=2))}</pre>
+                            <footer>Generated automatically by the GuideLLM automation pipeline.</footer>
+                          </body>
+                        </html>
+                        """
+                    )
+                    pathlib.Path(html_file).write_text(html_doc, encoding="utf-8")
+                    print(f"📄 HTML report written to {html_file}")
+              PY
+              done
             env:
             - name: GUIDELLM__ENV
               value: "prod"
+            - name: GUIDELLM__OPENAI__VERIFY
+              value: "false"
+            - name: GUIDELLM__LOGGING__CONSOLE_LOG_LEVEL
+              value: "INFO"
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: huggingface-token
+                  key: HF_TOKEN
             - name: PYTHONHTTPSVERIFY
               value: "0"
-            - name: CURL_CA_BUNDLE
-              value: ""
+            - name: HOME
+              value: "/tmp"
+            - name: HF_HOME
+              value: "/tmp/hf"
+            - name: PUSHGATEWAY_URL
+              value: "http://prometheus-pushgateway.private-ai-demo.svc.cluster.local:9091"
+            envFrom:
+            - configMapRef:
+                name: guidellm-daily-config
             volumeMounts:
             - name: shared
               mountPath: /shared
@@ -158,19 +614,20 @@ spec:
             - /bin/sh
             - -c
             - |
-              # Wait for both benchmarks to complete
-              while [ $(ls -1 /results/*.html 2>/dev/null | wc -l) -lt 2 ]; do
+              # Wait for both benchmarks to complete (JSON + HTML for each run)
+              while [ $(ls -1 /results/*.json 2>/dev/null | wc -l) -lt 2 ] || \
+                    [ $(ls -1 /results/*.html 2>/dev/null | wc -l) -lt 2 ]; do
                 echo "Waiting for benchmarks to complete..."
                 sleep 30
               done
               
               # Configure MinIO
-              mc alias set minio http://minio.private-ai-demo.svc.cluster.local:9000 \
+              mc alias set minio http://minio.model-storage.svc.cluster.local:9000 \
                 $MINIO_ACCESS_KEY $MINIO_SECRET_KEY
               
-              # Upload all results
+              # Upload all results (JSON + HTML artifacts)
+              mc cp /results/*.json minio/guidellm-results/daily/
               mc cp /results/*.html minio/guidellm-results/daily/
-              [ -f /results/*.json ] && mc cp /results/*.json minio/guidellm-results/daily/
               
               echo "✅ Daily benchmarks uploaded successfully"
               mc ls minio/guidellm-results/daily/
@@ -178,13 +635,13 @@ spec:
             - name: MINIO_ACCESS_KEY
               valueFrom:
                 secretKeyRef:
-                  name: minio-root-credentials
-                  key: MINIO_ROOT_USER
+                  name: guidellm-s3-credentials
+                  key: AWS_ACCESS_KEY_ID
             - name: MINIO_SECRET_KEY
               valueFrom:
                 secretKeyRef:
-                  name: minio-root-credentials
-                  key: MINIO_ROOT_PASSWORD
+                  name: guidellm-s3-credentials
+                  key: AWS_SECRET_ACCESS_KEY
             volumeMounts:
             - name: results
               mountPath: /results

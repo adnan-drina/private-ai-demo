@@ -46,11 +46,23 @@ OpenTelemetry Collector ──► Prometheus endpoint (metrics)
   - `tempo-stack.yaml` – single-tenant Tempo deployment (local storage backend)
   - `grafana-instance.yaml` – routed Grafana instance (namespace `private-ai-demo`)
 - Datasources: `grafana-datasource.yaml` (OTEL metrics), `grafana-datasource-tempo.yaml`
-- Dashboards: `grafana-dashboard-ai-metrics.yaml`, `grafana-dashboard-eval-results.yaml`, `grafana-dashboard-traces.yaml`
+- Dashboards:
+  - `grafana-dashboard-enhanced.yaml` – **Llama Stack Operations** (guardrail error rate/throughput, GPU, vLLM latencies)
+  - `grafana-dashboard-traces.yaml` – **Llama Stack Traces** (Tempo TraceQL explorer + span KPIs)
+  - `grafana-dashboard-ai-metrics.yaml`, `grafana-dashboard-eval-results.yaml`, `grafana-dashboard-guidellm.yaml`
   - Monitoring CRDs: `podmonitor.yaml`, `podmonitor-dcgm.yaml`, `pushgateway.yaml`
 - Metrics jobs: `trustyai/metrics/` CronJob pushing `lm_eval_*` to Pushgateway
+- Guardrail telemetry: `/metrics` scrape is handled by OTEL Collector; panels read `client_request_*` metrics exposed by the Guardrails Orchestrator (PII regex + toxicity shields) via OTLP.
 - Dashboard integration: `dashboard/odh-dashboard-config-patch.yaml` enables the **Model evaluations** navigation item by setting `disableLMEval: false` in the `OdhDashboardConfig` CR ([Red Hat guidance](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_cloud_service/1/html/managing_resources/customizing-the-dashboard#ref-dashboard-configuration-options_dashboard)).
 - 🔎 **Guardrails note**: Safety enforcement (GuardrailsOrchestrator, detectors, and their secrets) lives in Stage 2 alongside ingestion/serving so responses can be filtered before hitting observability. Stage 3 only consumes the guardrails telemetry exposed via OTEL.
+
+### GuideLLM Benchmark Automation
+- `guidellm/` overlay deploys:
+  - Daily & weekly CronJobs that pull scenarios and invoke the GuideLLM CLI.
+  - On-demand Jobs for the quantised/full Mistral models.
+  - A Workbench Deployment + Route for interactive debugging.
+  - S3 credentials + buckets (`guidellm-results/daily`, `guidellm-results/weekly`) provisioned automatically by `deploy.sh`.
+- Tekton pipeline definitions (`trustyai/tekton/`) are still included for reference when integrating into larger CI flows.
 
 ## Prerequisites
 
@@ -65,14 +77,25 @@ OpenTelemetry Collector ──► Prometheus endpoint (metrics)
 # Deploy Stage 3 resources via GitOps
 ./deploy.sh
 
-# Optional sanity checks
-./validate.sh
+# Inspect pod health
+oc get pods -n private-ai-demo
+
+# Grab Grafana URL
+oc get route grafana -n private-ai-demo -o jsonpath='{.spec.host}'
 ```
 
-The deploy script applies operator subscriptions (Grafana, OpenTelemetry, Tempo), waits for the CRDs to appear, and only then applies the TrustyAI, observability, and notebook overlays to avoid race conditions.
-It also provisions the Tempo trace bucket (via a short-lived `mc` pod) and generates the `tempo-storage` secret from the MinIO credentials stored in `.env`, so no manual steps are required.
+`deploy.sh` now:
+1. Ensures MinIO buckets exist for Tempo traces and GuideLLM results, writing the `tempo-storage` secret automatically.
+2. Applies the operator subscriptions, waits for their CRDs, and then rolls out TrustyAI, observability (OTEL + Tempo + Grafana), GuideLLM, dashboard patches, and notebooks in that order.
+3. Restarts the TrustyAI operator so the latest LM-Eval config takes effect.
 
-After deployment use the helper scripts to create runtime secrets from `.env` (for TrustyAI + Guardrails) and then synchronise GitOps. Useful commands:
+Validation checklist (rerun as needed):
+1. `oc get pods -n private-ai-demo | grep otel-collector` – collector should be `READY 1/1`.
+2. `oc exec deployment/otel-collector-collector -n private-ai-demo -- curl -s http://localhost:8889/metrics | head` – Prometheus scrape works.
+3. `oc get pods -n private-ai-demo | grep tempo` – distributor/query pods are running.
+4. `oc get cronjob -n private-ai-demo | grep guidellm` – daily & weekly schedules exist.
+5. `oc get lmevaljob -n private-ai-demo` – TrustyAI jobs installed.
+6. `oc get grafanadashboard -n private-ai-demo llama-stack-dashboard-enhanced` – dashboards synced.
 
 ```bash
 oc get lmevaljob -n private-ai-demo
@@ -83,9 +106,11 @@ oc get route grafana -n private-ai-demo -o jsonpath='{.spec.host}'
 
 ## Grafana Dashboards
 
+- **Llama Stack Operations** (`grafana-dashboard-enhanced.yaml`) – request rate, tokens/sec, guardrail error rate/throughput, vLLM latency, GPU utilisation.
+- **Llama Stack Traces** (`grafana-dashboard-traces.yaml`) – Tempo TraceQL explorer, service map, span latency/error panels.
 - **AI/ML Performance** – GPU utilisation, TTFT, throughput.
 - **Model Quality Assessment** – TrustyAI benchmark scores.
-- **Tempo Trace Explorer** – recent Llama Stack traces with service map integration.
+- **GuideLLM Results** – success/failure of daily/weekly benchmarks.
 
 Access Grafana:
 
@@ -93,6 +118,9 @@ Access Grafana:
 GRAFANA_URL=$(oc get route grafana -n private-ai-demo -o jsonpath='{.spec.host}')
 echo "https://${GRAFANA_URL}"
 ```
+
+> ℹ️ Guardrail panels (error rate / throughput / latency) populate after at least one shielded request
+> flows through the Playground (PII regex or toxicity shield).
 
 ## OpenTelemetry + Tempo
 

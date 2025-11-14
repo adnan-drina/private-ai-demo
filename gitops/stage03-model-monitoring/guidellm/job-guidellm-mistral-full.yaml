@@ -17,6 +17,8 @@ spec:
   ttlSecondsAfterFinished: 86400  # Keep completed jobs for 24 hours
   template:
     metadata:
+      annotations:
+        sidecar.istio.io/inject: "true"
       labels:
         app: guidellm
         model: mistral-24b
@@ -32,30 +34,9 @@ spec:
         - /bin/bash
         - -c
         - |
-          echo "🔍 Waiting for mistral-24b InferenceService to be READY..."
-          until oc get isvc mistral-24b -n private-ai-demo \
-            -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' | grep -q "True"; do
-            echo "Model not ready yet, waiting 10 seconds..."
-            sleep 10
-          done
-          echo "✅ Model is READY!"
-          
-          echo "🔍 Getting latest revision service URL (bypasses Knative routing)"
-          
-          # Get the latest ready revision from Knative Service
-          LATEST_REV=$(oc get ksvc mistral-24b-predictor -n private-ai-demo \
-            -o jsonpath='{.status.latestReadyRevisionName}')
-          
-          if [ -z "$LATEST_REV" ]; then
-            echo "❌ ERROR: Could not find latest ready revision"
-            exit 1
-          fi
-          
-          # Use revision-specific private service on port 80 (direct to vLLM, bypasses Knative routing)
-          INTERNAL_URL="http://${LATEST_REV}-private.private-ai-demo.svc.cluster.local"
-          
-          echo "✅ Latest Revision: ${LATEST_REV}"
-          echo "✅ Direct Service URL: ${INTERNAL_URL}"
+          echo "🔍 Using canonical internal service endpoint"
+          INTERNAL_URL="http://mistral-24b.private-ai-demo.svc.cluster.local"
+          echo "✅ Service URL: ${INTERNAL_URL}"
           echo -n "${INTERNAL_URL}" > /shared/inference-url.txt
         volumeMounts:
         - name: shared
@@ -73,9 +54,12 @@ spec:
           echo "🚀 Running GuideLLM Benchmark"
           echo "Target: ${MODEL_URL}"
           echo "Model: mistral-24b"
-          
+
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          OUTPUT_JSON="/results/mistral-24b-${TIMESTAMP}.json"
+          OUTPUT_HTML="/results/mistral-24b-${TIMESTAMP}.html"
+
           # Use synthetic data with Mistral tokenizer
-          # This generates test prompts with specified token counts
           guidellm benchmark \
             --target "${MODEL_URL}" \
             --model "mistral-24b" \
@@ -84,32 +68,180 @@ spec:
             --rate-type synchronous \
             --max-requests 10 \
             --data "prompt_tokens=128,output_tokens=64,samples=10" \
-            --output-path /results/mistral-full-$(date +%Y%m%d-%H%M%S).html
-          
-          echo "✅ Benchmark complete! HTML report generated with embedded GuideLLM UI"
+            --output-path "${OUTPUT_JSON}"
+
+          BENCHMARK_FILE="${OUTPUT_JSON}" \
+          BENCHMARK_MODEL="mistral-24b" \
+          BENCHMARK_TYPE="manual" \
+          BENCHMARK_TIMESTAMP="${TIMESTAMP}" \
+          HTML_FILE="${OUTPUT_HTML}" \
+          python - <<'PY'
+            import json
+            import os
+            import pathlib
+            import sys
+            from datetime import datetime
+            from html import escape
+
+            benchmark_file = os.environ["BENCHMARK_FILE"]
+            model = os.environ.get("BENCHMARK_MODEL", "unknown")
+            bench_type = os.environ.get("BENCHMARK_TYPE", "manual")
+            timestamp = os.environ.get("BENCHMARK_TIMESTAMP", "")
+            html_file = os.environ.get("HTML_FILE")
+
+            try:
+                with open(benchmark_file, "r", encoding="utf-8") as fh:
+                    data = json.load(fh)
+            except Exception as exc:  # noqa: BLE001
+                print(f"Unable to read benchmark output {benchmark_file}: {exc}")
+                sys.exit(0)
+
+            benchmarks = data.get("benchmarks") or []
+            if not benchmarks:
+                print(f"No benchmarks found in {benchmark_file}, skipping HTML generation.")
+                sys.exit(0)
+
+            metrics = benchmarks[0].get("metrics", {}) or {}
+
+            def select_section(metric_dict):
+                if not isinstance(metric_dict, dict):
+                    return None
+                section = metric_dict.get("total")
+                if isinstance(section, dict):
+                    return section
+                section = metric_dict.get("successful")
+                if isinstance(section, dict):
+                    return section
+                return metric_dict if isinstance(metric_dict, dict) else None
+
+            def get_metric(key, percentile=None, scale=1.0):
+                metric = metrics.get(key)
+                section = select_section(metric)
+                if not section:
+                    return None
+                value = None
+                if percentile:
+                    percentiles = section.get("percentiles")
+                    if isinstance(percentiles, dict):
+                        value = percentiles.get(percentile)
+                    if value is None:
+                        value = section.get(percentile)
+                if value is None:
+                    value = section.get("mean")
+                if value is None:
+                    return None
+                try:
+                    return float(value) * scale
+                except (TypeError, ValueError):
+                    return None
+
+            def compute_success_rate():
+                metric = metrics.get("requests_per_second")
+                if not isinstance(metric, dict):
+                    return None
+                total = metric.get("total")
+                successful = metric.get("successful")
+                if isinstance(total, dict) and isinstance(successful, dict):
+                    total_count = total.get("count")
+                    success_count = successful.get("count")
+                    if total_count:
+                        return (success_count or 0) / total_count * 100.0
+                return None
+
+            def compute_total_requests():
+                for candidate in ("request_latency", "requests_per_second"):
+                    metric = metrics.get(candidate)
+                    section = select_section(metric)
+                    if isinstance(section, dict):
+                        count = section.get("count")
+                        if isinstance(count, (int, float)):
+                            return int(count)
+                return None
+
+            def fmt(value, decimals=4, suffix=""):
+                if value is None:
+                    return "-"
+                if isinstance(value, float):
+                    return f"{value:.{decimals}f}{suffix}"
+                if isinstance(value, int):
+                    return f"{value}{suffix}"
+                try:
+                    return f"{float(value):.{decimals}f}{suffix}"
+                except Exception:
+                    return f"{value}{suffix}"
+
+            token_rate = get_metric("tokens_per_second")
+            if token_rate is None:
+                token_rate = get_metric("output_tokens_per_second")
+
+            table_rows = [
+                ("P50 request latency (s)", fmt(get_metric("request_latency", "p50"))),
+                ("P95 request latency (s)", fmt(get_metric("request_latency", "p95"))),
+                ("P99 request latency (s)", fmt(get_metric("request_latency", "p99"))),
+                ("P50 time to first token (s)", fmt(get_metric("time_to_first_token_ms", "p50", scale=0.001))),
+                ("P95 time to first token (s)", fmt(get_metric("time_to_first_token_ms", "p95", scale=0.001))),
+                ("Requests per second", fmt(get_metric("requests_per_second"))),
+                ("Tokens per second", fmt(token_rate)),
+                ("Request success rate (%)", fmt(compute_success_rate(), decimals=2)),
+                ("Total requests", fmt(compute_total_requests(), decimals=0)),
+            ]
+
+            timestamp_display = timestamp or datetime.utcnow().strftime("%Y-%m-%d %H:%M:%SZ")
+            rows_html = "".join(
+                f"<tr><th>{escape(label)}</th><td>{escape(value)}</td></tr>" for label, value in table_rows
+            )
+
+            html_doc = f"""<!DOCTYPE html>
+            <html lang=\"en\">
+              <head>
+                <meta charset=\"utf-8\" />
+                <title>GuideLLM Benchmark Report - {escape(model)}</title>
+                <style>
+                  body {{ font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif; margin: 2rem; }}
+                  h1 {{ margin-bottom: 0.5rem; }}
+                  table {{ border-collapse: collapse; margin-top: 1.5rem; width: 100%; max-width: 640px; }}
+                  th, td {{ border: 1px solid #444; padding: 0.4rem 0.6rem; text-align: left; }}
+                  th {{ background: #f0f0f0; width: 60%; }}
+                  pre {{ background: #f8f8f8; padding: 1rem; overflow-x: auto; }}
+                  footer {{ margin-top: 2rem; font-size: 0.85rem; color: #666; }}
+                </style>
+              </head>
+              <body>
+                <h1>GuideLLM Benchmark Report</h1>
+                <p><strong>Model:</strong> {escape(model)}</p>
+                <p><strong>Benchmark Type:</strong> {escape(bench_type)}</p>
+                <p><strong>Timestamp:</strong> {escape(timestamp_display)}</p>
+                <table>
+                  <tbody>
+                    {rows_html}
+                  </tbody>
+                </table>
+                <h2>Raw Benchmark Payload</h2>
+                <pre>{escape(json.dumps(data, indent=2))}</pre>
+                <footer>Generated automatically by the GuideLLM automation pipeline.</footer>
+              </body>
+            </html>
+            """
+
+            pathlib.Path(html_file).write_text(html_doc, encoding="utf-8")
+            print(f"📄 HTML report written to {html_file}")
+          PY
+
+          echo "✅ Benchmark complete! JSON + HTML artifacts generated."
+          touch /shared/.benchmark-done
         env:
         - name: TZ
           value: "America/New_York"
+        - name: GUIDELLM__OPENAI__VERIFY
+          value: "false"
         - name: PYTHONHTTPSVERIFY
           value: "0"  # Disable SSL verification for self-signed OpenShift certs
-        - name: CURL_CA_BUNDLE
-          value: ""  # Disable SSL bundle verification
+        - name: GUIDELLM__LOGGING__CONSOLE_LOG_LEVEL
+          value: "INFO"
         - name: HOME
           value: "/tmp"  # Writable directory for cache
         - name: HF_HOME
           value: "/tmp/hf"  # HuggingFace cache directory
-        volumeMounts:
-        - name: shared
-          mountPath: /shared
-        - name: results
-          mountPath: /results
-        resources:
-          requests:
-            cpu: "200m"
-            memory: "512Mi"
-          limits:
-            cpu: "1"
-            memory: "2Gi"
       
       # S3 Upload Sidecar - uploads HTML reports to MinIO
       - name: s3-uploader
@@ -118,21 +250,25 @@ spec:
         - /bin/sh
         - -c
         - |
-          echo "⏰ Waiting for benchmark to complete..."
-          while [ ! -f /results/*.html ]; do
+          echo "⏰ Waiting for benchmark artifacts..."
+          while [ $(ls -1 /results/*.json 2>/dev/null | wc -l) -lt 1 ] || \
+                [ $(ls -1 /results/*.html 2>/dev/null | wc -l) -lt 1 ]; do
             sleep 5
           done
-          sleep 5  # Extra time to ensure file is fully written
+          sleep 5  # Extra time to ensure files are fully written
           
           echo "📦 Configuring MinIO client..."
           mc alias set minio http://minio.model-storage.svc.cluster.local:9000 \
             $MINIO_ACCESS_KEY $MINIO_SECRET_KEY --api S3v4
           
-          echo "📤 Uploading report to MinIO..."
+          echo "📤 Uploading reports to MinIO..."
+          mc cp /results/*.json minio/guidellm-results/
           mc cp /results/*.html minio/guidellm-results/
           
           echo "✅ Upload complete!"
           mc ls minio/guidellm-results/
+          
+          touch /shared/.upload-done
         env:
         - name: HOME
           value: "/tmp"  # Writable directory for mc config
@@ -149,6 +285,8 @@ spec:
         volumeMounts:
         - name: results
           mountPath: /results
+        - name: shared
+          mountPath: /shared
         resources:
           requests:
             cpu: "100m"
@@ -156,6 +294,35 @@ spec:
           limits:
             cpu: "500m"
             memory: "512Mi"
+      
+      # Post-processing container to shut down Istio sidecar when work is done
+      - name: istio-shutdown
+        image: registry.redhat.io/openshift4/ose-cli:latest
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -euo pipefail
+          echo "⏳ Waiting for benchmark artifacts before stopping Istio sidecar..."
+          while [ ! -f /shared/.benchmark-done ] || [ ! -f /shared/.upload-done ]; do
+            sleep 5
+          done
+          echo "🛑 Requesting Istio sidecar shutdown"
+          if curl -fsS -XPOST http://127.0.0.1:15020/quitquitquit; then
+            echo "✅ Istio sidecar shutdown requested"
+          else
+            echo "⚠️ Unable to request Istio sidecar shutdown (continuing anyway)"
+          fi
+        volumeMounts:
+        - name: shared
+          mountPath: /shared
+        resources:
+          requests:
+            cpu: "10m"
+            memory: "32Mi"
+          limits:
+            cpu: "100m"
+            memory: "128Mi"
       
       volumes:
       - name: shared

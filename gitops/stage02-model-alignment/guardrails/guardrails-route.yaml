@@ -9,10 +9,10 @@ metadata:
 spec:
   to:
     kind: Service
-    name: llama-guardrails
+    name: llama-guardrails-service
   port:
-    targetPort: http
+    targetPort: https
   tls:
-    termination: edge
+    termination: passthrough
 
 

@@ -13,6 +13,16 @@ spec:
       server: https://kubernetes.default.svc
     - namespace: grafana-operator-system
       server: https://kubernetes.default.svc
+    - namespace: openshift-opentelemetry-operator
+      server: https://kubernetes.default.svc
+    - namespace: tempo-operator-system
+      server: https://kubernetes.default.svc
+    - namespace: nvidia-gpu-operator
+      server: https://kubernetes.default.svc
+    - namespace: openshift-config-managed
+      server: https://kubernetes.default.svc
+    - namespace: redhat-ods-applications
+      server: https://kubernetes.default.svc
   clusterResourceWhitelist:
     - group: ''
       kind: Namespace
@@ -20,6 +30,16 @@ spec:
       kind: Subscription
     - group: 'operators.coreos.com'
       kind: OperatorGroup
+    - group: 'rbac.authorization.k8s.io'
+      kind: ClusterRole
+    - group: 'rbac.authorization.k8s.io'
+      kind: ClusterRoleBinding
+    - group: 'authorization.openshift.io'
+      kind: ClusterRoleBinding
+    - group: 'console.openshift.io'
+      kind: ConsolePlugin
+    - group: 'operator.openshift.io'
+      kind: Console
   namespaceResourceWhitelist:
     - group: '*'
       kind: '*'

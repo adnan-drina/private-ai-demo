@@ -1,0 +1,14 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llama-guardrails
+  namespace: private-ai-demo
+spec:
+  template:
+    spec:
+      containers:
+        - name: llama-guardrails
+          env:
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://otel-collector-collector.private-ai-demo.svc:4318
+

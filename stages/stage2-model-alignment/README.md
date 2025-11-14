@@ -47,6 +47,11 @@ This script provides **one-click deployment**:
    - Milvus vector database
    - KFP Data Science Pipelines
 
+> **Compatibility note:** the shipped Playground is the legacy Streamlit UI.
+> A runtime `sitecustomize.py` shim (mounted via `gitops/stage02-model-alignment/llama-stack/configmap-sitecustomize.yaml`)
+> rewrites requests/responses so the 0.2 UI can talk to the 0.3 APIs, including streaming
+> adapters and vector-store path translations.
+
 2. **Automatically uploads documents to MinIO:**
    - Scans `scenario-docs/` for PDF files
    - Uploads all documents to corresponding S3 paths
@@ -101,6 +106,21 @@ Configuration files live in `gitops/stage02-model-alignment/guardrails/`:
 - `guardrails-configmap.yaml` – detector presets (PII + prompt-injection)
 - `guardrails-orchestrator.yaml` – runtime definition + OTEL telemetry
 - `guardrails-route.yaml` – external access for policy testing
+- `hf-detector-*.yaml` – Hugging Face toxicity detector BuildConfig/Deployment/Service
+- `patch-llama-guardrails-env.yaml` – OTEL env vars for orchestrator pods
+
+The Playground sidebar exposes a **Guardrails** toggle backed by the TrustyAI shields:
+
+- `regex_guardrail` – PII regex bundle (emails, SSNs, cards, phone, basic names)
+- `toxicity_guardrail` – Hugging Face `ibm-granite/granite-guardian-hap-38m`
+
+Both shields can be applied to prompts, RAG context, and streaming responses. See `docs/guardrails-shields.md`
+for guidance on adding/removing shields and suggested demo prompts.
+
+**Guardrail demo flow:**
+1. Run a normal Chat/RAG turn with guardrails disabled (baseline behaviour).
+2. Enable guardrails, pick the shield to showcase, optionally apply it to RAG context.
+3. Re-run the same prompt and highlight the block reason returned by the TrustyAI orchestrator.
 
 The LlamaStack Playground reads the Guardrails route to enforce policies in the RAG UI.
 
@@ -215,9 +235,16 @@ For detailed documentation, see:
 
 ### Access Points
 
-- **LlamaStack Playground**: https://llamastack-private-ai-demo.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com
-- **KFP UI**: https://ds-pipeline-dspa-private-ai-demo.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com
-- **LlamaStack API**: http://llama-stack-service.private-ai-demo.svc:8321
+```bash
+# Playground route
+oc get route llama-stack-playground -n private-ai-demo -o jsonpath='{.spec.host}'
+
+# DSPA / KFP UI
+oc get route ds-pipeline-dspa -n private-ai-demo -o jsonpath='{.spec.host}'
+
+# Internal LlamaStack API (service-only)
+echo "http://llama-stack-service.private-ai-demo.svc:8321"
+```
 
 ## 🔍 Troubleshooting
 

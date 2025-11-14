@@ -1,0 +1,125 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: guidellm-workbench
+  namespace: private-ai-demo
+  labels:
+    app: guidellm-workbench
+    app.kubernetes.io/name: guidellm-workbench
+    app.kubernetes.io/part-of: evaluation
+    app.kubernetes.io/component: benchmarking
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: guidellm-workbench
+  template:
+    metadata:
+      labels:
+        app: guidellm-workbench
+        app.kubernetes.io/name: guidellm-workbench
+        app.kubernetes.io/part-of: evaluation
+        app.kubernetes.io/component: benchmarking
+      annotations:
+        sidecar.istio.io/inject: "true"
+    spec:
+      serviceAccountName: guidellm-runner
+      containers:
+        - name: workbench
+          image: quay.io/rh-aiservices-bu/guidellm-wb:v1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8501
+              name: http
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: huggingface-token
+                  key: HF_TOKEN
+            - name: HUGGING_FACE_HUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: huggingface-token
+                  key: HF_TOKEN
+            - name: GUIDELLM__ENV
+              value: prod
+            - name: GUIDELLM__OPENAI__VERIFY
+              value: "false"
+            - name: PYTHONHTTPSVERIFY
+              value: "0"
+            - name: GUIDELLM_TARGET
+              value: "http://mistral-24b.private-ai-demo.svc.cluster.local/v1"
+            - name: GUIDELLM_MODEL
+              value: "mistral-24b"
+            - name: GUIDELLM_PROCESSOR
+              value: "mistralai/Mistral-Small-24B-Instruct-2501"
+            - name: GUIDELLM_RATE_TYPE
+              value: "sweep"
+            - name: GUIDELLM_RATE_START
+              value: "1"
+            - name: GUIDELLM_RATE_END
+              value: "20"
+            - name: GUIDELLM_RATE_STEP
+              value: "2"
+            - name: GUIDELLM_MAX_SECONDS
+              value: "900"
+            - name: GUIDELLM_MAX_REQUESTS
+              value: "500"
+            - name: GUIDELLM_MAX_CONCURRENCY
+              value: "16"
+            - name: GUIDELLM_PROMPT_TOKENS
+              value: "256"
+            - name: GUIDELLM_OUTPUT_TOKENS
+              value: "128"
+            - name: GUIDELLM_DATA_TYPE
+              value: "emulated"
+            - name: GUIDELLM_DATA_CONFIG
+              value: ""
+            - name: GUIDELLM_PROFILES_FILE
+              value: "/app/profiles/profiles.json"
+            - name: MINIO_ENDPOINT
+              value: "http://minio.model-storage.svc.cluster.local:9000"
+            - name: MINIO_BUCKET
+              value: "guidellm-results"
+            - name: MINIO_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: guidellm-s3-credentials
+                  key: AWS_ACCESS_KEY_ID
+            - name: MINIO_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: guidellm-s3-credentials
+                  key: AWS_SECRET_ACCESS_KEY
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 1
+              memory: 1Gi
+          volumeMounts:
+            - name: results
+              mountPath: /opt/app-root/src/results
+            - name: workbench-app
+              mountPath: /app/app.py
+              subPath: app.py
+              readOnly: true
+            - name: workbench-profiles
+              mountPath: /app/profiles
+              readOnly: true
+      volumes:
+        - name: results
+          emptyDir: {}
+        - name: workbench-app
+          configMap:
+            name: guidellm-workbench-app
+            items:
+              - key: app.py
+                path: app.py
+        - name: workbench-profiles
+          configMap:
+            name: guidellm-profiles
+
