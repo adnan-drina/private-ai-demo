@@ -1,0 +1,9 @@
+---
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: guardrails-detector-hf
+  labels:
+    app.kubernetes.io/component: guardrails
+    app.kubernetes.io/managed-by: gitops
+

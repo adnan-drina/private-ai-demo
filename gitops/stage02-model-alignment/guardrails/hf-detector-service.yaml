@@ -1,0 +1,18 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: guardrails-hf-toxicity
+  labels:
+    app.kubernetes.io/component: guardrails
+    app.kubernetes.io/managed-by: gitops
+spec:
+  selector:
+    app.kubernetes.io/name: guardrails-hf-toxicity
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+      protocol: TCP
+
+

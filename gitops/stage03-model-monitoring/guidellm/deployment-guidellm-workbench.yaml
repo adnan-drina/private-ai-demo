@@ -79,6 +79,20 @@ spec:
               value: ""
             - name: GUIDELLM_PROFILES_FILE
               value: "/app/profiles/profiles.json"
+            - name: MINIO_ENDPOINT
+              value: "http://minio.model-storage.svc.cluster.local:9000"
+            - name: MINIO_BUCKET
+              value: "guidellm-results"
+            - name: MINIO_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: guidellm-s3-credentials
+                  key: AWS_ACCESS_KEY_ID
+            - name: MINIO_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: guidellm-s3-credentials
+                  key: AWS_SECRET_ACCESS_KEY
           resources:
             requests:
               cpu: 200m

@@ -74,6 +74,8 @@ echo "   ✅ GuideLLM bucket ready: ${MINIO_BUCKET_GUIDELLM}"
 OPERATORS_PATH="${GITOPS_PATH}/operators"
 OBSERVABILITY_PATH="${GITOPS_PATH}/observability"
 TRUSTYAI_PATH="${GITOPS_PATH}/trustyai"
+GUIDELLM_PATH="${GITOPS_PATH}/guidellm"
+DASHBOARD_PATH="${GITOPS_PATH}/dashboard"
 NOTEBOOKS_PATH="${GITOPS_PATH}/notebooks"
 TRUSTYAI_NS="redhat-ods-applications"
 
@@ -142,6 +144,14 @@ wait_for_resource "TrustyAI operator" \
 echo ""
 echo "📦 Applying observability stack..."
 oc apply -k "$OBSERVABILITY_PATH"
+
+echo ""
+echo "📦 Applying GuideLLM benchmarking stack..."
+oc apply -k "$GUIDELLM_PATH"
+
+echo ""
+echo "📦 Applying dashboard configuration..."
+oc apply -k "$DASHBOARD_PATH"
 
 echo ""
 echo "📦 Applying notebooks..."

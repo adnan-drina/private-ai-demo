@@ -36,7 +36,7 @@ spec:
           "fieldConfig": {"defaults": {}, "overrides": []},
           "options": {
             "displayMode": "table",
-            "search": {"limit": 20, "minDuration": "", "query": "", "spanName": "", "serviceName": "", "tags": []},
+            "search": {"limit": 20, "minDuration": "", "query": "", "spanName": "", "serviceName": "$service", "tags": []},
             "tableColumns": [
               {"label": "Service", "value": "serviceName"},
               {"label": "Span", "value": "spanName"},
@@ -45,7 +45,7 @@ spec:
             ]
           },
           "targets": [
-            {"datasource": {"type": "tempo", "uid": "tempo"}, "queryType": "search", "refId": "A"}
+            {"datasource": {"type": "tempo", "uid": "tempo"}, "queryType": "search", "refId": "A", "serviceName": "$service"}
           ]
         },
         {
@@ -165,7 +165,8 @@ spec:
             "query": "label_values(tempo_spanmetrics_spans_total, service)",
             "refresh": 1,
             "includeAll": true,
-            "multi": true
+            "multi": true,
+            "current": {"text": "llama-stack", "value": "llama-stack", "selected": true}
           },
           {
             "name": "span_kind",

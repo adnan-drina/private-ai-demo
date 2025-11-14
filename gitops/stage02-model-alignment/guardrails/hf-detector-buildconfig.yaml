@@ -1,0 +1,37 @@
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: guardrails-detector-hf
+  labels:
+    app.kubernetes.io/component: guardrails
+    app.kubernetes.io/managed-by: gitops
+spec:
+  runPolicy: Serial
+  source:
+    type: Git
+    git:
+      uri: https://github.com/opendatahub-io/guardrails-detectors.git
+    contextDir: detectors
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile.hf
+      buildArgs:
+        - name: MAX_JOBS
+          value: "4"
+  resources:
+    requests:
+      cpu: "250m"
+      memory: 2Gi
+    limits:
+      cpu: "1"
+      memory: 4Gi
+  output:
+    to:
+      kind: ImageStreamTag
+      name: guardrails-detector-hf:latest
+  triggers:
+    - type: ConfigChange
+    - type: ImageChange
+

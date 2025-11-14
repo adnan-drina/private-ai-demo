@@ -16,7 +16,8 @@ spec:
     - name: target
       description: Base URL of the model endpoint (no /v1 suffix required).
       type: string
-      default: "http://mistral-24b.private-ai-demo.svc.cluster.local"
+      # TODO(workaround): use external HTTPS route until Tekton pods get Istio sidecars again
+      default: "https://mistral-24b-private-ai-demo.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com/v1"
     - name: model-name
       description: Logical name used for artifacts (e.g. mistral-24b).
       type: string
@@ -70,6 +71,8 @@ spec:
         value: prod
       - name: GUIDELLM__OPENAI__VERIFY
         value: "false"
+      - name: GUIDELLM__LOGGING__CONSOLE_LOG_LEVEL
+        value: "INFO"
       - name: PYTHONHTTPSVERIFY
         value: "0"
       - name: PUSHGATEWAY_URL
@@ -173,7 +176,62 @@ spec:
                     print(f"No benchmarks found in {benchmark_file}, skipping metrics export and HTML generation.")
                     sys.exit(0)
 
-                metrics = benchmarks[0].get("metrics", {})
+                metrics = benchmarks[0].get("metrics", {}) or {}
+
+                def select_section(metric_dict):
+                    if not isinstance(metric_dict, dict):
+                        return None
+                    section = metric_dict.get("total")
+                    if isinstance(section, dict):
+                        return section
+                    section = metric_dict.get("successful")
+                    if isinstance(section, dict):
+                        return section
+                    return metric_dict if isinstance(metric_dict, dict) else None
+
+                def get_metric(key, percentile=None, scale=1.0):
+                    metric = metrics.get(key)
+                    section = select_section(metric)
+                    if not section:
+                        return None
+                    value = None
+                    if percentile:
+                        percentiles = section.get("percentiles")
+                        if isinstance(percentiles, dict):
+                            value = percentiles.get(percentile)
+                        if value is None:
+                            value = section.get(percentile)
+                    if value is None:
+                        value = section.get("mean")
+                    if value is None:
+                        return None
+                    try:
+                        return float(value) * scale
+                    except (TypeError, ValueError):
+                        return None
+
+                def compute_success_rate():
+                    metric = metrics.get("requests_per_second")
+                    if not isinstance(metric, dict):
+                        return None
+                    total = metric.get("total")
+                    successful = metric.get("successful")
+                    if isinstance(total, dict) and isinstance(successful, dict):
+                        total_count = total.get("count")
+                        success_count = successful.get("count")
+                        if total_count:
+                            return (success_count or 0) / total_count * 100.0
+                    return None
+
+                def compute_total_requests():
+                    for candidate in ("request_latency", "requests_per_second"):
+                        metric = metrics.get(candidate)
+                        section = select_section(metric)
+                        if isinstance(section, dict):
+                            count = section.get("count")
+                            if isinstance(count, (int, float)):
+                                return int(count)
+                    return None
 
                 if pushgateway_url:
                     try:
@@ -188,20 +246,20 @@ spec:
                         gauge = Gauge(name, description, ["model", "benchmark_type"], registry=registry)
                         gauge.labels(model=model, benchmark_type=bench_type).set(value if value is not None else 0)
 
-                    metric_map = [
-                        ("guidellm_request_latency_p50_seconds", "P50 request latency", "request_latency_p50"),
-                        ("guidellm_request_latency_p95_seconds", "P95 request latency", "request_latency_p95"),
-                        ("guidellm_request_latency_p99_seconds", "P99 request latency", "request_latency_p99"),
-                        ("guidellm_ttft_p50_seconds", "P50 time to first token", "time_to_first_token_p50"),
-                        ("guidellm_ttft_p95_seconds", "P95 time to first token", "time_to_first_token_p95"),
-                        ("guidellm_throughput_requests_per_second", "Requests per second", "request_throughput"),
-                        ("guidellm_throughput_tokens_per_second", "Tokens per second", "token_throughput"),
-                        ("guidellm_request_success_rate", "Request success rate", "success_rate"),
-                        ("guidellm_total_requests", "Total requests", "total_requests"),
+                    prom_metrics = [
+                        ("guidellm_request_latency_p50_seconds", "P50 request latency", get_metric("request_latency", "p50")),
+                        ("guidellm_request_latency_p95_seconds", "P95 request latency", get_metric("request_latency", "p95")),
+                        ("guidellm_request_latency_p99_seconds", "P99 request latency", get_metric("request_latency", "p99")),
+                        ("guidellm_ttft_p50_seconds", "P50 time to first token", get_metric("time_to_first_token_ms", "p50", scale=0.001)),
+                        ("guidellm_ttft_p95_seconds", "P95 time to first token", get_metric("time_to_first_token_ms", "p95", scale=0.001)),
+                        ("guidellm_throughput_requests_per_second", "Requests per second", get_metric("requests_per_second")),
+                        ("guidellm_throughput_tokens_per_second", "Tokens per second", get_metric("tokens_per_second") or get_metric("output_tokens_per_second")),
+                        ("guidellm_request_success_rate", "Request success rate", compute_success_rate()),
+                        ("guidellm_total_requests", "Total requests", compute_total_requests()),
                     ]
 
-                    for metric_name, desc, key in metric_map:
-                        record(metric_name, desc, metrics.get(key))
+                    for metric_name, desc, value in prom_metrics:
+                        record(metric_name, desc, value)
 
                     try:
                         push_to_gateway(pushgateway_url, job="guidellm", registry=registry)
@@ -209,40 +267,36 @@ spec:
                     except Exception as exc:  # noqa: BLE001
                         print(f"⚠️ Failed to push metrics to {pushgateway_url}: {exc}")
 
-                else:
-                    metric_map = [
-                        ("guidellm_request_latency_p50_seconds", "P50 request latency", "request_latency_p50"),
-                        ("guidellm_request_latency_p95_seconds", "P95 request latency", "request_latency_p95"),
-                        ("guidellm_request_latency_p99_seconds", "P99 request latency", "request_latency_p99"),
-                        ("guidellm_ttft_p50_seconds", "P50 time to first token", "time_to_first_token_p50"),
-                        ("guidellm_ttft_p95_seconds", "P95 time to first token", "time_to_first_token_p95"),
-                        ("guidellm_throughput_requests_per_second", "Requests per second", "request_throughput"),
-                        ("guidellm_throughput_tokens_per_second", "Tokens per second", "token_throughput"),
-                        ("guidellm_request_success_rate", "Request success rate", "success_rate"),
-                        ("guidellm_total_requests", "Total requests", "total_requests"),
-                    ]
+                token_rate = get_metric("tokens_per_second") or get_metric("output_tokens_per_second")
+
+                table_rows = [
+                    ("P50 request latency (s)", get_metric("request_latency", "p50")),
+                    ("P95 request latency (s)", get_metric("request_latency", "p95")),
+                    ("P99 request latency (s)", get_metric("request_latency", "p99")),
+                    ("P50 time to first token (s)", get_metric("time_to_first_token_ms", "p50", scale=0.001)),
+                    ("P95 time to first token (s)", get_metric("time_to_first_token_ms", "p95", scale=0.001)),
+                    ("Requests per second", get_metric("requests_per_second")),
+                    ("Tokens per second", token_rate),
+                    ("Request success rate (%)", compute_success_rate()),
+                    ("Total requests", compute_total_requests()),
+                ]
 
                 if html_file:
-                    rows = []
-                    for _metric_name, friendly, key in metric_map:
-                        value = metrics.get(key)
-                        if isinstance(value, float):
-                            value_str = f"{value:.4f}"
-                        else:
-                            value_str = "-" if value in (None, \"\") else str(value)
-                        rows.append(f\"<tr><th>{escape(friendly)}</th><td>{escape(value_str)}</td></tr>\")
-
-                    timestamp_display = timestamp or datetime.utcnow().strftime(\"%Y-%m-%d %H:%M:%SZ\")
+                    timestamp_display = timestamp or datetime.utcnow().strftime("%Y-%m-%d %H:%M:%SZ")
+                    rows_html = "".join(
+                        f"<tr><th>{escape(label)}</th><td>{escape('-' if value is None else f'{value:.4f}' if isinstance(value, float) else str(value))}</td></tr>"
+                        for label, value in table_rows
+                    )
                     html_doc = dedent(
-                        f\"\"\"\\
+                        f"""\
                         <!DOCTYPE html>
-                        <html lang=\"en\">
+                        <html lang="en">
                           <head>
-                            <meta charset=\"utf-8\" />
+                            <meta charset="utf-8" />
                             <title>GuideLLM Benchmark Report - {escape(model)}</title>
                             <style>
-                              body {{ font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif; margin: 2rem; }}
-                              h1 {{ margin-bottom: 0.25rem; }}
+                              body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 2rem; }}
+                              h1 {{ margin-bottom: 0.5rem; }}
                               table {{ border-collapse: collapse; margin-top: 1.5rem; width: 100%; max-width: 640px; }}
                               th, td {{ border: 1px solid #444; padding: 0.4rem 0.6rem; text-align: left; }}
                               th {{ background: #f0f0f0; width: 60%; }}
@@ -255,24 +309,22 @@ spec:
                             <p><strong>Model:</strong> {escape(model)}</p>
                             <p><strong>Benchmark Type:</strong> {escape(bench_type)}</p>
                             <p><strong>Timestamp:</strong> {escape(timestamp_display)}</p>
-
                             <table>
                               <tbody>
-                                {"".join(rows)}
+                                {rows_html}
                               </tbody>
                             </table>
-
                             <h2>Raw Benchmark Payload</h2>
                             <pre>{escape(json.dumps(data, indent=2))}</pre>
-
                             <footer>Generated automatically by the GuideLLM automation pipeline.</footer>
                           </body>
                         </html>
-                        \"\"\"
+                        """
                     )
-                    pathlib.Path(html_file).write_text(html_doc, encoding=\"utf-8\")
-                    print(f\"📄 HTML report written to {html_file}\")
-                \"\"\"),
+                    pathlib.Path(html_file).write_text(html_doc, encoding="utf-8")
+                    print(f"📄 HTML report written to {html_file}")
+                """
+            ),
         )
         PY
 

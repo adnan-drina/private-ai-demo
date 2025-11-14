@@ -7,15 +7,28 @@ metadata:
     app.kubernetes.io/component: guardrails
     app.kubernetes.io/managed-by: gitops
 data:
-  detectors.yaml: |
+  config.yaml: |
+    openai:
+      service:
+        hostname: llamastack.private-ai-demo.svc
+        port: 8321
     detectors:
-      - id: regex_detector
-        type: builtin
-        params:
-          preset: pii
-      - id: prompt_injection
-        type: builtin
-        params:
-          preset: prompt_injection
+      regex:
+        type: text_contents
+        service:
+          hostname: 127.0.0.1
+          port: 8080
+        chunker_id: whole_doc_chunker
+        default_threshold: 0.5
+      hf_toxicity:
+        type: text_contents
+        service:
+          hostname: guardrails-hf-toxicity
+          port: 8000
+        chunker_id: whole_doc_chunker
+        default_threshold: 0.5
+        detector_params:
+          detector_id: hap
+
 
 

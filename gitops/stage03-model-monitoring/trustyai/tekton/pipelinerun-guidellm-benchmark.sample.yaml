@@ -19,7 +19,8 @@ spec:
         sidecar.istio.io/inject: "true"
   params:
     - name: target
-      value: "http://mistral-24b.private-ai-demo.svc.cluster.local"
+      # TODO(workaround): hitting external HTTPS route until Tekton sidecar injection is fixed
+      value: "https://mistral-24b-private-ai-demo.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com/v1"
     - name: model-name
       value: "mistral-24b"
     - name: processor

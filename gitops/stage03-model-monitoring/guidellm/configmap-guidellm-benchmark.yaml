@@ -8,12 +8,12 @@ metadata:
     app.kubernetes.io/part-of: evaluation
     app.kubernetes.io/component: benchmarking
 data:
-  GUIDELLM_RATE: "10"
+  GUIDELLM_RATE: "4,8,12,16,20"
   GUIDELLM_RATE_TYPE: "sweep"
   GUIDELLM_PROMPT_TOKENS: "256"
   GUIDELLM_OUTPUT_TOKENS: "128"
   GUIDELLM_SAMPLES: "100"
-  GUIDELLM_MAX_SECONDS: "1800"
+  GUIDELLM_MAX_SECONDS: "900"
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -29,5 +29,5 @@ data:
   GUIDELLM_PROMPT_TOKENS: "512"
   GUIDELLM_OUTPUT_TOKENS: "256"
   GUIDELLM_SAMPLES: "500"
-  GUIDELLM_MAX_SECONDS: "3600"
+  GUIDELLM_MAX_SECONDS: "2400"
 

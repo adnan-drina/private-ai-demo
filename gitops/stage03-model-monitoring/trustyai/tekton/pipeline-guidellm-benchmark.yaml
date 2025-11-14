@@ -15,7 +15,8 @@ spec:
     - name: target
       type: string
       description: Base URL of the model endpoint (internal service URL).
-      default: "http://mistral-24b.private-ai-demo.svc.cluster.local"
+      # TODO(workaround): use external HTTPS route until Istio sidecar injection is restored for Tekton pods
+      default: "https://mistral-24b-private-ai-demo.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com/v1"
     - name: model-name
       type: string
       description: Logical model identifier (used for artifact naming).

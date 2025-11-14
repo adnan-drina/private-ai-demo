@@ -1,0 +1,93 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: guardrails-hf-toxicity
+  labels:
+    app.kubernetes.io/component: guardrails
+    app.kubernetes.io/managed-by: gitops
+    app.kubernetes.io/name: guardrails-hf-toxicity
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: guardrails-hf-toxicity
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: guardrails-hf-toxicity
+        app.kubernetes.io/component: guardrails
+    spec:
+      volumes:
+        - name: model-cache
+          emptyDir: {}
+      initContainers:
+        - name: download-model
+          image: image-registry.openshift-image-registry.svc:5000/private-ai-demo/guardrails-detector-hf:latest
+          command:
+            - /bin/sh
+            - -c
+          args:
+            - |
+              set -euo pipefail
+              mkdir -p /models/.cache
+              python -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='ibm-granite/granite-guardian-hap-38m', local_dir='/models/ibm-granite/granite-guardian-hap-38m', local_dir_use_symlinks=False, revision=None)"
+          env:
+            - name: HF_HOME
+              value: /models/.cache
+            - name: HUGGINGFACE_HUB_CACHE
+              value: /models/.cache
+            - name: TRANSFORMERS_CACHE
+              value: /models/.cache
+            - name: HF_HUB_DISABLE_TELEMETRY
+              value: "1"
+          resources:
+            requests:
+              cpu: 500m
+              memory: 4Gi
+            limits:
+              cpu: "2"
+              memory: 8Gi
+          volumeMounts:
+            - name: model-cache
+              mountPath: /models
+      containers:
+        - name: detector
+          image: image-registry.openshift-image-registry.svc:5000/private-ai-demo/guardrails-detector-hf:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: MODEL_DIR
+              value: /models/ibm-granite/granite-guardian-hap-38m
+            - name: HF_HOME
+              value: /models/.cache
+            - name: HUGGINGFACE_HUB_CACHE
+              value: /models/.cache
+            - name: TRANSFORMERS_CACHE
+              value: /models/.cache
+            - name: HF_HUB_DISABLE_TELEMETRY
+              value: "1"
+          resources:
+            requests:
+              cpu: 500m
+              memory: 2Gi
+            limits:
+              cpu: "1"
+              memory: 4Gi
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          volumeMounts:
+            - name: model-cache
+              mountPath: /models
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+

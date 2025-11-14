@@ -28,6 +28,16 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import streamlit as st
+import streamlit.components.v1 as components
+from html import escape
+from textwrap import dedent
+
+try:  # Optional dependency for MinIO integration
+    import boto3
+    from botocore.client import Config as BotoConfig
+except ImportError:  # pragma: no cover
+    boto3 = None
+    BotoConfig = None
 
 APP_ROOT = Path(__file__).resolve().parent
 PROFILES_PATHS = [
@@ -38,7 +48,201 @@ PROFILES_PATHS = [
 RESULTS_ROOT = Path("/opt/app-root/src/results")
 RESULTS_ROOT.mkdir(parents=True, exist_ok=True)
 
+MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT")
+MINIO_BUCKET = os.getenv("MINIO_BUCKET", "guidellm-results")
+MINIO_REGION = os.getenv("MINIO_REGION", "us-east-1")
+MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY_ID")
+MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_ACCESS_KEY")
+MINIO_USE_SSL = os.getenv("MINIO_USE_SSL", "false").lower() == "true"
+
 LOG_MAX_LINES = 500
+
+
+def _select_metric_section(metric: Any) -> Optional[Dict[str, Any]]:
+    if not isinstance(metric, dict):
+        return None
+    section = metric.get("total")
+    if isinstance(section, dict):
+        return section
+    section = metric.get("successful")
+    if isinstance(section, dict):
+        return section
+    return metric if isinstance(metric, dict) else None
+
+
+def _metric_value(metrics: Dict[str, Any], key: str, percentile: Optional[str] = None, scale: float = 1.0) -> Optional[float]:
+    metric = metrics.get(key)
+    section = _select_metric_section(metric)
+    if not section:
+        return None
+    value: Optional[Any] = None
+    if percentile:
+        percentiles = section.get("percentiles")
+        if isinstance(percentiles, dict):
+            value = percentiles.get(percentile)
+        if value is None:
+            value = section.get(percentile)
+    if value is None:
+        value = section.get("mean")
+    if value is None:
+        return None
+    try:
+        return float(value) * scale
+    except (TypeError, ValueError):
+        return None
+
+
+def _success_rate(metrics: Dict[str, Any]) -> Optional[float]:
+    metric = metrics.get("requests_per_second")
+    if not isinstance(metric, dict):
+        return None
+    total = metric.get("total")
+    success = metric.get("successful")
+    if isinstance(total, dict) and isinstance(success, dict):
+        total_count = total.get("count")
+        success_count = success.get("count")
+        if isinstance(total_count, (int, float)) and total_count:
+            return float(success_count or 0) / float(total_count) * 100.0
+    return None
+
+
+def _total_requests(metrics: Dict[str, Any]) -> Optional[int]:
+    for key in ("request_latency", "requests_per_second"):
+        metric = metrics.get(key)
+        section = _select_metric_section(metric)
+        if isinstance(section, dict):
+            count = section.get("count")
+            if isinstance(count, (int, float)):
+                return int(count)
+    return None
+
+
+def _format_value(value: Optional[float], decimals: int = 4, suffix: str = "") -> str:
+    if value is None:
+        return "-"
+    if isinstance(value, float):
+        return f"{value:.{decimals}f}{suffix}"
+    if isinstance(value, int):
+        return f"{value}{suffix}"
+    try:
+        return f"{float(value):.{decimals}f}{suffix}"
+    except Exception:  # pragma: no cover - defensive
+        return f"{value}{suffix}"
+
+
+def build_metric_summary(metrics: Dict[str, Any]) -> List[Dict[str, str]]:
+    token_rate = _metric_value(metrics, "tokens_per_second") or _metric_value(metrics, "output_tokens_per_second")
+    rows = [
+        ("P50 request latency (s)", _format_value(_metric_value(metrics, "request_latency", "p50"))),
+        ("P95 request latency (s)", _format_value(_metric_value(metrics, "request_latency", "p95"))),
+        ("P99 request latency (s)", _format_value(_metric_value(metrics, "request_latency", "p99"))),
+        ("P50 time to first token (s)", _format_value(_metric_value(metrics, "time_to_first_token_ms", "p50", scale=0.001))),
+        ("P95 time to first token (s)", _format_value(_metric_value(metrics, "time_to_first_token_ms", "p95", scale=0.001))),
+        ("Requests per second", _format_value(_metric_value(metrics, "requests_per_second"))),
+        ("Tokens per second", _format_value(token_rate)),
+        ("Request success rate (%)", _format_value(_success_rate(metrics), decimals=2)),
+        ("Total requests", _format_value(_total_requests(metrics), decimals=0)),
+    ]
+    return [{"Metric": label, "Value": value} for label, value in rows]
+
+
+def write_html_report(
+    destination: Path,
+    model: str,
+    bench_type: str,
+    timestamp: str,
+    summary_rows: List[Dict[str, str]],
+    payload: Dict[str, Any],
+) -> None:
+    rows_html = "".join(
+        f"<tr><th>{escape(row['Metric'])}</th><td>{escape(row['Value'])}</td></tr>" for row in summary_rows
+    )
+    timestamp_display = timestamp or datetime.utcnow().strftime("%Y-%m-%d %H:%M:%SZ")
+    html_doc = dedent(
+        f"""
+        <!DOCTYPE html>
+        <html lang="en">
+          <head>
+            <meta charset="utf-8" />
+            <title>GuideLLM Benchmark Report - {escape(model)}</title>
+            <style>
+              body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 2rem; }}
+              h1 {{ margin-bottom: 0.5rem; }}
+              table {{ border-collapse: collapse; margin-top: 1.5rem; width: 100%; max-width: 640px; }}
+              th, td {{ border: 1px solid #444; padding: 0.4rem 0.6rem; text-align: left; }}
+              th {{ background: #f0f0f0; width: 60%; }}
+              pre {{ background: #f8f8f8; padding: 1rem; overflow-x: auto; }}
+              footer {{ margin-top: 2rem; font-size: 0.85rem; color: #666; }}
+            </style>
+          </head>
+          <body>
+            <h1>GuideLLM Benchmark Report</h1>
+            <p><strong>Model:</strong> {escape(model)}</p>
+            <p><strong>Benchmark Type:</strong> {escape(bench_type)}</p>
+            <p><strong>Timestamp:</strong> {escape(timestamp_display)}</p>
+            <table>
+              <tbody>
+                {rows_html}
+              </tbody>
+            </table>
+            <h2>Raw Benchmark Payload</h2>
+            <pre>{escape(json.dumps(payload, indent=2))}</pre>
+            <footer>Generated automatically by the GuideLLM workbench.</footer>
+          </body>
+        </html>
+        """
+    )
+    destination.write_text(html_doc, encoding="utf-8")
+
+
+def _s3_client():
+    if not (boto3 and BotoConfig and MINIO_ENDPOINT and MINIO_ACCESS_KEY and MINIO_SECRET_KEY):
+        return None
+    try:
+        return boto3.client(
+            "s3",
+            endpoint_url=MINIO_ENDPOINT,
+            aws_access_key_id=MINIO_ACCESS_KEY,
+            aws_secret_access_key=MINIO_SECRET_KEY,
+            region_name=MINIO_REGION,
+            use_ssl=MINIO_USE_SSL,
+            config=BotoConfig(signature_version="s3v4"),
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        st.warning(f"Unable to initialise MinIO client: {exc}")
+        return None
+
+
+def _list_minio_html(prefix: str = "") -> List[str]:
+    client = _s3_client()
+    if not client:
+        return []
+    paginator = client.get_paginator("list_objects_v2")
+    keys: List[str] = []
+    try:
+        for page in paginator.paginate(Bucket=MINIO_BUCKET, Prefix=prefix):
+            for obj in page.get("Contents", []):
+                key = obj.get("Key")
+                if key and key.endswith(".html"):
+                    keys.append(key)
+    except Exception as exc:
+        st.warning(f"Unable to list MinIO objects: {exc}")
+        return []
+    return sorted(keys, reverse=True)
+
+
+def _fetch_minio_html(key: str) -> Optional[str]:
+    client = _s3_client()
+    if not client:
+        return None
+    try:
+        response = client.get_object(Bucket=MINIO_BUCKET, Key=key)
+        body = response.get("Body")
+        if body:
+            return body.read().decode("utf-8")
+    except Exception as exc:
+        st.warning(f"Unable to download {key}: {exc}")
+    return None
 
 
 def load_profiles() -> List[Dict[str, Any]]:
@@ -220,6 +424,9 @@ with col_meta:
     }
     st.json(env_table)
 
+    if MINIO_ENDPOINT and not boto3:
+        st.warning("MinIO credentials detected but boto3 is not available in the workbench image.")
+
 
 history = st.session_state.setdefault("result_history", [])
 log_cache: List[str] = st.session_state.setdefault("log_cache", [])
@@ -315,8 +522,7 @@ def run_benchmark() -> Optional[Dict[str, Any]]:
                 del log_cache[:-LOG_MAX_LINES]
             placeholder.text_area(
                 "Console output",
-                value="
-".join(log_cache[-200:]),
+                value="\n".join(log_cache[-200:]),
                 height=320,
             )
             elapsed = time.time() - start_time
@@ -351,7 +557,38 @@ def run_benchmark() -> Optional[Dict[str, Any]]:
         st.warning(f"Unable to parse benchmark output: {exc}")
         payload = None
 
+    summary_rows: Optional[List[Dict[str, str]]] = None
+    report_path: Optional[Path] = None
+    if payload:
+        benchmarks = payload.get("benchmarks") or []
+        metrics = benchmarks[0].get("metrics") if benchmarks else None
+        if isinstance(metrics, dict):
+            summary_rows = build_metric_summary(metrics)
+            report_path = run_dir / "benchmark.html"
+            write_html_report(
+                report_path,
+                model_name or "unknown",
+                "workbench",
+                timestamp,
+                summary_rows,
+                payload,
+            )
+
     st.success("Benchmark completed successfully")
+    if summary_rows:
+        st.markdown("#### Summary")
+        st.table(summary_rows)
+        if report_path and report_path.exists():
+            report_contents = report_path.read_text(encoding="utf-8")
+            st.download_button(
+                "Download HTML report",
+                data=report_contents,
+                file_name=report_path.name,
+                mime="text/html",
+            )
+            with st.expander("Preview HTML report", expanded=False):
+                components.html(report_contents, height=420, scrolling=True)
+
     return {
         "success": True,
         "timestamp": timestamp,
@@ -359,6 +596,8 @@ def run_benchmark() -> Optional[Dict[str, Any]]:
         "output": payload,
         "log": log_lines,
         "output_path": str(output_path),
+        "summary": summary_rows,
+        "report_path": str(report_path) if report_path else None,
     }
 
 
@@ -395,10 +634,55 @@ with col_main:
             st.markdown(
                 f"{status} **{entry.get('timestamp')}** — {entry.get('run_dir')}"
             )
+            summary_rows = entry.get("summary")
+            if summary_rows:
+                st.table(summary_rows)
+                report_path_str = entry.get("report_path")
+                if report_path_str:
+                    report_path = Path(report_path_str)
+                    if report_path.exists():
+                        report_contents = report_path.read_text(encoding="utf-8")
+                        st.download_button(
+                            "Download HTML report",
+                            data=report_contents,
+                            file_name=report_path.name,
+                            mime="text/html",
+                            key=f"download-{report_path.name}",
+                        )
+                        with st.expander("Preview HTML report", expanded=False):
+                            components.html(report_contents, height=420, scrolling=True)
             if entry.get("output"):
-                st.json(entry["output"])
+                with st.expander("Benchmark payload", expanded=False):
+                    st.json(entry["output"])
             with st.expander("View log", expanded=False):
-                st.text("
-".join(entry.get("log", [])))
+                st.text("\n".join(entry.get("log", [])))
             st.markdown("---")
+
+    s3_client_available = _s3_client() is not None
+    if s3_client_available:
+        st.subheader("MinIO HTML reports")
+        default_prefix = st.session_state.get("minio_prefix", "")
+        prefix = st.text_input("Prefix filter", value=default_prefix, key="minio_prefix")
+        refresh = st.button("Refresh MinIO listing")
+        if refresh or "minio_objects" not in st.session_state or prefix != default_prefix:
+            st.session_state["minio_objects"] = _list_minio_html(prefix)
+        objects = st.session_state.get("minio_objects", [])
+        if not objects:
+            st.info("No HTML reports found in MinIO for the current filter")
+        else:
+            selected = st.selectbox("Available reports", options=objects, key="minio_selected")
+            if selected:
+                html_content = _fetch_minio_html(selected)
+                if html_content:
+                    st.download_button(
+                        "Download selected report",
+                        data=html_content,
+                        file_name=Path(selected).name,
+                        mime="text/html",
+                        key=f"download-minio-{selected}",
+                    )
+                    with st.expander("Preview selected report", expanded=True):
+                        components.html(html_content, height=420, scrolling=True)
+                else:
+                    st.warning("Unable to load selected report from MinIO")
 
