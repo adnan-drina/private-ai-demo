@@ -16,7 +16,7 @@ Guardrail configuration is managed centrally by the TrustyAI Guardrails Orchestr
 
 | Shield ID            | Type     | Description |
 |----------------------|----------|-------------|
-| `regex_guardrail`    | Content  | Regex-based PII detection (email, SSN, credit card, US phone numbers, basic two-word names). |
+| `regex_guardrail`    | Content  | Regex-based PII detection (email, SSN, credit card, US phone numbers). |
 | `toxicity_guardrail` | Content  | ML toxicity detector based on the `ibm-granite/granite-guardian-hap-38m` Hugging Face model. |
 
 Both shields are delivered by the TrustyAI FMS provider (`trustyai_fms`) that points to the Guardrails Orchestrator.

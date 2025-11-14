@@ -20,6 +20,16 @@ data:
           port: 8080
         chunker_id: whole_doc_chunker
         default_threshold: 0.5
+        # Limit regex detector to high-signal PII patterns.
+        # Leaving this empty causes the detector to add a very broad
+        # "(?i)[A-Z][a-z]+\\s[A-Z][a-z]+" pattern that misclassifies
+        # normal prompts (e.g. "You are a helpful assistant") as names.
+        detector_params:
+          regex:
+            - email
+            - ssn
+            - credit_card
+            - us-phone-number
       hf_toxicity:
         type: text_contents
         service:

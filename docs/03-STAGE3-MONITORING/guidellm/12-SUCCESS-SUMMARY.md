@@ -113,9 +113,9 @@ POD=$(oc get pods -n private-ai-demo -l app=guidellm,model=mistral-24b-quantized
 - **Solution**: Download HTML files directly from MinIO or pods
 
 ### Issue 2: S3 Uploader Sidecar Failed
-- **Status**: Fixed in code, needs redeployment
-- **Reason**: `CreateContainerConfigError` - missing secret
-- **Solution**: The guidellm-s3-credentials secret needs to be populated by `deploy.sh`
+- **Status**: Fixed
+- **Reason**: `CreateContainerConfigError` - missing AWS-style keys in a bespoke secret
+- **Solution**: Reuse the Stage 2 `llama-files-credentials` secret (keys `accesskey` / `secretkey`) everywhere GuideLLM needs MinIO access; no bespoke secret required.
 
 ---
 
@@ -157,7 +157,7 @@ POD=$(oc get pods -n private-ai-demo -l app=guidellm,model=mistral-24b-quantized
 
 ## 📝 Next Steps (Optional Improvements)
 
-1. **Fix S3 Upload**: Run `stages/stage3-model-monitoring/deploy.sh` to properly populate MinIO credentials
+1. **Fix S3 Upload**: (Done) workloads now pull credentials from `llama-files-credentials`
 
 2. **Scale Down nginx**: Delete the nginx deployment if not needed (HTML files are self-contained)
    ```bash

@@ -26,11 +26,6 @@ spec:
         component: vector-db
         app.kubernetes.io/part-of: pipeline
     spec:
-      securityContext:
-        runAsUser: 0
-        runAsGroup: 0
-        fsGroup: 0
-        fsGroupChangePolicy: OnRootMismatch
       containers:
       - name: milvus
         image: milvusdb/milvus:v2.4.0

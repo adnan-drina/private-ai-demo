@@ -20,7 +20,6 @@ resources:
   # Configuration
   - configmap-guidellm-benchmark.yaml
   - configmap-guidellm-profiles.yaml
-  - secret-s3-credentials.yaml
   
   # Jobs (manual benchmarks)
   - job-guidellm-mistral-quantized.yaml

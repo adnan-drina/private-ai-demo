@@ -163,9 +163,9 @@ spec:
       - name: results
         persistentVolumeClaim:
           claimName: guidellm-results
-      - name: s3-config
-        secret:
-          secretName: guidellm-s3-credentials
+        - name: s3-config
+          secret:
+            secretName: llama-files-credentials
 ```
 
 **Estimated Time**: 2 days
@@ -178,31 +178,12 @@ spec:
 
 **Tasks:**
 - [ ] Create MinIO bucket: `guidellm-results`
-- [ ] Create Secret with MinIO credentials
+- [ ] Reuse Stage 2 `llama-files-credentials` for MinIO credentials
 - [ ] Configure GuideLLM Job to upload results to S3
 - [ ] Test S3 upload from GuideLLM container
 
-**MinIO Secret:**
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: guidellm-s3-credentials
-  namespace: private-ai-demo
-type: Opaque
-stringData:
-  credentials: |
-    [default]
-    aws_access_key_id = ${MINIO_ACCESS_KEY}
-    aws_secret_access_key = ${MINIO_SECRET_KEY}
-  config: |
-    [default]
-    region = us-east-1
-    output = json
-    s3 =
-        endpoint_url = http://minio.private-ai-demo.svc.cluster.local:9000
-        signature_version = s3v4
-```
+**MinIO Secret:**  
+Use the existing `llama-files-credentials` secret created in Stage 2 (`accesskey` / `secretkey`). No new secret is required.
 
 **Post-Processing Script** (to upload to S3):
 ```yaml

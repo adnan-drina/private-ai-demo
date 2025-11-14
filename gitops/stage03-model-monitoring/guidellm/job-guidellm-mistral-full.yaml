@@ -242,6 +242,11 @@ spec:
           value: "/tmp"  # Writable directory for cache
         - name: HF_HOME
           value: "/tmp/hf"  # HuggingFace cache directory
+        volumeMounts:
+        - name: results
+          mountPath: /results
+        - name: shared
+          mountPath: /shared
       
       # S3 Upload Sidecar - uploads HTML reports to MinIO
       - name: s3-uploader
@@ -275,13 +280,13 @@ spec:
         - name: MINIO_ACCESS_KEY
           valueFrom:
             secretKeyRef:
-              name: guidellm-s3-credentials
-              key: AWS_ACCESS_KEY_ID
+              name: llama-files-credentials
+              key: accesskey
         - name: MINIO_SECRET_KEY
           valueFrom:
             secretKeyRef:
-              name: guidellm-s3-credentials
-              key: AWS_SECRET_ACCESS_KEY
+              name: llama-files-credentials
+              key: secretkey
         volumeMounts:
         - name: results
           mountPath: /results

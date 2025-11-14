@@ -33,7 +33,7 @@
 ✅ Service: guidellm-reports
 ✅ Route: guidellm-reports-private-ai-demo.apps.cluster...
 ✅ ConfigMaps: 4 (configs, nginx, index, metrics-exporter)
-✅ Secret: guidellm-s3-credentials
+✅ Secret reuse: `llama-files-credentials` (shared MinIO access)
 ✅ Grafana Dashboard: guidellm-benchmarks (9 panels)
 ```
 
