@@ -34,4 +34,5 @@ spec:
   triggers:
     - type: ConfigChange
     - type: ImageChange
+    - type: ImageChange
 
