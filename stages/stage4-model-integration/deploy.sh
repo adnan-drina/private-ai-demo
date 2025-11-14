@@ -12,7 +12,8 @@ set -euo pipefail
 ##############################################################################
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-GITOPS_PATH="../gitops-new/stage04-model-integration"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+GITOPS_PATH="$PROJECT_ROOT/gitops/stage04-model-integration"
 
 echo "════════════════════════════════════════════════════════════════"
 echo "  Stage 4: Model Integration with MCP + Llama Stack"

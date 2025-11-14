@@ -35,6 +35,13 @@ spec:
         # Pre-warm LlamaStack collections to avoid first-query segment load latency
         - name: prewarm-collections
           image: registry.access.redhat.com/ubi9/ubi-minimal:9.5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
           command:
             - /bin/sh
             - -c
