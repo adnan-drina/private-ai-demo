@@ -9,6 +9,7 @@ metadata:
   name: docling
   namespace: private-ai-demo
   labels:
+    app.kubernetes.io/instance: stage02-model-alignment
     app.kubernetes.io/name: docling
     app.kubernetes.io/component: document-processing
     app.kubernetes.io/part-of: private-ai-demo
