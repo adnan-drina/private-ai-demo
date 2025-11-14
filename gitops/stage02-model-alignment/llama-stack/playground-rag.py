@@ -560,31 +560,27 @@ def rag_chat_page():
 
             retrieval_message_placeholder.info(prompt_context)
 
-            effective_stream = not (guardrail_enabled and guardrail_apply_to_response)
-
+            # Always stream responses, even with guardrails enabled
+            # We'll stream the response, then check it afterwards
             response = llama_stack_api.client.inference.chat_completion(
                 messages=conversation_messages,
                 model_id=selected_model,
                 sampling_params={
                     "strategy": strategy,
                 },
-                stream=effective_stream,
+                stream=True,
             )
 
-            if effective_stream:
-                for chunk in response:
-                    response_delta = chunk.event.delta
-                    if isinstance(response_delta, ToolCallDelta):
-                        retrieval_message_placeholder.info(
-                            f"{prompt_context}\n\n{response_delta.tool_call.replace('====', '').strip()}"
-                        )
-                    else:
-                        full_response += chunk.event.delta.text
-                        message_placeholder.markdown(full_response + "▌")
-                message_placeholder.markdown(full_response)
-            else:
-                result = response
-                full_response = result.completion_message.content
+            for chunk in response:
+                response_delta = chunk.event.delta
+                if isinstance(response_delta, ToolCallDelta):
+                    retrieval_message_placeholder.info(
+                        f"{prompt_context}\n\n{response_delta.tool_call.replace('====', '').strip()}"
+                    )
+                else:
+                    full_response += chunk.event.delta.text
+                    message_placeholder.markdown(full_response + "▌")
+            message_placeholder.markdown(full_response)
 
             post_guardrail_violation = None
             post_guardrail_error = None

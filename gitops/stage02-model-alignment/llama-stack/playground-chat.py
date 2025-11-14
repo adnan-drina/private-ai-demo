@@ -269,15 +269,15 @@ if prompt := st.chat_input("Example: What is Llama Stack?"):
             else:
                 strategy = {"type": "greedy"}
 
-            effective_stream = stream and not (guardrail_enabled and guardrail_apply_to_response)
-
+            # Always use user's streaming preference, even with guardrails enabled
+            # We'll stream the response, then check it afterwards
             response = llama_stack_api.client.inference.chat_completion(
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt},
                 ],
                 model_id=selected_model,
-                stream=effective_stream,
+                stream=stream,
                 sampling_params={
                     "strategy": strategy,
                     "max_tokens": max_tokens,
@@ -285,7 +285,7 @@ if prompt := st.chat_input("Example: What is Llama Stack?"):
                 },
             )
 
-            if effective_stream:
+            if stream:
                 for chunk in response:
                     if chunk.event.event_type == "progress":
                         full_response += chunk.event.delta.text
