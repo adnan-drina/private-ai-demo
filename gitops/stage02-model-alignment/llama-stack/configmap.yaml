@@ -126,7 +126,6 @@ data:
                         - ssn
                         - credit_card
                         - us-phone-number
-                        - "(?i)[A-Z][a-z]+\\s[A-Z][a-z]+"
               toxicity_guardrail:
                 type: content
                 detectors:
