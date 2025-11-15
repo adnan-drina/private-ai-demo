@@ -61,15 +61,18 @@ data:
         # Milvus in private-ai-demo - optimized with HNSW index
         # Reference: https://llama-stack.readthedocs.io/en/v0.2.11/providers/vector_io/milvus.html
         # Reference: https://milvus.io/docs/schema-hands-on.md
-        # Schema: Int64 PK (auto_id=true), vector (HNSW indexed), dynamic fields
+        # Schema: VarChar PK (stored_chunk_id), vector (HNSW indexed), dynamic fields
+        # FIXED: Disabled auto_id to accept custom string IDs from ingestion pipeline
         - provider_id: milvus-shared
           provider_type: remote::milvus
           config:
             token: ""
             uri: "tcp://milvus-standalone.private-ai-demo.svc.cluster.local:19530"
-            # Field mappings - LET PROVIDER OWN THE SCHEMA
-            # Provider creates: chunk_id (PK), vector, chunk_content (JSON)
-            # Do NOT override text_field or id_field - provider manages these
+            # Field mappings - Use custom string IDs
+            # Override default schema to accept stored_chunk_id as string PK
+            id_field: "stored_chunk_id"
+            text_field: "content"
+            auto_id: false  # CRITICAL: Accept custom string IDs instead of auto-generating integers
             embedding_dimension: 768
             metric_type: "L2"
             # Search params aligned with HNSW index (M=16, efConstruction=200)
