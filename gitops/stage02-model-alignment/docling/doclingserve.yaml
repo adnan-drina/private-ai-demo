@@ -30,13 +30,14 @@ spec:
     instances: 1
     
     # Resource requests/limits
-    # Increased for RAG pipeline PDF processing (3+ MB documents, complex layouts)
+    # Increased for RAG pipeline PDF processing (7+ MB documents, complex layouts)
+    # Updated 2025-11-15: Doubled memory to 16Gi after new worker node added
     resources:
       requests:
-        memory: "4Gi"
+        memory: "8Gi"
         cpu: "2"
       limits:
-        memory: "8Gi"
+        memory: "16Gi"
         cpu: "4"
   
   # Engine Configuration
