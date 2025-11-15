@@ -56,13 +56,15 @@ def insert_via_llamastack(
     # Reference: https://milvus.io/docs/llama_stack_with_milvus.md
     #
     # Milvus schema: Int64 PK (auto_id=true), vector, content (VarChar), metadata (JSON)
-    # Provider generates PK and vector; we supply content + metadata as a dictionary.
+    # Provider generates PK and vector; we supply content + metadata + stored_chunk_id.
     #
-    # Chunk structure:
+    # Chunk structure (LlamaStack Chunk model):
     #   - content: string (chunk text) -> mapped to Milvus 'content' field
     #   - metadata: dict -> provider serializes for Milvus 'metadata' field
+    #   - stored_chunk_id: string (required) -> unique identifier for retrieval
     #
-    # NO id field needed - Milvus auto-generates Int64 PK.
+    # CRITICAL: stored_chunk_id must be a STRING. LlamaStack Pydantic model validation
+    # will fail on retrieval if this is an int or missing.
     llamastack_chunks = []
     skipped_chunks = 0
     min_len = None
@@ -98,9 +100,13 @@ def insert_via_llamastack(
         min_len = text_len if min_len is None else min(min_len, text_len)
         max_len = text_len if max_len is None else max(max_len, text_len)
 
+        # Generate unique chunk ID (LlamaStack expects stored_chunk_id as string)
+        chunk_id_str = f"{source_name}_chunk_{i}"
+
         llamastack_chunks.append({
             "content": content_text,
-            "metadata": metadata_dict  # Must be dict - LlamaStack API requires it
+            "metadata": metadata_dict,  # Must be dict - LlamaStack API requires it
+            "stored_chunk_id": chunk_id_str  # Required for retrieval (must be string)
         })
 
     if skipped_chunks:

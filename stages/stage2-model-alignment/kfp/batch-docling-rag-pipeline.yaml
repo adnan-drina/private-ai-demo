@@ -1,13 +1,15 @@
 # PIPELINE DEFINITION
-# Name: batch-data-processing
-# Description: Smart batch processing: Auto-discover PDFs in S3 path and process them all
+# Name: data-processing-and-insertion-single
+# Description: RAG Ingestion Pipeline v1.0.2 - Single document processing with Docling and LlamaStack Vector IO.
 # Inputs:
 #    chunk_size: int [Default: 512.0]
 #    docling_url: str [Default: 'http://docling-service.private-ai-demo.svc:5001']
+#    input_uri: str [Default: 's3://llama-files/sample/rag-mini.pdf']
 #    llamastack_url: str [Default: 'http://llama-stack-service.private-ai-demo.svc:8321']
-#    minio_creds_b64: str [Default: 'YWRtaW46bWluaW9hZG1pbg==']
+#    min_chunks: int [Default: 10.0]
+#    minio_creds_b64: str [Default: '']
 #    minio_endpoint: str [Default: 'minio.model-storage.svc:9000']
-#    s3_prefix: str [Default: 's3://llama-files/sample/']
+#    s3_secret_mount_path: str [Default: '/mnt/secrets']
 #    vector_db_id: str [Default: 'acme_corporate']
 components:
   comp-chunk-markdown:
@@ -34,8 +36,14 @@ components:
         input_uri:
           parameterType: STRING
         minio_creds_b64:
+          defaultValue: ''
+          isOptional: true
           parameterType: STRING
         minio_endpoint:
+          defaultValue: ''
+          isOptional: true
+          parameterType: STRING
+        s3_secret_mount_path:
           parameterType: STRING
     outputDefinitions:
       artifacts:
@@ -43,96 +51,6 @@ components:
           artifactType:
             schemaTitle: system.Dataset
             schemaVersion: 0.0.1
-  comp-for-loop-1:
-    dag:
-      tasks:
-        chunk-markdown:
-          cachingOptions: {}
-          componentRef:
-            name: comp-chunk-markdown
-          dependentTasks:
-          - process-with-docling
-          inputs:
-            artifacts:
-              markdown_file:
-                taskOutputArtifact:
-                  outputArtifactKey: output_markdown
-                  producerTask: process-with-docling
-            parameters:
-              chunk_size:
-                componentInputParameter: pipelinechannel--chunk_size
-          taskInfo:
-            name: chunk-markdown
-        download-from-s3:
-          cachingOptions: {}
-          componentRef:
-            name: comp-download-from-s3
-          inputs:
-            parameters:
-              input_uri:
-                componentInputParameter: pipelinechannel--list-pdfs-in-s3-Output-loop-item
-              minio_creds_b64:
-                componentInputParameter: pipelinechannel--minio_creds_b64
-              minio_endpoint:
-                componentInputParameter: pipelinechannel--minio_endpoint
-          taskInfo:
-            name: download-from-s3
-        insert-via-llamastack:
-          cachingOptions: {}
-          componentRef:
-            name: comp-insert-via-llamastack
-          dependentTasks:
-          - chunk-markdown
-          inputs:
-            artifacts:
-              chunks_file:
-                taskOutputArtifact:
-                  outputArtifactKey: output_chunks
-                  producerTask: chunk-markdown
-            parameters:
-              input_uri:
-                componentInputParameter: pipelinechannel--list-pdfs-in-s3-Output-loop-item
-              llamastack_url:
-                componentInputParameter: pipelinechannel--llamastack_url
-              vector_db_id:
-                componentInputParameter: pipelinechannel--vector_db_id
-          taskInfo:
-            name: insert-via-llamastack
-        process-with-docling:
-          cachingOptions: {}
-          componentRef:
-            name: comp-process-with-docling
-          dependentTasks:
-          - download-from-s3
-          inputs:
-            artifacts:
-              input_file:
-                taskOutputArtifact:
-                  outputArtifactKey: output_file
-                  producerTask: download-from-s3
-            parameters:
-              docling_url:
-                componentInputParameter: pipelinechannel--docling_url
-          taskInfo:
-            name: process-with-docling
-    inputDefinitions:
-      parameters:
-        pipelinechannel--chunk_size:
-          parameterType: NUMBER_INTEGER
-        pipelinechannel--docling_url:
-          parameterType: STRING
-        pipelinechannel--list-pdfs-in-s3-Output:
-          parameterType: LIST
-        pipelinechannel--list-pdfs-in-s3-Output-loop-item:
-          parameterType: STRING
-        pipelinechannel--llamastack_url:
-          parameterType: STRING
-        pipelinechannel--minio_creds_b64:
-          parameterType: STRING
-        pipelinechannel--minio_endpoint:
-          parameterType: STRING
-        pipelinechannel--vector_db_id:
-          parameterType: STRING
   comp-insert-via-llamastack:
     executorLabel: exec-insert-via-llamastack
     inputDefinitions:
@@ -152,23 +70,6 @@ components:
       parameters:
         Output:
           parameterType: STRUCT
-  comp-list-pdfs-in-s3:
-    executorLabel: exec-list-pdfs-in-s3
-    inputDefinitions:
-      parameters:
-        minio_creds_b64:
-          description: 'Base64-encoded credentials (format: "access_key:secret_key")'
-          parameterType: STRING
-        minio_endpoint:
-          description: MinIO endpoint
-          parameterType: STRING
-        s3_prefix:
-          description: S3 path prefix (e.g. "s3://llama-files/scenario2-acme/")
-          parameterType: STRING
-    outputDefinitions:
-      parameters:
-        Output:
-          parameterType: LIST
   comp-process-with-docling:
     executorLabel: exec-process-with-docling
     inputDefinitions:
@@ -186,6 +87,22 @@ components:
           artifactType:
             schemaTitle: system.Dataset
             schemaVersion: 0.0.1
+  comp-verify-ingestion:
+    executorLabel: exec-verify-ingestion
+    inputDefinitions:
+      parameters:
+        insert_result:
+          parameterType: STRUCT
+        llamastack_url:
+          parameterType: STRING
+        min_chunks:
+          parameterType: NUMBER_INTEGER
+        vector_db_id:
+          parameterType: STRING
+    outputDefinitions:
+      parameters:
+        Output:
+          parameterType: STRUCT
 deploymentSpec:
   executors:
     exec-chunk-markdown:
@@ -222,26 +139,27 @@ deploymentSpec:
           Chunking markdown document...\")\n\n    # Read markdown\n    with open(markdown_file.path,\
           \ \"r\") as f:\n        content = f.read()\n\n    # Smart chunking with\
           \ size limit (Milvus dynamic field limit is 65536 chars)\n    # Use chunk_size\
-          \ parameter but enforce Milvus limit\n    MAX_CHUNK_SIZE = 60000  # Leave\
-          \ buffer for Milvus limit\n    effective_chunk_size = min(chunk_size, MAX_CHUNK_SIZE)\n\
-          \n    print(f\"Chunking with max size: {effective_chunk_size} chars\")\n\
-          \n    # Split by paragraphs first\n    paragraphs = [p.strip() for p in\
-          \ content.split(\"\\n\\n\") if p.strip()]\n\n    # Combine paragraphs into\
-          \ chunks respecting size limit\n    chunks = []\n    current_chunk = []\n\
-          \    current_length = 0\n\n    for para in paragraphs:\n        para_len\
-          \ = len(para)\n\n        # If single paragraph exceeds limit, split it\n\
-          \        if para_len > effective_chunk_size:\n            # Add current\
-          \ chunk if any\n            if current_chunk:\n                chunks.append(\"\
-          \\n\\n\".join(current_chunk))\n                current_chunk = []\n    \
-          \            current_length = 0\n\n            # Split large paragraph by\
-          \ sentences\n            sentences = para.split(\". \")\n            temp_chunk\
-          \ = []\n            temp_len = 0\n\n            for sent in sentences:\n\
-          \                sent_len = len(sent) + 2  # +2 for \". \"\n           \
-          \     if temp_len + sent_len > effective_chunk_size:\n                 \
-          \   if temp_chunk:\n                        chunks.append(\". \".join(temp_chunk)\
-          \ + \".\")\n                    temp_chunk = [sent]\n                  \
-          \  temp_len = sent_len\n                else:\n                    temp_chunk.append(sent)\n\
-          \                    temp_len += sent_len\n\n            if temp_chunk:\n\
+          \ parameter but enforce Milvus limit\n    MAX_CHUNK_SIZE = 60000  # Absolute\
+          \ ceiling enforced by Milvus dynamic field limit\n    effective_chunk_size\
+          \ = min(max(chunk_size, 1), MAX_CHUNK_SIZE)\n\n    print(f\"Chunking with\
+          \ max size: {effective_chunk_size} chars\")\n\n    # Split by paragraphs\
+          \ first\n    paragraphs = [p.strip() for p in content.split(\"\\n\\n\")\
+          \ if p.strip()]\n\n    # Combine paragraphs into chunks respecting size\
+          \ limit\n    chunks = []\n    current_chunk = []\n    current_length = 0\n\
+          \n    for para in paragraphs:\n        para_len = len(para)\n\n        #\
+          \ If single paragraph exceeds limit, split it\n        if para_len > effective_chunk_size:\n\
+          \            # Add current chunk if any\n            if current_chunk:\n\
+          \                chunks.append(\"\\n\\n\".join(current_chunk))\n       \
+          \         current_chunk = []\n                current_length = 0\n\n   \
+          \         # Split large paragraph by sentences\n            sentences =\
+          \ para.split(\". \")\n            temp_chunk = []\n            temp_len\
+          \ = 0\n\n            for sent in sentences:\n                sent_len =\
+          \ len(sent) + 2  # +2 for \". \"\n                if temp_len + sent_len\
+          \ > effective_chunk_size:\n                    if temp_chunk:\n        \
+          \                chunks.append(\". \".join(temp_chunk) + \".\")\n      \
+          \              temp_chunk = [sent]\n                    temp_len = sent_len\n\
+          \                else:\n                    temp_chunk.append(sent)\n  \
+          \                  temp_len += sent_len\n\n            if temp_chunk:\n\
           \                chunks.append(\". \".join(temp_chunk) + \".\")\n\n    \
           \    # Normal paragraph fits or can be added\n        elif current_length\
           \ + para_len + 2 > effective_chunk_size:\n            # Current chunk is\
@@ -254,26 +172,35 @@ deploymentSpec:
           \ Final safety check - force-split any chunk that STILL exceeds limit\n\
           \    # This handles edge cases like very long sentences or code blocks\n\
           \    final_chunks = []\n    for chunk in chunks:\n        chunk_len = len(chunk)\n\
-          \        if chunk_len > MAX_CHUNK_SIZE:\n            # Force-split by characters\
-          \ as last resort\n            print(f\"SAFETY: Force-splitting {chunk_len}\
-          \ char chunk into {MAX_CHUNK_SIZE} char pieces\")\n            for i in\
-          \ range(0, chunk_len, MAX_CHUNK_SIZE):\n                piece = chunk[i:i\
-          \ + MAX_CHUNK_SIZE]\n                if len(piece) > 50:  # Filter very\
-          \ short pieces\n                    final_chunks.append(piece)\n       \
-          \ elif chunk_len > 50:  # Filter out very short chunks\n            final_chunks.append(chunk)\n\
-          \n    chunks = final_chunks\n\n    # Verify NO chunk exceeds limit\n   \
-          \ if chunks:\n        max_chunk_len = max(len(c) for c in chunks)\n    \
-          \    print(f\"Created {len(chunks)} chunks (max length: {max_chunk_len}\
-          \ chars, limit: {MAX_CHUNK_SIZE})\")\n        if max_chunk_len > MAX_CHUNK_SIZE:\n\
-          \            raise ValueError(f\"BUG: Chunk of {max_chunk_len} chars STILL\
-          \ exceeds limit {MAX_CHUNK_SIZE}!\")\n    else:\n        print(\"No chunks\
-          \ created (document too short)\")\n\n    # Save chunks as simple JSON array\
-          \ of text strings\n    # LlamaStack will compute embeddings server-side\n\
-          \    chunk_data = [{\"chunk_id\": i, \"text\": text} for i, text in enumerate(chunks)]\n\
-          \n    with open(output_chunks.path, \"w\") as f:\n        json.dump(chunk_data,\
-          \ f)\n\n    print(f\"[OK] Created {len(chunks)} chunks (embeddings will\
-          \ be computed by LlamaStack)\")\n\n"
+          \        if chunk_len > effective_chunk_size:\n            # Force-split\
+          \ by characters as last resort\n            print(f\"SAFETY: Force-splitting\
+          \ {chunk_len} char chunk into {effective_chunk_size} char pieces\")\n  \
+          \          for i in range(0, chunk_len, effective_chunk_size):\n       \
+          \         piece = chunk[i:i + effective_chunk_size]\n                if\
+          \ len(piece) > 50:  # Filter very short pieces\n                    final_chunks.append(piece)\n\
+          \        elif chunk_len > 50:  # Filter out very short chunks\n        \
+          \    final_chunks.append(chunk)\n\n    chunks = final_chunks\n\n    # Verify\
+          \ NO chunk exceeds limit\n    if chunks:\n        max_chunk_len = max(len(c)\
+          \ for c in chunks)\n        print(f\"Created {len(chunks)} chunks (max length:\
+          \ {max_chunk_len} chars, limit: {effective_chunk_size})\")\n        if max_chunk_len\
+          \ > effective_chunk_size:\n            raise ValueError(f\"BUG: Chunk of\
+          \ {max_chunk_len} chars STILL exceeds limit {effective_chunk_size}!\")\n\
+          \    else:\n        print(\"No chunks created (document too short)\")\n\n\
+          \    # Save chunks as simple JSON array of text strings\n    # LlamaStack\
+          \ will compute embeddings server-side\n    chunk_data = [{\"chunk_id\":\
+          \ i, \"text\": text} for i, text in enumerate(chunks)]\n\n    with open(output_chunks.path,\
+          \ \"w\") as f:\n        json.dump(chunk_data, f)\n\n    print(f\"[OK] Created\
+          \ {len(chunks)} chunks (embeddings will be computed by LlamaStack)\")\n\n"
         image: registry.access.redhat.com/ubi9/python-311:1-77
+        resources:
+          cpuLimit: 0.5
+          cpuRequest: 0.25
+          memoryLimit: 0.536870912
+          memoryRequest: 0.268435456
+          resourceCpuLimit: 500m
+          resourceCpuRequest: 250m
+          resourceMemoryLimit: 512Mi
+          resourceMemoryRequest: 256Mi
     exec-download-from-s3:
       container:
         args:
@@ -301,37 +228,55 @@ deploymentSpec:
 
           '
         - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
-          \ *\n\ndef download_from_s3(\n    input_uri: str,\n    minio_endpoint: str,\n\
-          \    minio_creds_b64: str,\n    output_file: Output[Dataset]\n):\n    \"\
-          \"\"\n    Download document from MinIO/S3\n\n    Credentials passed as base64-encoded\
-          \ string parameter (format: \"access_key:secret_key\")\n    to work within\
-          \ KFP v2 limitations (strips env secretKeyRef and custom volumes).\n\n \
-          \   This follows Red Hat guidance: base64 encode structured/sensitive parameters,\n\
-          \    decode in component. Keeps secrets out of plaintext parameters.\n \
-          \   \"\"\"\n    import boto3\n    from botocore.client import Config\n \
-          \   import base64\n    import os\n\n    print(f\"Downloading from: {input_uri}\"\
-          )\n    print(f\"Endpoint: {minio_endpoint}\")\n\n    # Decode credentials\
-          \ from base64 parameter\n    # Format: \"access_key:secret_key\" encoded\
-          \ as base64\n    try:\n        creds_decoded = base64.b64decode(minio_creds_b64).decode('utf-8').strip()\n\
-          \        aws_access_key_id, aws_secret_access_key = creds_decoded.split(':',\
-          \ 1)\n        aws_access_key_id = aws_access_key_id.strip()\n        aws_secret_access_key\
-          \ = aws_secret_access_key.strip()\n\n        # Security: Do not log credentials\
-          \ (per KFP best practices)\n        print(f\"[OK] Credentials decoded from\
-          \ parameter\")\n    except Exception as e:\n        raise ValueError(\n\
-          \            \"Failed to decode MinIO credentials from minio_creds_b64 parameter.\
-          \ \"\n            \"Expected base64-encoded string in format 'access_key:secret_key'\"\
-          \n        ) from e\n\n    # Parse S3 URI\n    if input_uri.startswith(\"\
+          \ *\n\ndef download_from_s3(\n    input_uri: str,\n    s3_secret_mount_path:\
+          \ str,\n    output_file: Output[Dataset],\n    minio_endpoint: str = \"\"\
+          ,\n    minio_creds_b64: str = \"\"\n):\n    \"\"\"\n    Download document\
+          \ from MinIO/S3.\n\n    Credentials are expected to be provided via a mounted\
+          \ secret that matches the\n    canonical Data Processing layout (`S3_ENDPOINT_URL`,\
+          \ `S3_ACCESS_KEY`,\n    `S3_SECRET_KEY`). The component reads credential\
+          \ files directly, mirroring\n    the upstream Docling Kubeflow pipeline\
+          \ pattern. For environments where\n    Kubernetes secret mounts are not\
+          \ available (for example KFP v2 stripping\n    secret refs), provide `minio_endpoint`\
+          \ and `minio_creds_b64` as a fallback.\n    \"\"\"\n    import os\n    from\
+          \ pathlib import Path\n\n    import boto3\n    from botocore.client import\
+          \ Config\n\n    print(f\"Downloading from: {input_uri}\")\n\n    endpoint_url\
+          \ = \"\"\n    access_key = \"\"\n    secret_key = \"\"\n\n    def _read_secret(key:\
+          \ str) -> str:\n        file_path = Path(s3_secret_mount_path) / key\n \
+          \       if file_path.is_file():\n            return file_path.read_text().strip()\n\
+          \        raise FileNotFoundError\n\n    try:\n        endpoint_url = _read_secret(\"\
+          S3_ENDPOINT_URL\")\n        access_key = _read_secret(\"S3_ACCESS_KEY\"\
+          )\n        secret_key = _read_secret(\"S3_SECRET_KEY\")\n        print(f\"\
+          [OK] Loaded S3 credentials from secret at {s3_secret_mount_path}\")\n  \
+          \  except FileNotFoundError:\n        if not minio_endpoint or not minio_creds_b64:\n\
+          \            raise ValueError(\n                \"S3 secret files were not\
+          \ found and fallback credentials were not provided. \"\n               \
+          \ \"Provide `minio_endpoint` and `minio_creds_b64`, or mount the secret.\"\
+          \n            )\n        import base64\n\n        creds_decoded = base64.b64decode(minio_creds_b64).decode(\"\
+          utf-8\").strip()\n        access_key, secret_key = [c.strip() for c in creds_decoded.split(\"\
+          :\", 1)]\n        endpoint_url = f\"http://{minio_endpoint}\" if not minio_endpoint.startswith(\"\
+          http\") else minio_endpoint\n        print(\"[WARN] Falling back to inline\
+          \ credentials (base64 parameter).\")\n\n    # Parse S3 URI\n    if input_uri.startswith(\"\
           s3://\"):\n        input_uri = input_uri[5:]\n\n    parts = input_uri.split(\"\
           /\", 1)\n    bucket = parts[0]\n    key = parts[1] if len(parts) > 1 else\
           \ \"\"\n\n    print(f\"Bucket: {bucket}, Key: {key}\")\n\n    # Configure\
-          \ S3 client for MinIO\n    s3_client = boto3.client(\n        \"s3\",\n\
-          \        endpoint_url=f\"http://{minio_endpoint}\",\n        aws_access_key_id=aws_access_key_id,\n\
-          \        aws_secret_access_key=aws_secret_access_key,\n        config=Config(signature_version=\"\
-          s3v4\"),\n        region_name=\"us-east-1\"\n    )\n\n    # Download file\n\
-          \    output_path = output_file.path\n    s3_client.download_file(bucket,\
-          \ key, output_path)\n\n    file_size = os.path.getsize(output_path)\n  \
-          \  print(f\"[OK] Downloaded: {file_size} bytes to {output_path}\")\n\n"
+          \ S3 client for MinIO/S3\n    s3_client = boto3.client(\n        \"s3\"\
+          ,\n        endpoint_url=endpoint_url,\n        aws_access_key_id=access_key,\n\
+          \        aws_secret_access_key=secret_key,\n        config=Config(signature_version=\"\
+          s3v4\", s3={\"addressing_style\": \"path\"}),\n        region_name=\"us-east-1\"\
+          ,\n    )\n\n    # Download file\n    output_path = output_file.path\n  \
+          \  s3_client.download_file(bucket, key, output_path)\n\n    file_size =\
+          \ os.path.getsize(output_path)\n    print(f\"[OK] Downloaded: {file_size}\
+          \ bytes to {output_path}\")\n\n"
         image: registry.access.redhat.com/ubi9/python-311:1-77
+        resources:
+          cpuLimit: 1.0
+          cpuRequest: 0.5
+          memoryLimit: 1.073741824
+          memoryRequest: 0.536870912
+          resourceCpuLimit: '1'
+          resourceCpuRequest: 500m
+          resourceMemoryLimit: 1Gi
+          resourceMemoryRequest: 512Mi
     exec-insert-via-llamastack:
       container:
         args:
@@ -375,138 +320,109 @@ deploymentSpec:
           \ source_name = os.path.basename(input_uri).replace(\".pdf\", \"\").replace(\"\
           s3://\", \"\").replace(\"/\", \"-\")\n\n    # Format chunks for LlamaStack\
           \ API\n    # Reference: https://llama-stack.readthedocs.io/en/v0.2.11/providers/vector_io/milvus.html\n\
-          \    # Reference: https://milvus.io/docs/schema-hands-on.md\n    #\n   \
-          \ # Milvus schema: Int64 PK (auto_id=true), vector, content (VarChar), metadata\
-          \ (VarChar JSON)\n    # Provider generates PK and vector; we supply content\
-          \ + metadata\n    #\n    # Chunk structure (FLAT - mapped to Milvus fields):\n\
-          \    #   - content: string (chunk text) -> mapped to Milvus 'content' field\n\
-          \    #   - metadata: JSON string -> mapped to Milvus 'metadata' field\n\
-          \    #\n    # NO id field needed - Milvus auto-generates Int64 PK\n    llamastack_chunks\
-          \ = []\n    for i, item in enumerate(chunks_data):\n        content_text\
-          \ = item.get(\"text\", item.get(\"content\", \"\"))\n\n        # Calculate\
-          \ token count (rough estimation: ~4 chars per token)\n        # This is\
-          \ used by LlamaStack RAG tool to track context window usage\n        token_count\
-          \ = len(content_text) // 4\n\n        metadata_dict = {\n            \"\
-          document_id\": f\"{source_name}\",\n            \"source\": input_uri,\n\
-          \            \"chunk_index\": i,\n            \"token_count\": token_count\
-          \  # Required by RAG tool\n        }\n\n        chunk = {\n            \"\
-          content\": content_text,\n            \"metadata\": json.dumps(metadata_dict)\
-          \  # Serialize metadata to JSON string for Milvus VarChar field\n      \
-          \  }\n        llamastack_chunks.append(chunk)\n\n    # Insert via LlamaStack\
-          \ Vector IO API (with batching and retry)\n    print(f\"Inserting {len(llamastack_chunks)}\
-          \ chunks via LlamaStack...\")\n\n    # Batch insertion to avoid long single-call\
-          \ timeouts\n    BATCH_SIZE = 100  # Process 100 chunks at a time\n    total_inserted\
-          \ = 0\n    batches = [llamastack_chunks[i:i + BATCH_SIZE] for i in range(0,\
-          \ len(llamastack_chunks), BATCH_SIZE)]\n\n    print(f\"Split into {len(batches)}\
-          \ batches of up to {BATCH_SIZE} chunks\")\n\n    import time\n    for batch_idx,\
-          \ batch in enumerate(batches):\n        batch_num = batch_idx + 1\n    \
-          \    print(f\"Processing batch {batch_num}/{len(batches)} ({len(batch)}\
-          \ chunks)...\")\n\n        # Retry logic with exponential backoff\n    \
-          \    max_retries = 3\n        for attempt in range(max_retries):\n     \
-          \       try:\n                # Timeout: ~3 sec/chunk + 120s overhead, max\
-          \ 600s\n                # Increased from 2s/chunk + 60s to handle large\
-          \ documents and server-side embedding computation\n                timeout\
-          \ = min(600, len(batch) * 3 + 120)\n\n                response = requests.post(\n\
-          \                    f\"{llamastack_url}/v1/vector-io/insert\",\n      \
-          \              json={\n                        \"vector_db_id\": vector_db_id,\n\
-          \                        \"chunks\": batch\n                    },\n   \
-          \                 headers={\"Content-Type\": \"application/json\"},\n  \
-          \                  timeout=timeout\n                )\n\n              \
-          \  if response.status_code != 200:\n                    print(f\"  ERROR:\
-          \ Batch {batch_num} returned {response.status_code}\")\n               \
-          \     print(f\"  Response: {response.text}\")\n                    response.raise_for_status()\n\
-          \n                # Parse response - handle empty/null JSON\n          \
-          \      try:\n                    result = response.json()\n            \
-          \    except Exception as e:\n                    print(f\"  WARNING: Could\
-          \ not parse JSON response: {e}\")\n                    result = None\n\n\
-          \                # If no result or no num_inserted field, assume all chunks\
-          \ inserted\n                batch_inserted = result.get(\"num_inserted\"\
+          \    # Reference: https://milvus.io/docs/llama_stack_with_milvus.md\n  \
+          \  #\n    # Milvus schema: Int64 PK (auto_id=true), vector, content (VarChar),\
+          \ metadata (JSON)\n    # Provider generates PK and vector; we supply content\
+          \ + metadata + stored_chunk_id.\n    #\n    # Chunk structure (LlamaStack\
+          \ Chunk model):\n    #   - content: string (chunk text) -> mapped to Milvus\
+          \ 'content' field\n    #   - metadata: dict -> provider serializes for Milvus\
+          \ 'metadata' field\n    #   - stored_chunk_id: string (required) -> unique\
+          \ identifier for retrieval\n    #\n    # CRITICAL: stored_chunk_id must\
+          \ be a STRING. LlamaStack Pydantic model validation\n    # will fail on\
+          \ retrieval if this is an int or missing.\n    llamastack_chunks = []\n\
+          \    skipped_chunks = 0\n    min_len = None\n    max_len = None\n    for\
+          \ i, item in enumerate(chunks_data):\n        content_text = item.get(\"\
+          text\") or item.get(\"content\") or \"\"\n        if not isinstance(content_text,\
+          \ str):\n            content_text = str(content_text)\n        stripped\
+          \ = content_text.strip()\n        if not stripped:\n            skipped_chunks\
+          \ += 1\n            print(f\"[SKIP] Chunk {i} empty after stripping; raw\
+          \ length={len(content_text)}\")\n            continue\n        content_text\
+          \ = stripped\n\n        # Calculate token count (rough estimation: ~4 chars\
+          \ per token)\n        token_count = len(content_text) // 4\n\n        metadata_dict\
+          \ = {\n            \"document_id\": source_name,\n            \"chunk_index\"\
+          : int(i),\n            \"chunk_id\": int(item.get(\"chunk_id\", i)),\n \
+          \           \"source_uri\": input_uri,\n            \"token_count\": int(token_count),\n\
+          \            \"character_count\": len(content_text),\n        }\n\n    \
+          \    extra_metadata = item.get(\"metadata\")\n        if isinstance(extra_metadata,\
+          \ dict):\n            metadata_dict.update(extra_metadata)\n\n        text_len\
+          \ = len(content_text)\n        min_len = text_len if min_len is None else\
+          \ min(min_len, text_len)\n        max_len = text_len if max_len is None\
+          \ else max(max_len, text_len)\n\n        # Generate unique chunk ID (LlamaStack\
+          \ expects stored_chunk_id as string)\n        chunk_id_str = f\"{source_name}_chunk_{i}\"\
+          \n\n        llamastack_chunks.append({\n            \"content\": content_text,\n\
+          \            \"metadata\": metadata_dict,  # Must be dict - LlamaStack API\
+          \ requires it\n            \"stored_chunk_id\": chunk_id_str  # Required\
+          \ for retrieval (must be string)\n        })\n\n    if skipped_chunks:\n\
+          \        print(f\"Skipped {skipped_chunks} chunk(s) with empty content.\"\
+          )\n    if llamastack_chunks:\n        print(f\"Prepared {len(llamastack_chunks)}\
+          \ chunk(s); content length range {min_len}-{max_len}.\")\n\n    # Insert\
+          \ via LlamaStack Vector IO API (with batching and retry)\n    print(f\"\
+          Inserting {len(llamastack_chunks)} chunks via LlamaStack...\")\n\n    #\
+          \ Batch insertion to avoid long single-call timeouts\n    BATCH_SIZE = 100\
+          \  # Process 100 chunks at a time\n    total_inserted = 0\n    batches =\
+          \ [llamastack_chunks[i:i + BATCH_SIZE] for i in range(0, len(llamastack_chunks),\
+          \ BATCH_SIZE)]\n\n    print(f\"Split into {len(batches)} batch(es) of up\
+          \ to {BATCH_SIZE} chunks\")\n\n    import time\n    for batch_idx, batch\
+          \ in enumerate(batches):\n        batch_num = batch_idx + 1\n        print(f\"\
+          Processing batch {batch_num}/{len(batches)} ({len(batch)} chunks)...\")\n\
+          \n        # Validate batch content before calling LlamaStack\n        for\
+          \ chunk_meta in batch:\n            content_val = chunk_meta.get(\"content\"\
+          )\n            if not isinstance(content_val, str) or not content_val.strip():\n\
+          \                raise ValueError(\n                    f\"Chunk missing\
+          \ content prior to insert (batch {batch_num}): {chunk_meta.get('metadata')}\"\
+          \n                )\n\n        # Retry logic with exponential backoff (per\
+          \ Milvus guidance: up to 5 retries)\n        max_retries = 5\n        response\
+          \ = None\n        for attempt in range(max_retries):\n            try:\n\
+          \                # Timeout: ~3 sec/chunk + 120s overhead, max 600s\n   \
+          \             timeout = min(600, len(batch) * 3 + 120)\n\n             \
+          \   response = requests.post(\n                    f\"{llamastack_url}/v1/vector-io/insert\"\
+          ,\n                    json={\n                        \"vector_db_id\"\
+          : vector_db_id,\n                        \"chunks\": batch\n           \
+          \         },\n                    headers={\"Content-Type\": \"application/json\"\
+          },\n                    timeout=timeout\n                )\n\n         \
+          \       if response.status_code != 200:\n                    print(f\" \
+          \ ERROR: Batch {batch_num} returned {response.status_code}\")\n        \
+          \            print(f\"  Response: {response.text}\")\n                 \
+          \   response.raise_for_status()\n\n                # Parse response - handle\
+          \ empty/null JSON\n                try:\n                    result = response.json()\n\
+          \                except Exception as e:\n                    print(f\" \
+          \ WARNING: Could not parse JSON response: {e}\")\n                    result\
+          \ = None\n\n                batch_inserted = result.get(\"num_inserted\"\
           , len(batch)) if result else len(batch)\n                total_inserted\
           \ += batch_inserted\n                print(f\"  [OK] Batch {batch_num}:\
           \ {batch_inserted} chunks inserted\")\n                break  # Success\n\
-          \n            except requests.exceptions.Timeout as e:\n               \
-          \ if attempt < max_retries - 1:\n                    wait_time = 2 ** attempt\
-          \  # Exponential backoff: 1s, 2s, 4s\n                    print(f\"  Timeout\
-          \ on batch {batch_num}, retry {attempt + 1}/{max_retries} after {wait_time}s...\"\
+          \n            except requests.exceptions.Timeout:\n                if attempt\
+          \ < max_retries - 1:\n                    wait_time = min(30, 2 ** attempt)\
+          \  # 1,2,4,8,16 (cap at 30s)\n                    print(f\"  Timeout on\
+          \ batch {batch_num}, retry {attempt + 1}/{max_retries} after {wait_time}s...\"\
           )\n                    time.sleep(wait_time)\n                else:\n  \
           \                  print(f\"  FAILED: Batch {batch_num} timed out after\
           \ {max_retries} attempts\")\n                    raise\n            except\
-          \ requests.exceptions.RequestException as e:\n                # Check if\
-          \ we have a response before accessing it\n                # Connection errors\
-          \ won't have a response object\n                has_response = 'response'\
-          \ in locals() and response is not None\n                should_retry = (\n\
-          \                    attempt < max_retries - 1 and\n                   \
-          \ (not has_response or (has_response and response.status_code >= 500))\n\
-          \                )\n\n                if should_retry:\n               \
-          \     wait_time = 2 ** attempt\n                    status_info = f\"({response.status_code})\"\
-          \ if has_response else \"(connection error)\"\n                    print(f\"\
-          \  Error on batch {batch_num} {status_info}, retry {attempt + 1}/{max_retries}\
-          \ after {wait_time}s...\")\n                    time.sleep(wait_time)\n\
-          \                else:\n                    print(f\"  FAILED: Batch {batch_num}\
-          \ error: {e}\")\n                    raise\n\n    print(f\"[OK] Successfully\
-          \ inserted {total_inserted}/{len(llamastack_chunks)} chunks across {len(batches)}\
-          \ batches\")\n    print(f\"Sample document_id: {llamastack_chunks[0]['metadata']['document_id']}\"\
-          )\n\n    return {\n        \"vector_db_id\": vector_db_id,\n        \"num_chunks\"\
-          : total_inserted,\n        \"source\": input_uri,\n        \"status\": \"\
-          success\"\n    }\n\n"
+          \ requests.exceptions.RequestException as e:\n                status_info\
+          \ = \"\"\n                if response is not None:\n                   \
+          \ status_info = f\" (status {response.status_code})\"\n                if\
+          \ attempt < max_retries - 1:\n                    wait_time = min(30, 2\
+          \ ** attempt)\n                    print(f\"  Request error on batch {batch_num}{status_info}:\
+          \ {e}. Retry {attempt + 1}/{max_retries} after {wait_time}s...\")\n    \
+          \                time.sleep(wait_time)\n                else:\n        \
+          \            print(f\"  FAILED: Batch {batch_num} error after retries: {e}\"\
+          )\n                    raise\n\n    print(f\"[OK] Successfully inserted\
+          \ {total_inserted}/{len(llamastack_chunks)} chunks across {len(batches)}\
+          \ batches\")\n    if llamastack_chunks:\n        print(f\"Sample document_id:\
+          \ {llamastack_chunks[0]['metadata'].get('document_id')}\")\n\n    return\
+          \ {\n        \"vector_db_id\": vector_db_id,\n        \"num_chunks\": total_inserted,\n\
+          \        \"source\": input_uri,\n        \"status\": \"success\"\n    }\n\
+          \n"
         image: registry.access.redhat.com/ubi9/python-311:1-77
-    exec-list-pdfs-in-s3:
-      container:
-        args:
-        - --executor_input
-        - '{{$}}'
-        - --function_to_execute
-        - list_pdfs_in_s3
-        command:
-        - sh
-        - -c
-        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
-          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
-          \ python3 -m pip install --quiet --no-warn-script-location 'boto3'  && \
-          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.14.6'\
-          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
-          $0\" \"$@\"\n"
-        - sh
-        - -ec
-        - 'program_path=$(mktemp -d)
-
-
-          printf "%s" "$0" > "$program_path/ephemeral_component.py"
-
-          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
-
-          '
-        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
-          \ *\n\ndef list_pdfs_in_s3(\n    s3_prefix: str,\n    minio_endpoint: str,\n\
-          \    minio_creds_b64: str\n) -> List[str]:\n    \"\"\"\n    Discover all\
-          \ PDF files in an S3 prefix\n\n    Parameters:\n        s3_prefix: S3 path\
-          \ prefix (e.g. \"s3://llama-files/scenario2-acme/\")\n        minio_endpoint:\
-          \ MinIO endpoint\n        minio_creds_b64: Base64-encoded credentials (format:\
-          \ \"access_key:secret_key\")\n\n    Returns:\n        List of full S3 URIs\
-          \ for all PDFs found (e.g. [\"s3://bucket/file1.pdf\", ...])\n    \"\"\"\
-          \n    import boto3\n    from botocore.client import Config\n    import base64\n\
-          \n    print(f\"Discovering PDFs in: {s3_prefix}\")\n\n    # Decode credentials\n\
-          \    creds_decoded = base64.b64decode(minio_creds_b64).decode('utf-8').strip()\n\
-          \    aws_access_key_id, aws_secret_access_key = creds_decoded.split(':',\
-          \ 1)\n    aws_access_key_id = aws_access_key_id.strip()\n    aws_secret_access_key\
-          \ = aws_secret_access_key.strip()\n\n    # Parse S3 prefix\n    if s3_prefix.startswith(\"\
-          s3://\"):\n        s3_prefix = s3_prefix[5:]\n\n    # Remove trailing slash\n\
-          \    s3_prefix = s3_prefix.rstrip('/')\n\n    parts = s3_prefix.split(\"\
-          /\", 1)\n    bucket = parts[0]\n    prefix = parts[1] + \"/\" if len(parts)\
-          \ > 1 else \"\"\n\n    print(f\"Bucket: {bucket}, Prefix: {prefix}\")\n\n\
-          \    # Configure S3 client\n    s3_client = boto3.client(\n        \"s3\"\
-          ,\n        endpoint_url=f\"http://{minio_endpoint}\",\n        aws_access_key_id=aws_access_key_id,\n\
-          \        aws_secret_access_key=aws_secret_access_key,\n        config=Config(signature_version=\"\
-          s3v4\"),\n        region_name=\"us-east-1\"\n    )\n\n    # List all objects\
-          \ with prefix\n    response = s3_client.list_objects_v2(Bucket=bucket, Prefix=prefix)\n\
-          \n    if 'Contents' not in response:\n        print(f\"No files found in\
-          \ {s3_prefix}\")\n        return []\n\n    # Filter for PDFs only\n    pdf_keys\
-          \ = [\n        obj['Key'] for obj in response['Contents']\n        if obj['Key'].lower().endswith('.pdf')\n\
-          \    ]\n\n    # Build full S3 URIs\n    pdf_uris = [f\"s3://{bucket}/{key}\"\
-          \ for key in pdf_keys]\n\n    print(f\"[OK] Found {len(pdf_uris)} PDF files:\"\
-          )\n    for uri in pdf_uris:\n        print(f\"  - {uri.split('/')[-1]}\"\
-          )\n\n    return pdf_uris\n\n"
-        image: registry.access.redhat.com/ubi9/python-311:1-77
+        resources:
+          cpuLimit: 0.5
+          cpuRequest: 0.25
+          memoryLimit: 0.536870912
+          memoryRequest: 0.268435456
+          resourceCpuLimit: 500m
+          resourceCpuRequest: 250m
+          resourceMemoryLimit: 512Mi
+          resourceMemoryRequest: 256Mi
     exec-process-with-docling:
       container:
         args:
@@ -599,59 +515,199 @@ deploymentSpec:
           \n    print(f\"[OK] Extracted {len(markdown_content)} characters of markdown\"\
           )\n    print(f\"Preview: {markdown_content[:200]}...\")\n\n"
         image: registry.access.redhat.com/ubi9/python-311:1-77
+        resources:
+          cpuLimit: 1.0
+          cpuRequest: 0.5
+          memoryLimit: 1.073741824
+          memoryRequest: 0.536870912
+          resourceCpuLimit: '1'
+          resourceCpuRequest: 500m
+          resourceMemoryLimit: 1Gi
+          resourceMemoryRequest: 512Mi
+    exec-verify-ingestion:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - verify_ingestion
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'requests'  &&\
+          \  python3 -m pip install --quiet --no-warn-script-location 'kfp==2.14.6'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef verify_ingestion(\n    llamastack_url: str,\n    vector_db_id:\
+          \ str,\n    min_chunks: int,\n    insert_result: dict\n) -> dict:\n    \"\
+          \"\"\n    Verify ingestion by querying LlamaStack Vector IO API\n\n    Tests\
+          \ that chunks can be retrieved via /v1/vector-io/query\n    \"\"\"\n   \
+          \ import requests\n    import json\n\n    print(f\"Verifying ingestion in\
+          \ vector DB: {vector_db_id}\")\n    print(f\"Insert result: {insert_result}\"\
+          )\n\n    # Use a meaningful query derived from the document source\n   \
+          \ # Better than generic \"test document content\" - provides real signal\n\
+          \    source_uri = insert_result.get(\"source\", \"\")\n    if \"rag-mini\"\
+          \ in source_uri.lower():\n        test_query = \"Red Hat OpenShift AI platform\"\
+          \n    elif \"acme\" in source_uri.lower():\n        test_query = \"corporate\
+          \ policy\"\n    elif \"ai\" in source_uri.lower() and \"act\" in source_uri.lower():\n\
+          \        test_query = \"artificial intelligence regulation\"\n    else:\n\
+          \        # Generic fallback\n        test_query = \"document information\"\
+          \n\n    print(f\"Testing retrieval with query: '{test_query}'\")\n\n   \
+          \ response = requests.post(\n        f\"{llamastack_url}/v1/vector-io/query\"\
+          ,\n        json={\n            \"vector_db_id\": vector_db_id,\n       \
+          \     \"query\": test_query,\n            \"params\": {\"top_k\": 5}\n \
+          \       },\n        headers={\"Content-Type\": \"application/json\"},\n\
+          \        timeout=60\n    )\n\n    if response.status_code != 200:\n    \
+          \    print(f\"ERROR: Query failed with status {response.status_code}\")\n\
+          \        print(f\"Response: {response.text}\")\n        return {\n     \
+          \       \"success\": False,\n            \"error\": f\"Query failed: {response.status_code}\"\
+          ,\n            \"vector_db_id\": vector_db_id\n        }\n\n    result =\
+          \ response.json()\n    chunks_returned = len(result.get(\"chunks\", []))\n\
+          \n    print(f\"Query returned {chunks_returned} chunks\")\n\n    # Verify\
+          \ we got results\n    num_chunks = insert_result.get(\"num_chunks\", 0)\n\
+          \    success = chunks_returned > 0 and num_chunks >= min_chunks\n\n    print(f\"\
+          Ingestion verification:\")\n    print(f\"  Chunks inserted: {num_chunks}\"\
+          )\n    print(f\"  Chunks retrieved: {chunks_returned}\")\n    print(f\"\
+          \  Minimum required: {min_chunks}\")\n\n    if success:\n        print(f\"\
+          [OK] Verification PASSED\")\n\n        # Print top results with scores (better\
+          \ signal than single chunk)\n        if result.get(\"chunks\"):\n      \
+          \      print(f\"Top {min(3, chunks_returned)} results with scores:\")\n\
+          \            for idx, chunk in enumerate(result[\"chunks\"][:3]):\n    \
+          \            content = chunk.get(\"content\", chunk.get(\"text\", str(chunk)))\n\
+          \                score = chunk.get(\"score\", \"N/A\")\n               \
+          \ doc_id = chunk.get(\"metadata\", {}).get(\"document_id\", \"unknown\"\
+          )\n\n                print(f\"  {idx + 1}. Score={score}, doc_id={doc_id}\"\
+          )\n                print(f\"     Content: {content[:150]}...\")\n    else:\n\
+          \        print(f\"[FAIL] Verification FAILED\")\n\n    return {\n      \
+          \  \"success\": success,\n        \"num_chunks_inserted\": num_chunks,\n\
+          \        \"num_chunks_retrieved\": chunks_returned,\n        \"min_chunks\"\
+          : min_chunks,\n        \"vector_db_id\": vector_db_id\n    }\n\n"
+        image: registry.access.redhat.com/ubi9/python-311:1-77
+        resources:
+          cpuLimit: 0.5
+          cpuRequest: 0.25
+          memoryLimit: 0.536870912
+          memoryRequest: 0.268435456
+          resourceCpuLimit: 500m
+          resourceCpuRequest: 250m
+          resourceMemoryLimit: 512Mi
+          resourceMemoryRequest: 256Mi
 pipelineInfo:
-  description: 'Smart batch processing: Auto-discover PDFs in S3 path and process
-    them all'
-  name: batch-data-processing
+  description: RAG Ingestion Pipeline v1.0.2 - Single document processing with Docling
+    and LlamaStack Vector IO.
+  name: data-processing-and-insertion-single
 root:
   dag:
     tasks:
-      for-loop-1:
+      chunk-markdown:
+        cachingOptions: {}
         componentRef:
-          name: comp-for-loop-1
+          name: comp-chunk-markdown
         dependentTasks:
-        - list-pdfs-in-s3
+        - process-with-docling
         inputs:
+          artifacts:
+            markdown_file:
+              taskOutputArtifact:
+                outputArtifactKey: output_markdown
+                producerTask: process-with-docling
           parameters:
-            pipelinechannel--chunk_size:
+            chunk_size:
               componentInputParameter: chunk_size
-            pipelinechannel--docling_url:
-              componentInputParameter: docling_url
-            pipelinechannel--list-pdfs-in-s3-Output:
-              taskOutputParameter:
-                outputParameterKey: Output
-                producerTask: list-pdfs-in-s3
-            pipelinechannel--llamastack_url:
-              componentInputParameter: llamastack_url
-            pipelinechannel--minio_creds_b64:
-              componentInputParameter: minio_creds_b64
-            pipelinechannel--minio_endpoint:
-              componentInputParameter: minio_endpoint
-            pipelinechannel--vector_db_id:
-              componentInputParameter: vector_db_id
-        iteratorPolicy:
-          parallelismLimit: 2
-        parameterIterator:
-          itemInput: pipelinechannel--list-pdfs-in-s3-Output-loop-item
-          items:
-            inputParameter: pipelinechannel--list-pdfs-in-s3-Output
         taskInfo:
-          name: process-each-pdf
-      list-pdfs-in-s3:
-        cachingOptions:
-          enableCache: true
+          name: chunk-markdown
+      download-from-s3:
+        cachingOptions: {}
         componentRef:
-          name: comp-list-pdfs-in-s3
+          name: comp-download-from-s3
         inputs:
           parameters:
+            input_uri:
+              componentInputParameter: input_uri
             minio_creds_b64:
               componentInputParameter: minio_creds_b64
             minio_endpoint:
               componentInputParameter: minio_endpoint
-            s3_prefix:
-              componentInputParameter: s3_prefix
+            s3_secret_mount_path:
+              componentInputParameter: s3_secret_mount_path
         taskInfo:
-          name: list-pdfs-in-s3
+          name: download-from-s3
+      insert-via-llamastack:
+        cachingOptions: {}
+        componentRef:
+          name: comp-insert-via-llamastack
+        dependentTasks:
+        - chunk-markdown
+        inputs:
+          artifacts:
+            chunks_file:
+              taskOutputArtifact:
+                outputArtifactKey: output_chunks
+                producerTask: chunk-markdown
+          parameters:
+            input_uri:
+              componentInputParameter: input_uri
+            llamastack_url:
+              componentInputParameter: llamastack_url
+            vector_db_id:
+              componentInputParameter: vector_db_id
+        retryPolicy:
+          backoffDuration: 0s
+          backoffFactor: 2.0
+          backoffMaxDuration: 3600s
+        taskInfo:
+          name: insert-via-llamastack
+      process-with-docling:
+        cachingOptions: {}
+        componentRef:
+          name: comp-process-with-docling
+        dependentTasks:
+        - download-from-s3
+        inputs:
+          artifacts:
+            input_file:
+              taskOutputArtifact:
+                outputArtifactKey: output_file
+                producerTask: download-from-s3
+          parameters:
+            docling_url:
+              componentInputParameter: docling_url
+        taskInfo:
+          name: process-with-docling
+      verify-ingestion:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-verify-ingestion
+        dependentTasks:
+        - insert-via-llamastack
+        inputs:
+          parameters:
+            insert_result:
+              taskOutputParameter:
+                outputParameterKey: Output
+                producerTask: insert-via-llamastack
+            llamastack_url:
+              componentInputParameter: llamastack_url
+            min_chunks:
+              componentInputParameter: min_chunks
+            vector_db_id:
+              componentInputParameter: vector_db_id
+        taskInfo:
+          name: verify-ingestion
   inputDefinitions:
     parameters:
       chunk_size:
@@ -662,26 +718,32 @@ root:
         defaultValue: http://docling-service.private-ai-demo.svc:5001
         isOptional: true
         parameterType: STRING
+      input_uri:
+        defaultValue: s3://llama-files/sample/rag-mini.pdf
+        isOptional: true
+        parameterType: STRING
       llamastack_url:
         defaultValue: http://llama-stack-service.private-ai-demo.svc:8321
         isOptional: true
         parameterType: STRING
+      min_chunks:
+        defaultValue: 10.0
+        isOptional: true
+        parameterType: NUMBER_INTEGER
       minio_creds_b64:
-        defaultValue: YWRtaW46bWluaW9hZG1pbg==
+        defaultValue: ''
         isOptional: true
         parameterType: STRING
       minio_endpoint:
         defaultValue: minio.model-storage.svc:9000
         isOptional: true
         parameterType: STRING
-      s3_prefix:
-        defaultValue: s3://llama-files/sample/
-        description: S3 folder path containing PDFs (e.g. "s3://llama-files/scenario2-acme/")
+      s3_secret_mount_path:
+        defaultValue: /mnt/secrets
         isOptional: true
         parameterType: STRING
       vector_db_id:
         defaultValue: acme_corporate
-        description: Target collection name (all docs go here)
         isOptional: true
         parameterType: STRING
 schemaVersion: 2.1.0
