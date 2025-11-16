@@ -67,6 +67,8 @@ spec:
         - --enable-prefix-caching           # Cache optimization for repeated prompts
         - --trust-remote-code               # Allow custom model code
         - --dtype=auto                      # Auto-detect dtype from model config
+        - --enable-auto-tool-choice         # Enable automatic tool calling for agents
+        - --tool-call-parser=mistral        # Use Mistral's native tool calling format
     # Node placement for g6.4xlarge (1 GPU node) - matches nvidia-l4-1gpu hardware profile
     nodeSelector:
       node.kubernetes.io/instance-type: g6.4xlarge

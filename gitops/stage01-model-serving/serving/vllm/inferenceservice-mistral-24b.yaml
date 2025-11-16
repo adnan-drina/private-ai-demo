@@ -68,6 +68,8 @@ spec:
         - --enable-prefix-caching           # Cache optimization for repeated prompts
         - --trust-remote-code               # Allow custom model code
         - --disable-custom-all-reduce       # Required for PCIe-only multi-GPU (>2)
+        - --enable-auto-tool-choice         # Enable automatic tool calling for agents
+        - --tool-call-parser=mistral        # Use Mistral's native tool calling format
     # Node placement for g6.12xlarge (4 GPU node)
     nodeSelector:
       node.kubernetes.io/instance-type: g6.12xlarge
