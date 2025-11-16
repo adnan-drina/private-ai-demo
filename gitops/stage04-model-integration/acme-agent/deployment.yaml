@@ -41,6 +41,8 @@ spec:
           value: "http://slack-mcp.private-ai-demo.svc:8080"
         - name: DATABASE_MCP_URL
           value: "http://database-mcp.private-ai-demo.svc:8080"
+        - name: OPENSHIFT_MCP_URL
+          value: "http://openshift-mcp.private-ai-demo.svc:8000"
         - name: DOCS_DIR
           value: "./documents/scenario2"
         # TODO: Add quarkus-smallrye-health extension for proper health checks

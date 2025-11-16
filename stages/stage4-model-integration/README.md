@@ -11,6 +11,10 @@ Stage 4 demonstrates enterprise agentic AI using the Model Context Protocol (MCP
   - Equipment metadata queries
   - Calibration history lookup
   - Specification retrieval
+- **OpenShift MCP Server** - Cluster troubleshooting interface
+  - List projects, namespaces, pods, and events
+  - Stream pod logs for rapid diagnosis
+  - Backed by a read-only ServiceAccount bound to the `view` ClusterRole
 - **Slack MCP Server** - Team notification system
   - Alert notifications
   - Status updates
@@ -63,6 +67,7 @@ oc get svc postgresql -n private-ai-demo
 # Check MCP servers
 oc get deployment database-mcp -n private-ai-demo
 oc get deployment slack-mcp -n private-ai-demo
+oc get deployment openshift-mcp -n private-ai-demo
 
 # Check ACME Agent
 oc get deployment acme-agent -n private-ai-demo
@@ -176,6 +181,17 @@ Provides tools for:
 Configuration:
 - Demo mode (logs only) or webhook URL
 
+### OpenShift MCP
+
+Provides tools for:
+- `pods_list`, `pods_logs` - Inspect workloads and gather evidence
+- `projects_list`, `namespaces_list` - Understand tenancy
+- `events_list` - Capture cluster warnings/alerts
+
+Configuration:
+- ServiceAccount `openshift-mcp` bound to the built-in `view` ClusterRole
+- SSE endpoint exposed at `http://openshift-mcp.private-ai-demo.svc:8000/sse`
+
 ## Architecture Highlights
 
 ### Sovereignty
@@ -198,7 +214,9 @@ Configuration:
 
 ### MCP Servers Not Responding
 - Check logs: `oc logs deployment/database-mcp -n private-ai-demo`
+- OpenShift MCP health: `oc logs deployment/openshift-mcp -n private-ai-demo`
 - Verify service: `oc get svc database-mcp -n private-ai-demo`
+- Verify SSE endpoint: `oc exec deployment/openshift-mcp -n private-ai-demo -- curl -s localhost:8000/health`
 - Test endpoint: `curl http://database-mcp:8080/health`
 
 ### ACME Agent Errors
@@ -218,6 +236,7 @@ gitops-new/stage04-model-integration/
 ├── postgresql/          # Database deployment + init schema
 ├── mcp-servers/
 │   ├── database-mcp/    # PostgreSQL MCP server
+│   ├── openshift-mcp/   # Kubernetes/OpenShift MCP server
 │   └── slack-mcp/       # Slack notification MCP server
 ├── acme-agent/          # Quarkus agent application
 └── notebooks/           # Agent demo notebook
@@ -234,6 +253,8 @@ In OpenShift Console → Topology:
   │     └─→ 🗄️  Milvus (RAG)
   ├─→ 🔌 Database MCP
   │     └─→ 🐘 PostgreSQL
+  ├─→ ☸️ OpenShift MCP
+  │     └─→ 📡 Cluster API (pods/projects/events)
   └─→ 📢 Slack MCP
         └─→ 💬 Slack API
 ```

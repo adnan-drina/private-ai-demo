@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: openshift-mcp
+  namespace: private-ai-demo
+  labels:
+    app: openshift-mcp
+    component: mcp-server
+spec:
+  selector:
+    app: openshift-mcp
+    component: mcp-server
+  ports:
+  - name: sse
+    port: 8000
+    targetPort: sse
+    protocol: TCP
+  type: ClusterIP

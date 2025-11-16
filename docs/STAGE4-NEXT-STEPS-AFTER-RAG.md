@@ -182,16 +182,16 @@ After RAG validation is complete, proceed with **Stage 4 Model Integration**:
 ### Phase 1: MCP Server Implementation
 
 **Priority 1: OpenShift MCP Server**
-- [ ] Implement `mcp::openshift` server (FastAPI)
-- [ ] Tools: `list_pods`, `get_pod_logs`, `scale_deployment`
-- [ ] Build container image
-- [ ] Deploy to `private-ai-demo` namespace
-- [ ] Register with LlamaStack
+- [x] Implement `mcp::openshift` server (Go-based Kubernetes MCP image)
+- [x] Tools: `list_pods`, `get_pod_logs`, `projects_list`, `events_list`
+- [x] Build container image / reference upstream image
+- [x] Deploy to `private-ai-demo` namespace with RBAC + ServiceAccount
+- [x] Register with LlamaStack
 
 **Priority 2: Slack MCP Server** (Already exists in Stage 04)
-- [ ] Review existing implementation
-- [ ] Update for SSE endpoint requirement
-- [ ] Test integration
+- [x] Review existing implementation
+- [x] Update for SSE endpoint requirement
+- [x] Test integration via Playground agent
 
 **Reference**: 
 - Demo notebook: https://github.com/opendatahub-io/llama-stack-demos/blob/main/demos/rag_agentic/notebooks/Level6_agents_MCP_and_RAG.ipynb
@@ -206,10 +206,15 @@ tool_groups:
   - toolgroup_id: builtin::rag
     provider_id: rag-runtime
   
+  - toolgroup_id: mcp::database
+    provider_id: model-context-protocol
+    mcp_endpoint:
+      uri: "http://database-mcp.private-ai-demo.svc:8080/sse"
+  
   - toolgroup_id: mcp::openshift
     provider_id: model-context-protocol
     mcp_endpoint:
-      uri: "http://openshift-mcp.private-ai-demo.svc:8080/sse"
+      uri: "http://openshift-mcp.private-ai-demo.svc:8000/sse"
   
   - toolgroup_id: mcp::slack
     provider_id: model-context-protocol
@@ -220,8 +225,8 @@ tool_groups:
 ### Phase 3: Playground Enhancement
 
 **Extend LlamaStack Playground for tool usage:**
-- [ ] Add tool selection UI
-- [ ] Display tool execution results
+- [x] Add tool selection UI
+- [x] Display tool execution results
 - [ ] Show agent reasoning steps (ReAct pattern)
 - [ ] Tool execution visualization
 

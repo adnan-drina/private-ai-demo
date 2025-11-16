@@ -8,11 +8,11 @@ spec:
   limits:
     - type: Container
       default:
-        cpu: "2"           # Raised for pipeline tasks (model downloads, builds)
-        memory: "8Gi"      # Raised for HuggingFace parallel downloads + Buildah
+        cpu: "500m"        # Balanced default so lightweight pods (e.g. KFP drivers) can schedule
+        memory: "1Gi"
       defaultRequest:
-        cpu: "2"           # Matched to default for predictable scheduling
-        memory: "8Gi"      # Matched to default to prevent OOMKilled
+        cpu: "500m"
+        memory: "1Gi"
       max:
         cpu: "64"  # Increased to support GPU workloads (full model needs 32 CPU)
         memory: "128Gi"

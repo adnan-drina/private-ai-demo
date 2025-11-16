@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openshift-mcp
+  namespace: private-ai-demo
+  labels:
+    app: openshift-mcp
+    app.kubernetes.io/name: openshift-mcp
+    app.kubernetes.io/component: mcp-server
+    app.kubernetes.io/part-of: mcp-servers
+    app.openshift.io/runtime: golang
+    component: mcp-server
+  annotations:
+    openshift.io/display-name: "OpenShift MCP Server"
+    description: "Model Context Protocol server exposing pod logs, events, and project info"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: openshift-mcp
+  template:
+    metadata:
+      labels:
+        app: openshift-mcp
+        component: mcp-server
+    spec:
+      serviceAccountName: openshift-mcp
+      containers:
+      - name: openshift-mcp
+        image: quay.io/hveeradh/ocp-mcp-server:latest
+        imagePullPolicy: IfNotPresent
+        command:
+        - ./kubernetes-mcp-server
+        args:
+        - --sse-port
+        - "8000"
+        ports:
+        - name: sse
+          containerPort: 8000
+          protocol: TCP
+        env:
+        - name: LOG_LEVEL
+          value: info
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          tcpSocket:
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          tcpSocket:
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
