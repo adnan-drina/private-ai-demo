@@ -1,0 +1,25 @@
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: slack-mcp
+  namespace: private-ai-demo
+  labels:
+    app: slack-mcp
+    app.kubernetes.io/component: mcp-server
+    app.kubernetes.io/part-of: mcp-servers
+  annotations:
+    description: "Build configuration for Slack MCP server"
+spec:
+  source:
+    type: Binary
+    binary: {}
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: slack-mcp:latest
+  triggers: []
+  runPolicy: Serial

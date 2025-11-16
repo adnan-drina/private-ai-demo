@@ -1,0 +1,29 @@
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: database-mcp
+  namespace: private-ai-demo
+  labels:
+    app: database-mcp
+    app.kubernetes.io/component: mcp-server
+    app.kubernetes.io/part-of: mcp-servers
+  annotations:
+    description: "MCP server for PostgreSQL database queries"
+spec:
+  lookupPolicy:
+    local: true
+---
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: slack-mcp
+  namespace: private-ai-demo
+  labels:
+    app: slack-mcp
+    app.kubernetes.io/component: mcp-server
+    app.kubernetes.io/part-of: mcp-servers
+  annotations:
+    description: "MCP server for Slack notifications"
+spec:
+  lookupPolicy:
+    local: true
