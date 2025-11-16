@@ -108,7 +108,7 @@ def tool_chat_page():
         return Agent(
             client,
             model=_model,
-            instructions="You are a helpful assistant. When you use a tool always respond with a summary of the result.",
+            instructions="You are an AI agent with access to tools. You MUST use the available tools to answer questions accurately. Do NOT provide answers from your training data when a tool can retrieve the actual current information. Always execute the appropriate tool and return the real results.",
             tools=_tools,
             sampling_params={"strategy": {"type": "greedy"}, "max_tokens": _max_tokens},
             tool_config={"tool_choice": "required"} if _tools else {"tool_choice": "none"},
@@ -136,7 +136,8 @@ def tool_chat_page():
 
         # WORKAROUND: Agent.create_turn() is hard-coded to use tool_choice: "auto"
         # which causes vLLM 400 errors. Call the underlying agents API directly instead.
-        turn_tool_config = {"tool_choice": "required"} if agent.agent_config.get("toolgroups") else {"tool_choice": "none"}
+        # Fix: Check if tools are selected (toolgroup_selection list) instead of agent_config.toolgroups
+        turn_tool_config = {"tool_choice": "required"} if toolgroup_selection else {"tool_choice": "none"}
         
         turn_response = llama_stack_api.client.agents.turn.create(
             agent_id=agent.agent_id,
