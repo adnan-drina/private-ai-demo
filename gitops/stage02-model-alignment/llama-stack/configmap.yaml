@@ -105,7 +105,7 @@ data:
               type: sqlite
               namespace: null
               db_path: /data/responses_store.db
-      
+    
       safety:
         # Inline safety provider (required by agents)
         - provider_id: inline-safety
@@ -136,7 +136,7 @@ data:
                     detector_params:
                       detector_id: hap
                       threshold: 0.5
-      
+    
       telemetry:
         # SQLite telemetry for local storage
         - provider_id: meta-reference
@@ -149,7 +149,7 @@ data:
               - otel_trace
               - otel_metric
             otel_exporter_otlp_endpoint: http://otel-collector-collector.private-ai-demo.svc:4318
-      
+    
       files:
         - provider_id: s3-files
           provider_type: remote::s3
@@ -162,17 +162,7 @@ data:
             metadata_store:
               type: sqlite
               db_path: /data/sqlite/files_metadata.db
-        
-        # OpenTelemetry for distributed tracing and metrics
-        # Note: Requires OpenTelemetry instrumentation in the Llama Stack image
-        # This is configured via OTEL_* environment variables in the deployment
-        # - provider_id: opentelemetry
-        #   provider_type: inline::opentelemetry
-        #   config:
-        #     service_name: llama-stack
-        #     exporter_type: otlp
-        #     endpoint: http://tempo-distributor.openshift-distributed-tracing.svc:4317
-      
+    
       tool_runtime:
         # RAG runtime tool provider (required for agent RAG)
         # RAG runtime uses vector_io provider to access Milvus
@@ -184,7 +174,7 @@ data:
             top_k: 5                                  # retrieve top 5 chunks
             similarity_threshold: 0.0                # no filtering (start permissive)
             files_provider_id: s3-files
-        
+    
         # Model Context Protocol provider for external tools
         - provider_id: model-context-protocol
           provider_type: remote::model-context-protocol
@@ -250,30 +240,20 @@ data:
         provider_id: milvus-shared
     
     tool_groups:
-      # Built-in RAG tool group (required for Agent RAG)
-      - toolgroup_id: builtin::rag
-        provider_id: rag-runtime
+    # Built-in RAG tool group (required for Agent RAG)
+    - toolgroup_id: builtin::rag
+      provider_id: rag-runtime
+    # OpenShift MCP server (pod logs, events, namespaces)
+    - toolgroup_id: mcp::openshift
+      provider_id: model-context-protocol
+      mcp_endpoint:
+        uri: "http://openshift-mcp.private-ai-demo.svc:8000/sse"
     
     shields:
       - shield_id: regex_guardrail
         provider_id: trustyai_fms
       - shield_id: toxicity_guardrail
         provider_id: trustyai_fms
-      
-      # MCP Servers - TEMPORARILY DISABLED
-      # TODO: Enable after implementing SSE endpoints in MCP servers
-      # Current MCP servers use simple HTTP, but Llama Stack requires SSE
-      # Will be fixed in Phase 3
-      
-      # - toolgroup_id: mcp::database
-      #   provider_id: model-context-protocol
-      #   mcp_endpoint:
-      #     uri: "http://database-mcp.private-ai-demo.svc.cluster.local:8080/sse"
-      
-      # - toolgroup_id: mcp::slack
-      #   provider_id: model-context-protocol
-      #   mcp_endpoint:
-      #     uri: "http://slack-mcp.private-ai-demo.svc.cluster.local:8080/sse"
     
     vector_dbs:
       # Scenario-specific vector databases for RAG
