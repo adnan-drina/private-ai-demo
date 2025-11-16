@@ -2,6 +2,11 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-resources:
-  - app-stage04-model-integration.yaml
+# Stage 04 components commented out until container images are built/sourced
+# Blocker: Missing container images (database-mcp, slack-mcp, acme-agent)
+# Uncomment when ready to deploy Stage 04
+
+# resources:
+#   - appproject-stage04.yaml
+#   - app-stage04-model-integration.yaml
 

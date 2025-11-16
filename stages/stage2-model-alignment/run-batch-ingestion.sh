@@ -58,6 +58,29 @@ S3_PREFIX="${S3_PREFIXES[$SCENARIO]}"
 VECTOR_DB_ID="${VECTOR_DB_IDS[$SCENARIO]}"
 DESCRIPTION="${DESCRIPTIONS[$SCENARIO]}"
 
+# Resolve MinIO credentials (used as fallback by pipeline components).
+# Priority:
+#   1. MINIO_CREDS_B64 environment variable (explicit override, already base64 encoded "access:secret")
+#   2. `oc` cluster secret `llama-files-credentials` (decoded + re-encoded on the fly)
+#   3. Default baked-in value matching the GitOps secret (kept for backwards compatibility)
+DEFAULT_MINIO_CREDS_B64="YWRtaW46T2tnZEhUd0ppamYyb1dvOFF6OUpWMkFXb2JqMXJxVEY="
+if [[ -z "${MINIO_CREDS_B64:-}" ]]; then
+    if command -v oc >/dev/null 2>&1; then
+        ACCESS_B64=$(oc -n private-ai-demo get secret llama-files-credentials -o jsonpath='{.data.accesskey}' 2>/dev/null || true)
+        SECRET_B64=$(oc -n private-ai-demo get secret llama-files-credentials -o jsonpath='{.data.secretkey}' 2>/dev/null || true)
+        if [[ -n "$ACCESS_B64" && -n "$SECRET_B64" ]]; then
+            ACCESS_DEC=$(printf '%s' "$ACCESS_B64" | base64 --decode)
+            SECRET_DEC=$(printf '%s' "$SECRET_B64" | base64 --decode)
+            MINIO_CREDS_B64=$(printf '%s:%s' "$ACCESS_DEC" "$SECRET_DEC" | base64 | tr -d '\n')
+            echo -e "${GREEN}🔐 Loaded MinIO credentials from cluster secret${NC}"
+        fi
+    fi
+    MINIO_CREDS_B64="${MINIO_CREDS_B64:-$DEFAULT_MINIO_CREDS_B64}"
+else
+    echo -e "${GREEN}🔐 Using MINIO_CREDS_B64 environment override${NC}"
+fi
+export MINIO_CREDS_B64
+
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${BLUE}  RAG Batch Ingestion Pipeline${NC}"
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -207,12 +230,12 @@ run_name = f"{SCENARIO}-batch-ingestion-{int(time.time())}"
 
 params = {
     "s3_prefix": S3_PREFIX,
-    "docling_url": "http://docling-service.private-ai-demo.svc:8080",
+    "docling_url": "http://docling-service.private-ai-demo.svc:5001",
     "llamastack_url": "http://llama-stack-service.private-ai-demo.svc:8321",
     "vector_db_id": VECTOR_DB_ID,
     "chunk_size": 512,
     "minio_endpoint": "minio.model-storage.svc:9000",
-    "minio_creds_b64": "YWRtaW46bWluaW9hZG1pbg==",
+    "minio_creds_b64": os.environ["MINIO_CREDS_B64"],
     "cache_buster": str(int(time.time()))  # Force fresh run
 }
 

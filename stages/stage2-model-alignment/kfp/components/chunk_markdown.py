@@ -39,8 +39,8 @@ def chunk_markdown(
     
     # Smart chunking with size limit (Milvus dynamic field limit is 65536 chars)
     # Use chunk_size parameter but enforce Milvus limit
-    MAX_CHUNK_SIZE = 60000  # Leave buffer for Milvus limit
-    effective_chunk_size = min(chunk_size, MAX_CHUNK_SIZE)
+    MAX_CHUNK_SIZE = 60000  # Absolute ceiling enforced by Milvus dynamic field limit
+    effective_chunk_size = min(max(chunk_size, 1), MAX_CHUNK_SIZE)
     
     print(f"Chunking with max size: {effective_chunk_size} chars")
     
@@ -103,11 +103,11 @@ def chunk_markdown(
     final_chunks = []
     for chunk in chunks:
         chunk_len = len(chunk)
-        if chunk_len > MAX_CHUNK_SIZE:
+        if chunk_len > effective_chunk_size:
             # Force-split by characters as last resort
-            print(f"SAFETY: Force-splitting {chunk_len} char chunk into {MAX_CHUNK_SIZE} char pieces")
-            for i in range(0, chunk_len, MAX_CHUNK_SIZE):
-                piece = chunk[i:i + MAX_CHUNK_SIZE]
+            print(f"SAFETY: Force-splitting {chunk_len} char chunk into {effective_chunk_size} char pieces")
+            for i in range(0, chunk_len, effective_chunk_size):
+                piece = chunk[i:i + effective_chunk_size]
                 if len(piece) > 50:  # Filter very short pieces
                     final_chunks.append(piece)
         elif chunk_len > 50:  # Filter out very short chunks
@@ -118,9 +118,9 @@ def chunk_markdown(
     # Verify NO chunk exceeds limit
     if chunks:
         max_chunk_len = max(len(c) for c in chunks)
-        print(f"Created {len(chunks)} chunks (max length: {max_chunk_len} chars, limit: {MAX_CHUNK_SIZE})")
-        if max_chunk_len > MAX_CHUNK_SIZE:
-            raise ValueError(f"BUG: Chunk of {max_chunk_len} chars STILL exceeds limit {MAX_CHUNK_SIZE}!")
+        print(f"Created {len(chunks)} chunks (max length: {max_chunk_len} chars, limit: {effective_chunk_size})")
+        if max_chunk_len > effective_chunk_size:
+            raise ValueError(f"BUG: Chunk of {max_chunk_len} chars STILL exceeds limit {effective_chunk_size}!")
     else:
         print("No chunks created (document too short)")
     

@@ -24,7 +24,7 @@ spec:
         app.openshift.io/runtime: python
       annotations:
         # Topology: Connects to LlamaStack API
-        app.openshift.io/connects-to: '[{"apiVersion":"v1","kind":"Service","name":"llamastack"}]'
+        app.openshift.io/connects-to: '[{"apiVersion":"v1","kind":"Service","name":"llama-stack-service"}]'
         app.openshift.io/vcs-uri: https://github.com/adnan-drina/private-ai-demo
         app.openshift.io/vcs-ref: feature/stage2-implementation
         # No Istio sidecar needed for UI
@@ -42,7 +42,7 @@ spec:
               echo "Pre-warming LlamaStack vector collections..."
               for collection in red_hat_docs acme_corporate eu_ai_act; do
                 echo "  Querying: $collection"
-                curl -sf -X POST http://llamastack.private-ai-demo.svc:8321/v1/vector-io/query \
+                curl -sf -X POST http://llama-stack-service.private-ai-demo.svc:8321/v1/vector-io/query \
                   -H 'Content-Type: application/json' \
                   -d "{\"vector_db_id\":\"$collection\",\"query\":\"test\",\"params\":{\"top_k\":1}}" \
                   > /dev/null && echo "    ✅ $collection ready" || echo "    ⚠️  $collection unavailable (will retry on first UI query)"
@@ -50,7 +50,7 @@ spec:
               echo "Pre-warm complete"
       containers:
         - name: playground
-          # Legacy Streamlit UI with compatibility shim for Llama Stack 0.3
+          # Pinned to specific digest for reproducibility (verified 2025-11-07)
           image: quay.io/rh-aiservices-bu/llama-stack-playground@sha256:56be9a862f2b9152ec698f763d762fe426eb8b1c211980a5dd5d7c501b5c25d1
           imagePullPolicy: IfNotPresent
           ports:
@@ -58,15 +58,13 @@ spec:
               containerPort: 8501
               protocol: TCP
           env:
-            - name: PYTHONPATH
-              value: /opt/sitecustomize
             # LlamaStack API endpoints (internal for SSR, external for browser)
             - name: LLAMA_STACK_BASE_URL
-              value: http://llamastack.private-ai-demo.svc:8321
+              value: http://llama-stack-service.private-ai-demo.svc:8321
             - name: LLAMA_STACK_URL
-              value: http://llamastack.private-ai-demo.svc:8321
+              value: http://llama-stack-service.private-ai-demo.svc:8321
             - name: LLAMA_STACK_ENDPOINT
-              value: http://llamastack.private-ai-demo.svc:8321
+              value: http://llama-stack-service.private-ai-demo.svc:8321
             # Public-facing endpoint for browser
             - name: NEXT_PUBLIC_LLAMA_STACK_URL
               value: https://llamastack-private-ai-demo.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com
@@ -98,44 +96,6 @@ spec:
               port: http
             initialDelaySeconds: 30
             periodSeconds: 10
-          volumeMounts:
-            - name: runtime-config
-              mountPath: /opt/app-root/run.yaml
-              subPath: run.yaml
-            - name: sitecustomize
-              mountPath: /opt/sitecustomize
-              readOnly: true
-            - name: playground-chat
-              mountPath: /app/page/playground/chat.py
-              subPath: chat.py
-            - name: playground-rag
-              mountPath: /app/page/playground/rag.py
-              subPath: rag.py
-      volumes:
-        - name: runtime-config
-          configMap:
-            name: llamastack-config
-            items:
-              - key: run.yaml
-                path: run.yaml
-        - name: sitecustomize
-          configMap:
-            name: llama-stack-playground-sitecustomize
-            items:
-              - key: sitecustomize.py
-                path: sitecustomize.py
-        - name: playground-chat
-          configMap:
-            name: llama-stack-playground-chat
-            items:
-              - key: chat.py
-                path: chat.py
-        - name: playground-rag
-          configMap:
-            name: llama-stack-playground-rag
-            items:
-              - key: rag.py
-                path: rag.py
 ---
 apiVersion: v1
 kind: Service
