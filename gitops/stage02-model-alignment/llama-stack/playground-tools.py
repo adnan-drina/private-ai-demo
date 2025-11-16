@@ -103,7 +103,9 @@ def tool_chat_page():
             )
             toolgroup_selection[i] = tool_dict
 
-    @st.cache_resource
+    # Note: Removed @st.cache_resource decorator to fix tool selection bug
+    # The aggressive caching was preventing agent from being recreated when tools changed
+    # Impact: Slightly slower but ensures agent always has correct tools
     def create_agent(_model, _tools, _max_tokens):
         return Agent(
             client,
