@@ -93,6 +93,12 @@ def tool_chat_page():
             on_change=reset_agent,
         )
 
+    # CRITICAL FIX: Keep MCP tool references as STRINGS!
+    # Based on working demo: https://github.com/opendatahub-io/llama-stack-demos/blob/main/demos/rag_agentic/notebooks/Level6_agents_MCP_and_RAG.ipynb
+    # Tools should be:
+    #   • "mcp::openshift" (string - references toolgroup_id from ConfigMap)
+    #   • dict for builtin::rag (needs vector_db_ids args)
+    # Previously we were converting ALL to dicts, which broke MCP execution!
     for i, tool_name in enumerate(toolgroup_selection):
         if tool_name == "builtin::rag":
             tool_dict = dict(
@@ -102,6 +108,7 @@ def tool_chat_page():
                 },
             )
             toolgroup_selection[i] = tool_dict
+        # MCP tools (mcp::*) MUST stay as strings!
 
     # Note: Removed @st.cache_resource decorator to fix tool selection bug
     # The aggressive caching was preventing agent from being recreated when tools changed
@@ -140,6 +147,11 @@ def tool_chat_page():
         # which causes vLLM 400 errors. Call the underlying agents API directly instead.
         # Fix: Check if tools are selected (toolgroup_selection list) instead of agent_config.toolgroups
         turn_tool_config = {"tool_choice": "required"} if toolgroup_selection else {"tool_choice": "none"}
+        
+        # DEBUG: Log what we're sending
+        print(f"[DEBUG] toolgroup_selection: {toolgroup_selection}")
+        print(f"[DEBUG] turn_tool_config: {turn_tool_config}")
+        print(f"[DEBUG] agent.agent_config.toolgroups: {agent.agent_config.get('toolgroups', 'NOT SET')}")
         
         turn_response = llama_stack_api.client.agents.turn.create(
             agent_id=agent.agent_id,
