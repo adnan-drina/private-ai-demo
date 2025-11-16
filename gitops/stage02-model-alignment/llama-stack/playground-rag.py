@@ -1,5 +1,6 @@
 # Patched version of the upstream Streamlit RAG page.
 
+import json
 import uuid
 from typing import Iterable, List, Optional
 
@@ -63,26 +64,57 @@ def _dedupe_chunks_by_document(chunks: List[dict]) -> List[dict]:
 
 
 def _extract_vector_db_id(item) -> str:
+    """
+    Extract the human-readable vector DB name (not the UUID).
+    
+    LlamaStack /v1/vector_stores returns:
+      {
+        "id": "vs_0e19961e-6541-49d8-bb99-1ea00ee7a4d2",  # UUID (internal use)
+        "name": "red_hat_docs",                            # Human-readable name
+        "vector_db_id": "red_hat_docs"                     # Alias for name
+      }
+    
+    We want to display "red_hat_docs", not "vs_0e19961e...".
+    """
     if item is None:
         return ""
-    identifier = getattr(item, "identifier", None)
-    if identifier:
-        return identifier
+    
+    # Try name first (this is the human-readable identifier)
+    name = getattr(item, "name", None)
+    if name:
+        return name
+    
+    # Try vector_db_id (alias for name in some responses)
+    vector_db_id = getattr(item, "vector_db_id", None)
+    if vector_db_id:
+        return vector_db_id
+    
+    # Dict handling
     if isinstance(item, dict):
-        identifier = item.get("identifier") or item.get("id")
-        if identifier:
-            return identifier
+        # Check for name or vector_db_id first
+        name = item.get("name") or item.get("vector_db_id")
+        if name:
+            return name
+        
+        # Check metadata
         metadata = item.get("metadata") or {}
         if isinstance(metadata, dict):
-            return metadata.get("provider_vector_db_id") or metadata.get("vector_db_id") or ""
-        return ""
-    item_id = getattr(item, "id", None)
-    if item_id:
-        return item_id
+            metadata_name = metadata.get("vector_db_id") or metadata.get("provider_vector_db_id")
+            if metadata_name:
+                return metadata_name
+        
+        # Last resort: use identifier or id (UUID fallback)
+        return item.get("identifier") or item.get("id") or ""
+    
+    # Object handling - check metadata
     metadata = getattr(item, "metadata", None) or {}
     if isinstance(metadata, dict):
-        return metadata.get("provider_vector_db_id") or metadata.get("vector_db_id") or ""
-    return ""
+        metadata_name = metadata.get("vector_db_id") or metadata.get("provider_vector_db_id")
+        if metadata_name:
+            return metadata_name
+    
+    # Last resort: fallback to UUID
+    return getattr(item, "identifier", None) or getattr(item, "id", None) or ""
 
 
 def _list_shield_ids() -> List[str]:
@@ -353,6 +385,41 @@ def rag_chat_page():
             disabled=should_disable_input(),
         )
 
+        max_tokens = st.slider(
+            "Max tokens",
+            min_value=16,
+            max_value=4096,
+            value=768,
+            step=16,
+            help="Maximum number of tokens the assistant may generate per response.",
+            on_change=reset_agent_and_chat,
+            disabled=should_disable_input(),
+        )
+
+        st.subheader("Agent Tools", divider=True)
+        # NOTE: database-mcp and slack-mcp are disabled (no SSE endpoint implementation)
+        # enable_database_tool = st.checkbox(
+        #     "Enable Database MCP (equipment data lookup)",
+        #     value=True,
+        #     help="Allow the agent to query ACME equipment metadata/service history via the PostgreSQL-backed MCP server.",
+        #     on_change=reset_agent_and_chat,
+        #     disabled=should_disable_input(),
+        # )
+        enable_openshift_tool = st.checkbox(
+            "Enable OpenShift MCP (pods, logs, events)",
+            value=True,
+            help="Allow the agent to issue OpenShift MCP tool calls (list pods, get logs, list projects/events).",
+            on_change=reset_agent_and_chat,
+            disabled=should_disable_input(),
+        )
+        # enable_slack_tool = st.checkbox(
+        #     "Enable Slack MCP (post updates)",
+        #     value=False,
+        #     help="Allow the agent to post short updates via the Slack MCP server.",
+        #     on_change=reset_agent_and_chat,
+        #     disabled=should_disable_input(),
+        # )
+
         # Add clear chat button to sidebar
         if st.button("Clear Chat", use_container_width=True):
             reset_agent_and_chat()
@@ -378,27 +445,50 @@ def rag_chat_page():
     else:
         strategy = {"type": "greedy"}
 
+    agent_cache_key = json.dumps(
+        {
+            "model": selected_model,
+            "system_prompt": system_prompt,
+            "strategy": strategy,
+            "vector_dbs": list(selected_vector_dbs),
+            "enable_openshift_tool": enable_openshift_tool,
+            "max_tokens": max_tokens,
+        },
+        sort_keys=True,
+    )
+
     @st.cache_resource
-    def create_agent():
+    def create_agent(_cache_key: str):
+        agent_tools = [
+            dict(
+                name="builtin::rag/knowledge_search",
+                args={
+                    "vector_db_ids": list(selected_vector_dbs),
+                },
+            )
+        ]
+        if enable_openshift_tool:
+            agent_tools.append("mcp::openshift")
+
+        # Llama Stack auto tool-choice is disabled in our cluster. Force the agent to use tools
+        # whenever they are configured so we don't hit the server-side 400 requiring CLI flags.
+        tool_config = {"tool_choice": "required"} if agent_tools else {"tool_choice": "none"}
+
         return Agent(
             llama_stack_api.client,
             model=selected_model,
             instructions=system_prompt,
             sampling_params={
                 "strategy": strategy,
+                "max_tokens": max_tokens,
             },
-            tools=[
-                dict(
-                    name="builtin::rag/knowledge_search",
-                    args={
-                        "vector_db_ids": list(selected_vector_dbs),
-                    },
-                )
-            ],
+            tools=agent_tools,
+            tool_config=tool_config,
         )
 
+    agent = create_agent(agent_cache_key)
+
     if rag_mode == "Agent-based":
-        agent = create_agent()
         if "agent_session_id" not in st.session_state:
             st.session_state["agent_session_id"] = agent.create_session(session_name=f"rag_demo_{uuid.uuid4()}")
 
@@ -427,26 +517,38 @@ def rag_chat_page():
 
         st.session_state.messages.append({"role": "user", "content": prompt})
 
-        response = agent.create_turn(
+        # WORKAROUND: Agent.create_turn() is hard-coded to use tool_choice: "auto"
+        # which causes vLLM 400 errors. Call the underlying agents API directly instead.
+        turn_tool_config = {"tool_choice": "required"} if agent.agent_config.get("toolgroups") else {"tool_choice": "none"}
+        
+        response = llama_stack_api.client.agents.turn.create(
+            agent_id=agent.agent_id,
+            session_id=session_id,
             messages=[
                 {
                     "role": "user",
                     "content": prompt,
                 }
             ],
-            session_id=session_id,
+            tool_config=turn_tool_config,
+            stream=True,
         )
 
         with st.chat_message("assistant"):
             retrieval_message_placeholder = st.empty()
             message_placeholder = st.empty()
             full_response = ""
-            retrieval_response = ""
+            tool_event_outputs: list[str] = []
             for log in AgentEventLogger().log(response):
                 log.print()
                 if log.role == "tool_execution":
-                    retrieval_response += log.content.replace("====", "").strip()
-                    retrieval_message_placeholder.info(retrieval_response)
+                    metadata = getattr(log, "metadata", {}) or {}
+                    tool_name = getattr(log, "tool_name", None) or metadata.get("tool_name")
+                    tool_output = log.content.replace("====", "").strip()
+                    if tool_name:
+                        tool_output = f"**{tool_name}**\n{tool_output}"
+                    tool_event_outputs.append(tool_output)
+                    retrieval_message_placeholder.info("\n\n".join(tool_event_outputs))
                 else:
                     full_response += log.content
                     message_placeholder.markdown(full_response + "▌")
@@ -567,6 +669,7 @@ def rag_chat_page():
                 model_id=selected_model,
                 sampling_params={
                     "strategy": strategy,
+                    "max_tokens": max_tokens,
                 },
                 stream=True,
             )
