@@ -8,6 +8,7 @@ metadata:
     app: llama-stack
     component: rag
 spec:
+  storageClassName: gp3-csi
   accessModes:
     - ReadWriteOnce
   resources:

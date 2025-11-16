@@ -55,16 +55,14 @@ def insert_via_llamastack(
     # Reference: https://llama-stack.readthedocs.io/en/v0.2.11/providers/vector_io/milvus.html
     # Reference: https://milvus.io/docs/llama_stack_with_milvus.md
     #
-    # Milvus schema: Int64 PK (auto_id=true), vector, content (VarChar), metadata (JSON)
-    # Provider generates PK and vector; we supply content + metadata + stored_chunk_id.
+    # Milvus schema (v0.2.x): Int64 PK (auto_id=true), vector, chunk_content (JSON)
+    # Provider auto-generates PK (chunk_id) and vector; we supply content + metadata.
     #
-    # Chunk structure (LlamaStack Chunk model):
-    #   - content: string (chunk text) -> mapped to Milvus 'content' field
-    #   - metadata: dict -> provider serializes for Milvus 'metadata' field
-    #   - stored_chunk_id: string (required) -> unique identifier for retrieval
+    # Chunk structure (LlamaStack v0.2.x Chunk model):
+    #   - content: string (chunk text) -> provider stores in Milvus
+    #   - metadata: dict -> provider serializes to JSON for Milvus
     #
-    # CRITICAL: stored_chunk_id must be a STRING. LlamaStack Pydantic model validation
-    # will fail on retrieval if this is an int or missing.
+    # NOTE: v0.2.x provider manages chunk IDs internally. Do NOT send stored_chunk_id.
     llamastack_chunks = []
     skipped_chunks = 0
     min_len = None
@@ -100,13 +98,10 @@ def insert_via_llamastack(
         min_len = text_len if min_len is None else min(min_len, text_len)
         max_len = text_len if max_len is None else max(max_len, text_len)
 
-        # Generate unique chunk ID (LlamaStack expects stored_chunk_id as string)
-        chunk_id_str = f"{source_name}_chunk_{i}"
-
+        # v0.2.x: Provider auto-generates chunk IDs (no stored_chunk_id needed)
         llamastack_chunks.append({
             "content": content_text,
-            "metadata": metadata_dict,  # Must be dict - LlamaStack API requires it
-            "stored_chunk_id": chunk_id_str  # Required for retrieval (must be string)
+            "metadata": metadata_dict  # Must be dict - LlamaStack API requires it
         })
 
     if skipped_chunks:

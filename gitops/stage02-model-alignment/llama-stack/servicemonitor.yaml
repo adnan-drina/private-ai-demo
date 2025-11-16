@@ -14,12 +14,12 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app.kubernetes.io/name: llama-stack
+      app.kubernetes.io/name: otel-collector-collector
+      app.kubernetes.io/part-of: opentelemetry
   endpoints:
-  - port: http
+  - port: prometheus
     interval: 30s
     path: /metrics
     scheme: http
-    # Optional: Add scrape timeout
     scrapeTimeout: 10s
 

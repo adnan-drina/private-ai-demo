@@ -1,14 +1,15 @@
 # PIPELINE DEFINITION
-# Name: data-processing-and-insertion-single
-# Description: RAG Ingestion Pipeline v1.0.2 - Single document processing with Docling and LlamaStack Vector IO.
+# Name: data-processing-and-insertion
+# Description: RAG Ingestion Pipeline v1.0.2 - Refactored with modular components. Optimized server-side embeddings via LlamaStack Vector IO.
 # Inputs:
+#    cache_buster: str [Default: '']
 #    chunk_size: int [Default: 512.0]
 #    docling_url: str [Default: 'http://docling-service.private-ai-demo.svc:5001']
-#    input_uri: str [Default: 's3://llama-files/sample/rag-mini.pdf']
 #    llamastack_url: str [Default: 'http://llama-stack-service.private-ai-demo.svc:8321']
-#    min_chunks: int [Default: 10.0]
 #    minio_creds_b64: str [Default: '']
 #    minio_endpoint: str [Default: 'minio.model-storage.svc:9000']
+#    num_splits: int [Default: 2.0]
+#    s3_prefix: str [Default: 's3://llama-files/sample/']
 #    s3_secret_mount_path: str [Default: '/mnt/secrets']
 #    vector_db_id: str [Default: 'acme_corporate']
 components:
@@ -51,6 +52,156 @@ components:
           artifactType:
             schemaTitle: system.Dataset
             schemaVersion: 0.0.1
+  comp-for-loop-1:
+    dag:
+      tasks:
+        for-loop-2:
+          componentRef:
+            name: comp-for-loop-2
+          inputs:
+            parameters:
+              pipelinechannel--chunk_size:
+                componentInputParameter: pipelinechannel--chunk_size
+              pipelinechannel--docling_url:
+                componentInputParameter: pipelinechannel--docling_url
+              pipelinechannel--llamastack_url:
+                componentInputParameter: pipelinechannel--llamastack_url
+              pipelinechannel--minio_creds_b64:
+                componentInputParameter: pipelinechannel--minio_creds_b64
+              pipelinechannel--minio_endpoint:
+                componentInputParameter: pipelinechannel--minio_endpoint
+              pipelinechannel--s3_secret_mount_path:
+                componentInputParameter: pipelinechannel--s3_secret_mount_path
+              pipelinechannel--split-pdf-list-Output-loop-item:
+                componentInputParameter: pipelinechannel--split-pdf-list-Output-loop-item
+              pipelinechannel--vector_db_id:
+                componentInputParameter: pipelinechannel--vector_db_id
+          iteratorPolicy:
+            parallelismLimit: 1
+          parameterIterator:
+            itemInput: pipelinechannel--split-pdf-list-Output-loop-item-loop-item
+            items:
+              inputParameter: pipelinechannel--split-pdf-list-Output-loop-item
+          taskInfo:
+            name: process-each-pdf
+    inputDefinitions:
+      parameters:
+        pipelinechannel--chunk_size:
+          parameterType: NUMBER_INTEGER
+        pipelinechannel--docling_url:
+          parameterType: STRING
+        pipelinechannel--llamastack_url:
+          parameterType: STRING
+        pipelinechannel--minio_creds_b64:
+          parameterType: STRING
+        pipelinechannel--minio_endpoint:
+          parameterType: STRING
+        pipelinechannel--s3_secret_mount_path:
+          parameterType: STRING
+        pipelinechannel--split-pdf-list-Output:
+          parameterType: LIST
+        pipelinechannel--split-pdf-list-Output-loop-item:
+          parameterType: LIST
+        pipelinechannel--vector_db_id:
+          parameterType: STRING
+  comp-for-loop-2:
+    dag:
+      tasks:
+        chunk-markdown:
+          cachingOptions: {}
+          componentRef:
+            name: comp-chunk-markdown
+          dependentTasks:
+          - process-with-docling
+          inputs:
+            artifacts:
+              markdown_file:
+                taskOutputArtifact:
+                  outputArtifactKey: output_markdown
+                  producerTask: process-with-docling
+            parameters:
+              chunk_size:
+                componentInputParameter: pipelinechannel--chunk_size
+          taskInfo:
+            name: chunk-markdown
+        download-from-s3:
+          cachingOptions: {}
+          componentRef:
+            name: comp-download-from-s3
+          inputs:
+            parameters:
+              input_uri:
+                componentInputParameter: pipelinechannel--split-pdf-list-Output-loop-item-loop-item
+              minio_creds_b64:
+                componentInputParameter: pipelinechannel--minio_creds_b64
+              minio_endpoint:
+                componentInputParameter: pipelinechannel--minio_endpoint
+              s3_secret_mount_path:
+                componentInputParameter: pipelinechannel--s3_secret_mount_path
+          taskInfo:
+            name: download-from-s3
+        insert-via-llamastack:
+          cachingOptions: {}
+          componentRef:
+            name: comp-insert-via-llamastack
+          dependentTasks:
+          - chunk-markdown
+          inputs:
+            artifacts:
+              chunks_file:
+                taskOutputArtifact:
+                  outputArtifactKey: output_chunks
+                  producerTask: chunk-markdown
+            parameters:
+              input_uri:
+                componentInputParameter: pipelinechannel--split-pdf-list-Output-loop-item-loop-item
+              llamastack_url:
+                componentInputParameter: pipelinechannel--llamastack_url
+              vector_db_id:
+                componentInputParameter: pipelinechannel--vector_db_id
+          retryPolicy:
+            backoffDuration: 0s
+            backoffFactor: 2.0
+            backoffMaxDuration: 3600s
+          taskInfo:
+            name: insert-via-llamastack
+        process-with-docling:
+          cachingOptions: {}
+          componentRef:
+            name: comp-process-with-docling
+          dependentTasks:
+          - download-from-s3
+          inputs:
+            artifacts:
+              input_file:
+                taskOutputArtifact:
+                  outputArtifactKey: output_file
+                  producerTask: download-from-s3
+            parameters:
+              docling_url:
+                componentInputParameter: pipelinechannel--docling_url
+          taskInfo:
+            name: process-with-docling
+    inputDefinitions:
+      parameters:
+        pipelinechannel--chunk_size:
+          parameterType: NUMBER_INTEGER
+        pipelinechannel--docling_url:
+          parameterType: STRING
+        pipelinechannel--llamastack_url:
+          parameterType: STRING
+        pipelinechannel--minio_creds_b64:
+          parameterType: STRING
+        pipelinechannel--minio_endpoint:
+          parameterType: STRING
+        pipelinechannel--s3_secret_mount_path:
+          parameterType: STRING
+        pipelinechannel--split-pdf-list-Output-loop-item:
+          parameterType: LIST
+        pipelinechannel--split-pdf-list-Output-loop-item-loop-item:
+          parameterType: STRING
+        pipelinechannel--vector_db_id:
+          parameterType: STRING
   comp-insert-via-llamastack:
     executorLabel: exec-insert-via-llamastack
     inputDefinitions:
@@ -70,6 +221,32 @@ components:
       parameters:
         Output:
           parameterType: STRUCT
+  comp-list-pdfs-in-s3:
+    executorLabel: exec-list-pdfs-in-s3
+    inputDefinitions:
+      parameters:
+        minio_creds_b64:
+          defaultValue: ''
+          description: Optional fallback credentials in base64 ("access:secret")
+          isOptional: true
+          parameterType: STRING
+        minio_endpoint:
+          defaultValue: ''
+          description: Optional fallback endpoint (used if secret not mounted)
+          isOptional: true
+          parameterType: STRING
+        s3_prefix:
+          description: S3 path prefix (e.g. "s3://llama-files/scenario2-acme/")
+          parameterType: STRING
+        s3_secret_mount_path:
+          defaultValue: /mnt/secrets
+          description: Filesystem path where S3 credentials are mounted
+          isOptional: true
+          parameterType: STRING
+    outputDefinitions:
+      parameters:
+        Output:
+          parameterType: LIST
   comp-process-with-docling:
     executorLabel: exec-process-with-docling
     inputDefinitions:
@@ -87,22 +264,23 @@ components:
           artifactType:
             schemaTitle: system.Dataset
             schemaVersion: 0.0.1
-  comp-verify-ingestion:
-    executorLabel: exec-verify-ingestion
+  comp-split-pdf-list:
+    executorLabel: exec-split-pdf-list
     inputDefinitions:
       parameters:
-        insert_result:
-          parameterType: STRUCT
-        llamastack_url:
-          parameterType: STRING
-        min_chunks:
+        num_splits:
+          defaultValue: 2.0
+          description: Desired number of splits (defaults to 2).
+          isOptional: true
           parameterType: NUMBER_INTEGER
-        vector_db_id:
-          parameterType: STRING
+        pdf_uris:
+          description: List of full S3 URIs to process.
+          parameterType: LIST
     outputDefinitions:
       parameters:
         Output:
-          parameterType: STRUCT
+          parameterType: LIST
+defaultPipelineRoot: s3://kfp-artifacts/
 deploymentSpec:
   executors:
     exec-chunk-markdown:
@@ -321,38 +499,34 @@ deploymentSpec:
           s3://\", \"\").replace(\"/\", \"-\")\n\n    # Format chunks for LlamaStack\
           \ API\n    # Reference: https://llama-stack.readthedocs.io/en/v0.2.11/providers/vector_io/milvus.html\n\
           \    # Reference: https://milvus.io/docs/llama_stack_with_milvus.md\n  \
-          \  #\n    # Milvus schema: Int64 PK (auto_id=true), vector, content (VarChar),\
-          \ metadata (JSON)\n    # Provider generates PK and vector; we supply content\
-          \ + metadata + stored_chunk_id.\n    #\n    # Chunk structure (LlamaStack\
-          \ Chunk model):\n    #   - content: string (chunk text) -> mapped to Milvus\
-          \ 'content' field\n    #   - metadata: dict -> provider serializes for Milvus\
-          \ 'metadata' field\n    #   - stored_chunk_id: string (required) -> unique\
-          \ identifier for retrieval\n    #\n    # CRITICAL: stored_chunk_id must\
-          \ be a STRING. LlamaStack Pydantic model validation\n    # will fail on\
-          \ retrieval if this is an int or missing.\n    llamastack_chunks = []\n\
-          \    skipped_chunks = 0\n    min_len = None\n    max_len = None\n    for\
-          \ i, item in enumerate(chunks_data):\n        content_text = item.get(\"\
-          text\") or item.get(\"content\") or \"\"\n        if not isinstance(content_text,\
-          \ str):\n            content_text = str(content_text)\n        stripped\
-          \ = content_text.strip()\n        if not stripped:\n            skipped_chunks\
-          \ += 1\n            print(f\"[SKIP] Chunk {i} empty after stripping; raw\
-          \ length={len(content_text)}\")\n            continue\n        content_text\
-          \ = stripped\n\n        # Calculate token count (rough estimation: ~4 chars\
-          \ per token)\n        token_count = len(content_text) // 4\n\n        metadata_dict\
-          \ = {\n            \"document_id\": source_name,\n            \"chunk_index\"\
-          : int(i),\n            \"chunk_id\": int(item.get(\"chunk_id\", i)),\n \
-          \           \"source_uri\": input_uri,\n            \"token_count\": int(token_count),\n\
-          \            \"character_count\": len(content_text),\n        }\n\n    \
-          \    extra_metadata = item.get(\"metadata\")\n        if isinstance(extra_metadata,\
-          \ dict):\n            metadata_dict.update(extra_metadata)\n\n        text_len\
-          \ = len(content_text)\n        min_len = text_len if min_len is None else\
+          \  #\n    # Milvus schema (v0.2.x): Int64 PK (auto_id=true), vector, chunk_content\
+          \ (JSON)\n    # Provider auto-generates PK (chunk_id) and vector; we supply\
+          \ content + metadata.\n    #\n    # Chunk structure (LlamaStack v0.2.x Chunk\
+          \ model):\n    #   - content: string (chunk text) -> provider stores in\
+          \ Milvus\n    #   - metadata: dict -> provider serializes to JSON for Milvus\n\
+          \    #\n    # NOTE: v0.2.x provider manages chunk IDs internally. Do NOT\
+          \ send stored_chunk_id.\n    llamastack_chunks = []\n    skipped_chunks\
+          \ = 0\n    min_len = None\n    max_len = None\n    for i, item in enumerate(chunks_data):\n\
+          \        content_text = item.get(\"text\") or item.get(\"content\") or \"\
+          \"\n        if not isinstance(content_text, str):\n            content_text\
+          \ = str(content_text)\n        stripped = content_text.strip()\n       \
+          \ if not stripped:\n            skipped_chunks += 1\n            print(f\"\
+          [SKIP] Chunk {i} empty after stripping; raw length={len(content_text)}\"\
+          )\n            continue\n        content_text = stripped\n\n        # Calculate\
+          \ token count (rough estimation: ~4 chars per token)\n        token_count\
+          \ = len(content_text) // 4\n\n        metadata_dict = {\n            \"\
+          document_id\": source_name,\n            \"chunk_index\": int(i),\n    \
+          \        \"chunk_id\": int(item.get(\"chunk_id\", i)),\n            \"source_uri\"\
+          : input_uri,\n            \"token_count\": int(token_count),\n         \
+          \   \"character_count\": len(content_text),\n        }\n\n        extra_metadata\
+          \ = item.get(\"metadata\")\n        if isinstance(extra_metadata, dict):\n\
+          \            metadata_dict.update(extra_metadata)\n\n        text_len =\
+          \ len(content_text)\n        min_len = text_len if min_len is None else\
           \ min(min_len, text_len)\n        max_len = text_len if max_len is None\
-          \ else max(max_len, text_len)\n\n        # Generate unique chunk ID (LlamaStack\
-          \ expects stored_chunk_id as string)\n        chunk_id_str = f\"{source_name}_chunk_{i}\"\
-          \n\n        llamastack_chunks.append({\n            \"content\": content_text,\n\
-          \            \"metadata\": metadata_dict,  # Must be dict - LlamaStack API\
-          \ requires it\n            \"stored_chunk_id\": chunk_id_str  # Required\
-          \ for retrieval (must be string)\n        })\n\n    if skipped_chunks:\n\
+          \ else max(max_len, text_len)\n\n        # v0.2.x: Provider auto-generates\
+          \ chunk IDs (no stored_chunk_id needed)\n        llamastack_chunks.append({\n\
+          \            \"content\": content_text,\n            \"metadata\": metadata_dict\
+          \  # Must be dict - LlamaStack API requires it\n        })\n\n    if skipped_chunks:\n\
           \        print(f\"Skipped {skipped_chunks} chunk(s) with empty content.\"\
           )\n    if llamastack_chunks:\n        print(f\"Prepared {len(llamastack_chunks)}\
           \ chunk(s); content length range {min_len}-{max_len}.\")\n\n    # Insert\
@@ -413,6 +587,88 @@ deploymentSpec:
           \ {\n        \"vector_db_id\": vector_db_id,\n        \"num_chunks\": total_inserted,\n\
           \        \"source\": input_uri,\n        \"status\": \"success\"\n    }\n\
           \n"
+        image: registry.access.redhat.com/ubi9/python-311:1-77
+        resources:
+          cpuLimit: 0.5
+          cpuRequest: 0.25
+          memoryLimit: 0.536870912
+          memoryRequest: 0.268435456
+          resourceCpuLimit: 500m
+          resourceCpuRequest: 250m
+          resourceMemoryLimit: 512Mi
+          resourceMemoryRequest: 256Mi
+    exec-list-pdfs-in-s3:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - list_pdfs_in_s3
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'boto3'  && \
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.14.6'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef list_pdfs_in_s3(\n    s3_prefix: str,\n    s3_secret_mount_path:\
+          \ str = \"/mnt/secrets\",\n    minio_endpoint: str = \"\",\n    minio_creds_b64:\
+          \ str = \"\"\n) -> List[str]:\n    \"\"\"\n    Discover all PDF files in\
+          \ an S3 prefix\n\n    Parameters:\n        s3_prefix: S3 path prefix (e.g.\
+          \ \"s3://llama-files/scenario2-acme/\")\n        s3_secret_mount_path: Filesystem\
+          \ path where S3 credentials are mounted\n        minio_endpoint: Optional\
+          \ fallback endpoint (used if secret not mounted)\n        minio_creds_b64:\
+          \ Optional fallback credentials in base64 (\"access:secret\")\n\n    Returns:\n\
+          \        List of full S3 URIs for all PDFs found (e.g. [\"s3://bucket/file1.pdf\"\
+          , ...])\n    \"\"\"\n    import os\n    from pathlib import Path\n\n   \
+          \ import boto3\n    from botocore.client import Config\n\n    print(f\"\
+          Discovering PDFs in: {s3_prefix}\")\n\n    endpoint_url = \"\"\n    access_key\
+          \ = \"\"\n    secret_key = \"\"\n\n    def _read_secret(key: str) -> str:\n\
+          \        file_path = Path(s3_secret_mount_path) / key\n        if file_path.is_file():\n\
+          \            return file_path.read_text().strip()\n        raise FileNotFoundError\n\
+          \n    try:\n        endpoint_url = _read_secret(\"S3_ENDPOINT_URL\")\n \
+          \       access_key = _read_secret(\"S3_ACCESS_KEY\")\n        secret_key\
+          \ = _read_secret(\"S3_SECRET_KEY\")\n        print(f\"[OK] Loaded S3 credentials\
+          \ from secret at {s3_secret_mount_path}\")\n    except FileNotFoundError:\n\
+          \        if not minio_endpoint or not minio_creds_b64:\n            raise\
+          \ ValueError(\n                \"S3 secret files were not found and fallback\
+          \ credentials were not provided. \"\n                \"Provide `minio_endpoint`\
+          \ and `minio_creds_b64`, or mount the secret.\"\n            )\n       \
+          \ import base64\n\n        creds_decoded = base64.b64decode(minio_creds_b64).decode(\"\
+          utf-8\").strip()\n        access_key, secret_key = [c.strip() for c in creds_decoded.split(\"\
+          :\", 1)]\n        endpoint_url = f\"http://{minio_endpoint}\" if not minio_endpoint.startswith(\"\
+          http\") else minio_endpoint\n        print(\"[WARN] Falling back to inline\
+          \ credentials (base64 parameter).\")\n\n    # Parse S3 prefix\n    if s3_prefix.startswith(\"\
+          s3://\"):\n        s3_prefix = s3_prefix[5:]\n\n    # Remove trailing slash\n\
+          \    s3_prefix = s3_prefix.rstrip('/')\n\n    parts = s3_prefix.split(\"\
+          /\", 1)\n    bucket = parts[0]\n    prefix = parts[1] + \"/\" if len(parts)\
+          \ > 1 else \"\"\n\n    print(f\"Bucket: {bucket}, Prefix: {prefix}\")\n\n\
+          \    # Configure S3 client\n    s3_client = boto3.client(\n        \"s3\"\
+          ,\n        endpoint_url=endpoint_url,\n        aws_access_key_id=access_key,\n\
+          \        aws_secret_access_key=secret_key,\n        config=Config(signature_version=\"\
+          s3v4\", s3={\"addressing_style\": \"path\"}),\n        region_name=\"us-east-1\"\
+          ,\n    )\n\n    # List all objects with prefix\n    response = s3_client.list_objects_v2(Bucket=bucket,\
+          \ Prefix=prefix)\n\n    if 'Contents' not in response:\n        print(f\"\
+          No files found in {s3_prefix}\")\n        return []\n\n    # Filter for\
+          \ PDFs only\n    pdf_keys = [\n        obj['Key'] for obj in response['Contents']\n\
+          \        if obj['Key'].lower().endswith('.pdf')\n    ]\n\n    # Build full\
+          \ S3 URIs\n    pdf_uris = [f\"s3://{bucket}/{key}\" for key in pdf_keys]\n\
+          \n    print(f\"[OK] Found {len(pdf_uris)} PDF files:\")\n    for uri in\
+          \ pdf_uris:\n        print(f\"  - {uri.split('/')[-1]}\")\n\n    return\
+          \ pdf_uris\n\n"
         image: registry.access.redhat.com/ubi9/python-311:1-77
         resources:
           cpuLimit: 0.5
@@ -524,20 +780,19 @@ deploymentSpec:
           resourceCpuRequest: 500m
           resourceMemoryLimit: 1Gi
           resourceMemoryRequest: 512Mi
-    exec-verify-ingestion:
+    exec-split-pdf-list:
       container:
         args:
         - --executor_input
         - '{{$}}'
         - --function_to_execute
-        - verify_ingestion
+        - split_pdf_list
         command:
         - sh
         - -c
         - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
           \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
-          \ python3 -m pip install --quiet --no-warn-script-location 'requests'  &&\
-          \  python3 -m pip install --quiet --no-warn-script-location 'kfp==2.14.6'\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.14.6'\
           \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
           $0\" \"$@\"\n"
         - sh
@@ -551,50 +806,19 @@ deploymentSpec:
 
           '
         - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
-          \ *\n\ndef verify_ingestion(\n    llamastack_url: str,\n    vector_db_id:\
-          \ str,\n    min_chunks: int,\n    insert_result: dict\n) -> dict:\n    \"\
-          \"\"\n    Verify ingestion by querying LlamaStack Vector IO API\n\n    Tests\
-          \ that chunks can be retrieved via /v1/vector-io/query\n    \"\"\"\n   \
-          \ import requests\n    import json\n\n    print(f\"Verifying ingestion in\
-          \ vector DB: {vector_db_id}\")\n    print(f\"Insert result: {insert_result}\"\
-          )\n\n    # Use a meaningful query derived from the document source\n   \
-          \ # Better than generic \"test document content\" - provides real signal\n\
-          \    source_uri = insert_result.get(\"source\", \"\")\n    if \"rag-mini\"\
-          \ in source_uri.lower():\n        test_query = \"Red Hat OpenShift AI platform\"\
-          \n    elif \"acme\" in source_uri.lower():\n        test_query = \"corporate\
-          \ policy\"\n    elif \"ai\" in source_uri.lower() and \"act\" in source_uri.lower():\n\
-          \        test_query = \"artificial intelligence regulation\"\n    else:\n\
-          \        # Generic fallback\n        test_query = \"document information\"\
-          \n\n    print(f\"Testing retrieval with query: '{test_query}'\")\n\n   \
-          \ response = requests.post(\n        f\"{llamastack_url}/v1/vector-io/query\"\
-          ,\n        json={\n            \"vector_db_id\": vector_db_id,\n       \
-          \     \"query\": test_query,\n            \"params\": {\"top_k\": 5}\n \
-          \       },\n        headers={\"Content-Type\": \"application/json\"},\n\
-          \        timeout=60\n    )\n\n    if response.status_code != 200:\n    \
-          \    print(f\"ERROR: Query failed with status {response.status_code}\")\n\
-          \        print(f\"Response: {response.text}\")\n        return {\n     \
-          \       \"success\": False,\n            \"error\": f\"Query failed: {response.status_code}\"\
-          ,\n            \"vector_db_id\": vector_db_id\n        }\n\n    result =\
-          \ response.json()\n    chunks_returned = len(result.get(\"chunks\", []))\n\
-          \n    print(f\"Query returned {chunks_returned} chunks\")\n\n    # Verify\
-          \ we got results\n    num_chunks = insert_result.get(\"num_chunks\", 0)\n\
-          \    success = chunks_returned > 0 and num_chunks >= min_chunks\n\n    print(f\"\
-          Ingestion verification:\")\n    print(f\"  Chunks inserted: {num_chunks}\"\
-          )\n    print(f\"  Chunks retrieved: {chunks_returned}\")\n    print(f\"\
-          \  Minimum required: {min_chunks}\")\n\n    if success:\n        print(f\"\
-          [OK] Verification PASSED\")\n\n        # Print top results with scores (better\
-          \ signal than single chunk)\n        if result.get(\"chunks\"):\n      \
-          \      print(f\"Top {min(3, chunks_returned)} results with scores:\")\n\
-          \            for idx, chunk in enumerate(result[\"chunks\"][:3]):\n    \
-          \            content = chunk.get(\"content\", chunk.get(\"text\", str(chunk)))\n\
-          \                score = chunk.get(\"score\", \"N/A\")\n               \
-          \ doc_id = chunk.get(\"metadata\", {}).get(\"document_id\", \"unknown\"\
-          )\n\n                print(f\"  {idx + 1}. Score={score}, doc_id={doc_id}\"\
-          )\n                print(f\"     Content: {content[:150]}...\")\n    else:\n\
-          \        print(f\"[FAIL] Verification FAILED\")\n\n    return {\n      \
-          \  \"success\": success,\n        \"num_chunks_inserted\": num_chunks,\n\
-          \        \"num_chunks_retrieved\": chunks_returned,\n        \"min_chunks\"\
-          : min_chunks,\n        \"vector_db_id\": vector_db_id\n    }\n\n"
+          \ *\n\ndef split_pdf_list(pdf_uris: List[str], num_splits: int = 2) -> List[List[str]]:\n\
+          \    \"\"\"\n    Split a list of PDF URIs into roughly even groups.\n\n\
+          \    Args:\n        pdf_uris: List of full S3 URIs to process.\n       \
+          \ num_splits: Desired number of splits (defaults to 2).\n\n    Returns:\n\
+          \        A list of lists, each containing a subset of the original URIs.\n\
+          \        Empty groups are filtered out.\n    \"\"\"\n    if num_splits <\
+          \ 1:\n        raise ValueError(\"num_splits must be >= 1\")\n\n    # Ensure\
+          \ deterministic ordering and remove duplicates while preserving order\n\
+          \    seen = set()\n    ordered_uris = []\n    for uri in pdf_uris:\n   \
+          \     if uri not in seen:\n            seen.add(uri)\n            ordered_uris.append(uri)\n\
+          \n    if not ordered_uris:\n        return []\n\n    splits = [ordered_uris[i::num_splits]\
+          \ for i in range(num_splits)]\n    return [group for group in splits if\
+          \ group]\n\n"
         image: registry.access.redhat.com/ubi9/python-311:1-77
         resources:
           cpuLimit: 0.5
@@ -606,110 +830,81 @@ deploymentSpec:
           resourceMemoryLimit: 512Mi
           resourceMemoryRequest: 256Mi
 pipelineInfo:
-  description: RAG Ingestion Pipeline v1.0.2 - Single document processing with Docling
-    and LlamaStack Vector IO.
-  name: data-processing-and-insertion-single
+  description: RAG Ingestion Pipeline v1.0.2 - Refactored with modular components.
+    Optimized server-side embeddings via LlamaStack Vector IO.
+  name: data-processing-and-insertion
 root:
   dag:
     tasks:
-      chunk-markdown:
-        cachingOptions: {}
+      for-loop-1:
         componentRef:
-          name: comp-chunk-markdown
+          name: comp-for-loop-1
         dependentTasks:
-        - process-with-docling
+        - split-pdf-list
         inputs:
-          artifacts:
-            markdown_file:
-              taskOutputArtifact:
-                outputArtifactKey: output_markdown
-                producerTask: process-with-docling
           parameters:
-            chunk_size:
+            pipelinechannel--chunk_size:
               componentInputParameter: chunk_size
+            pipelinechannel--docling_url:
+              componentInputParameter: docling_url
+            pipelinechannel--llamastack_url:
+              componentInputParameter: llamastack_url
+            pipelinechannel--minio_creds_b64:
+              componentInputParameter: minio_creds_b64
+            pipelinechannel--minio_endpoint:
+              componentInputParameter: minio_endpoint
+            pipelinechannel--s3_secret_mount_path:
+              componentInputParameter: s3_secret_mount_path
+            pipelinechannel--split-pdf-list-Output:
+              taskOutputParameter:
+                outputParameterKey: Output
+                producerTask: split-pdf-list
+            pipelinechannel--vector_db_id:
+              componentInputParameter: vector_db_id
+        parameterIterator:
+          itemInput: pipelinechannel--split-pdf-list-Output-loop-item
+          items:
+            inputParameter: pipelinechannel--split-pdf-list-Output
         taskInfo:
-          name: chunk-markdown
-      download-from-s3:
+          name: process-pdf-group
+      list-pdfs-in-s3:
         cachingOptions: {}
         componentRef:
-          name: comp-download-from-s3
+          name: comp-list-pdfs-in-s3
         inputs:
           parameters:
-            input_uri:
-              componentInputParameter: input_uri
             minio_creds_b64:
               componentInputParameter: minio_creds_b64
             minio_endpoint:
               componentInputParameter: minio_endpoint
+            s3_prefix:
+              componentInputParameter: s3_prefix
             s3_secret_mount_path:
               componentInputParameter: s3_secret_mount_path
         taskInfo:
-          name: download-from-s3
-      insert-via-llamastack:
+          name: list-pdfs-in-s3
+      split-pdf-list:
         cachingOptions: {}
         componentRef:
-          name: comp-insert-via-llamastack
+          name: comp-split-pdf-list
         dependentTasks:
-        - chunk-markdown
-        inputs:
-          artifacts:
-            chunks_file:
-              taskOutputArtifact:
-                outputArtifactKey: output_chunks
-                producerTask: chunk-markdown
-          parameters:
-            input_uri:
-              componentInputParameter: input_uri
-            llamastack_url:
-              componentInputParameter: llamastack_url
-            vector_db_id:
-              componentInputParameter: vector_db_id
-        retryPolicy:
-          backoffDuration: 0s
-          backoffFactor: 2.0
-          backoffMaxDuration: 3600s
-        taskInfo:
-          name: insert-via-llamastack
-      process-with-docling:
-        cachingOptions: {}
-        componentRef:
-          name: comp-process-with-docling
-        dependentTasks:
-        - download-from-s3
-        inputs:
-          artifacts:
-            input_file:
-              taskOutputArtifact:
-                outputArtifactKey: output_file
-                producerTask: download-from-s3
-          parameters:
-            docling_url:
-              componentInputParameter: docling_url
-        taskInfo:
-          name: process-with-docling
-      verify-ingestion:
-        cachingOptions:
-          enableCache: true
-        componentRef:
-          name: comp-verify-ingestion
-        dependentTasks:
-        - insert-via-llamastack
+        - list-pdfs-in-s3
         inputs:
           parameters:
-            insert_result:
+            num_splits:
+              componentInputParameter: num_splits
+            pdf_uris:
               taskOutputParameter:
                 outputParameterKey: Output
-                producerTask: insert-via-llamastack
-            llamastack_url:
-              componentInputParameter: llamastack_url
-            min_chunks:
-              componentInputParameter: min_chunks
-            vector_db_id:
-              componentInputParameter: vector_db_id
+                producerTask: list-pdfs-in-s3
         taskInfo:
-          name: verify-ingestion
+          name: split-pdf-list
   inputDefinitions:
     parameters:
+      cache_buster:
+        defaultValue: ''
+        isOptional: true
+        parameterType: STRING
       chunk_size:
         defaultValue: 512.0
         isOptional: true
@@ -718,18 +913,10 @@ root:
         defaultValue: http://docling-service.private-ai-demo.svc:5001
         isOptional: true
         parameterType: STRING
-      input_uri:
-        defaultValue: s3://llama-files/sample/rag-mini.pdf
-        isOptional: true
-        parameterType: STRING
       llamastack_url:
         defaultValue: http://llama-stack-service.private-ai-demo.svc:8321
         isOptional: true
         parameterType: STRING
-      min_chunks:
-        defaultValue: 10.0
-        isOptional: true
-        parameterType: NUMBER_INTEGER
       minio_creds_b64:
         defaultValue: ''
         isOptional: true
@@ -738,12 +925,22 @@ root:
         defaultValue: minio.model-storage.svc:9000
         isOptional: true
         parameterType: STRING
+      num_splits:
+        defaultValue: 2.0
+        isOptional: true
+        parameterType: NUMBER_INTEGER
+      s3_prefix:
+        defaultValue: s3://llama-files/sample/
+        description: S3 folder path containing PDFs (e.g. "s3://llama-files/scenario2-acme/")
+        isOptional: true
+        parameterType: STRING
       s3_secret_mount_path:
         defaultValue: /mnt/secrets
         isOptional: true
         parameterType: STRING
       vector_db_id:
         defaultValue: acme_corporate
+        description: Target collection name (all docs go here)
         isOptional: true
         parameterType: STRING
 schemaVersion: 2.1.0

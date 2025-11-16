@@ -31,6 +31,12 @@ spec:
       args:
         - --yaml-config
         - /opt/app-root/run.yaml
+      startupProbe:
+        httpGet:
+          path: /v1/health
+          port: 8321
+        failureThreshold: 30
+        periodSeconds: 10
       
       env:
         # Config and writable homes
