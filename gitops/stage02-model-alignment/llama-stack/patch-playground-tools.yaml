@@ -1,0 +1,25 @@
+---
+# Patch to mount fixed playground-tools.py from ConfigMap
+# Removes init container that was blocking on unregistered acme_corporate collection
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llama-stack-playground
+  namespace: private-ai-demo
+spec:
+  template:
+    spec:
+      # Remove init container (blocks on acme_corporate)
+      initContainers: []
+      containers:
+      - name: playground
+        volumeMounts:
+        - name: playground-tools-fix
+          mountPath: /app/playground-tools.py
+          subPath: playground-tools.py
+          readOnly: true
+      volumes:
+      - name: playground-tools-fix
+        configMap:
+          name: playground-tools-fix
+          defaultMode: 0644

@@ -24,9 +24,12 @@ resources:
   - route.yaml
   - servicemonitor.yaml  # Prometheus metrics collection
   - playground-deployment.yaml  # Streamlit UI for LlamaStack (no default vector_db)
+  - configmap-playground-tools.yaml  # Fixed playground code (ConfigMap mount)
 
 patches:
   - path: patch-llama-stack-recreate.yaml
+  - path: patch-startup-probe.yaml
+  - path: patch-playground-tools.yaml
 
 # Llama Stack Component for RAG
 # Official Red Hat OpenShift AI RAG runtime
