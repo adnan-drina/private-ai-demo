@@ -143,21 +143,20 @@ def tool_chat_page():
 
         st.session_state.messages.append({"role": "user", "content": prompt})
 
-        # WORKAROUND: Agent.create_turn() is hard-coded to use tool_choice: "auto"
-        # which causes vLLM 400 errors. Call the underlying agents API directly instead.
-        # Fix: Check if tools are selected (toolgroup_selection list) instead of agent_config.toolgroups
-        turn_tool_config = {"tool_choice": "required"} if toolgroup_selection else {"tool_choice": "none"}
+        # FIX: Use agent.create_turn() instead of bypassing to raw API
+        # The Agent class properly resolves MCP tool references!
+        # Previously we bypassed Agent and called agents API directly,
+        # which didn't have access to the agent's tools configuration.
         
         # DEBUG: Log what we're sending
-        print(f"[DEBUG] toolgroup_selection: {toolgroup_selection}")
-        print(f"[DEBUG] turn_tool_config: {turn_tool_config}")
-        print(f"[DEBUG] agent.agent_config.toolgroups: {agent.agent_config.get('toolgroups', 'NOT SET')}")
+        import sys
+        print(f"[DEBUG] toolgroup_selection: {toolgroup_selection}", file=sys.stderr)
+        print(f"[DEBUG] agent.agent_id: {agent.agent_id}", file=sys.stderr)
+        print(f"[DEBUG] Using agent.create_turn() with proper tool resolution", file=sys.stderr)
         
-        turn_response = llama_stack_api.client.agents.turn.create(
-            agent_id=agent.agent_id,
-            session_id=session_id,
+        turn_response = agent.create_turn(
             messages=[{"role": "user", "content": prompt}],
-            tool_config=turn_tool_config,
+            session_id=session_id,
             stream=True,
         )
 
