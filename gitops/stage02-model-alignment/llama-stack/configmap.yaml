@@ -202,10 +202,17 @@ data:
       - toolgroup_id: builtin::rag
         provider_id: rag-runtime
       
-      # MCP Servers - TEMPORARILY DISABLED
-      # TODO: Enable after implementing SSE endpoints in MCP servers
-      # Current MCP servers use simple HTTP, but Llama Stack requires SSE
-      # Will be fixed in Phase 3
+      # OpenShift MCP Server - ENABLED (SSE-ready)
+      # Provides cluster troubleshooting tools via kubernetes-mcp-server
+      - toolgroup_id: mcp::openshift
+        provider_id: model-context-protocol
+        mcp_endpoint:
+          uri: "http://openshift-mcp.private-ai-demo.svc.cluster.local:8000/sse"
+      
+      # Database MCP and Slack MCP - DISABLED
+      # TODO: Add SSE support to enable these MCP servers
+      # Current implementation uses HTTP POST /execute (not SSE)
+      # LlamaStack model-context-protocol provider requires SSE endpoints
       
       # - toolgroup_id: mcp::database
       #   provider_id: model-context-protocol
