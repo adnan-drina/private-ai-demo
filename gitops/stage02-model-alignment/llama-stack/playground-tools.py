@@ -8,6 +8,8 @@ import uuid
 
 import streamlit as st
 from llama_stack_client import Agent
+from llama_stack_client.lib.agents.react.agent import ReActAgent
+from llama_stack_client.lib.agents.event_logger import EventLogger
 
 from llama_stack.distribution.ui.modules.api import llama_stack_api
 
@@ -110,17 +112,19 @@ def tool_chat_page():
             toolgroup_selection[i] = tool_dict
         # MCP tools (mcp::*) MUST stay as strings!
 
-    # Note: Removed @st.cache_resource decorator to fix tool selection bug
-    # The aggressive caching was preventing agent from being recreated when tools changed
-    # Impact: Slightly slower but ensures agent always has correct tools
+    # CRITICAL: Use ReActAgent (not base Agent) to match Level 6 demo
+    # ReActAgent implements a Reasoning + Acting loop that FORCES tool usage
+    # Base Agent uses tool_choice="auto" which lets LLM hallucinate
+    # Reference: https://github.com/opendatahub-io/llama-stack-demos/blob/main/demos/rag_agentic/notebooks/Level6_agents_MCP_and_RAG.ipynb
     def create_agent(_model, _tools, _max_tokens):
-        return Agent(
-            client,
+        # Match demo: minimal sampling_params, no custom instructions, no tool_config
+        return ReActAgent(
+            client=client,
             model=_model,
-            instructions="You are an AI agent with access to tools. You MUST use the available tools to answer questions accurately. Do NOT provide answers from your training data when a tool can retrieve the actual current information. Always execute the appropriate tool and return the real results.",
-            tools=_tools,
-            sampling_params={"strategy": {"type": "greedy"}, "max_tokens": _max_tokens},
-            tool_config={"tool_choice": "required"} if _tools else {"tool_choice": "none"},
+            tools=_tools,  # List of strings (MCP) and dicts (RAG)
+            sampling_params={"max_tokens": _max_tokens},
+            # ReActAgent handles tool selection automatically through its reasoning loop
+            # No need for custom instructions or tool_config
         )
 
     agent = create_agent(model, toolgroup_selection, max_tokens)
@@ -143,38 +147,41 @@ def tool_chat_page():
 
         st.session_state.messages.append({"role": "user", "content": prompt})
 
-        # FIX: Use agent.create_turn() instead of bypassing to raw API
-        # The Agent class properly resolves MCP tool references!
-        # Previously we bypassed Agent and called agents API directly,
-        # which didn't have access to the agent's tools configuration.
-        
-        # DEBUG: Log what we're sending
-        import sys
-        print(f"[DEBUG] toolgroup_selection: {toolgroup_selection}", file=sys.stderr)
-        print(f"[DEBUG] agent.agent_id: {agent.agent_id}", file=sys.stderr)
-        print(f"[DEBUG] Using agent.create_turn() with proper tool resolution", file=sys.stderr)
-        
+        # Use ReActAgent.create_turn() - matches Level 6 demo pattern
+        # ReActAgent will reason about the task and invoke tools automatically
         turn_response = agent.create_turn(
             messages=[{"role": "user", "content": prompt}],
             session_id=session_id,
             stream=True,
         )
 
+        # Enhanced response generator that shows ReAct reasoning steps
+        # Displays: Thought → Action (tool call) → Observation (result) → Answer
         def response_generator(turn_response):
-            for response in turn_response:
-                if hasattr(response.event, "payload"):
-                    print(response.event.payload)
-                    if response.event.payload.event_type == "step_progress":
-                        if hasattr(response.event.payload.delta, "text"):
-                            yield response.event.payload.delta.text
-                    if response.event.payload.event_type == "step_complete":
-                        if response.event.payload.step_details.step_type == "tool_execution":
-                            yield " 🛠 "
+            for event in EventLogger().log(turn_response):
+                # Format different event types for better UX
+                if event.role == "Tool":
+                    # Tool execution step
+                    yield f"\n\n🛠 **Executing Tool**: `{event.tool_name}`\n"
+                    if event.tool_args:
+                        yield f"```json\n{event.tool_args}\n```\n"
+                elif event.role == "Observation":
+                    # Tool result
+                    yield f"\n📊 **Tool Result**:\n```\n{event.content[:500]}{'...' if len(event.content) > 500 else ''}\n```\n\n"
+                elif event.role == "Thought":
+                    # Agent reasoning
+                    yield f"\n💭 **Thinking**: {event.content}\n\n"
+                elif event.role == "Answer":
+                    # Final answer
+                    yield event.content
                 else:
-                    yield f"Error occurred in the Llama Stack Cluster: {response}"
+                    # Stream text deltas
+                    if hasattr(event, 'content') and event.content:
+                        yield event.content
 
         with st.chat_message("assistant"):
-            response = st.write_stream(response_generator(turn_response))
+            with st.spinner("Agent is thinking and using tools..."):
+                response = st.write_stream(response_generator(turn_response))
 
         st.session_state.messages.append({"role": "assistant", "content": response})
 
