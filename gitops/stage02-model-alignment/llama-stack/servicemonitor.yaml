@@ -14,10 +14,9 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app.kubernetes.io/name: otel-collector-collector
-      app.kubernetes.io/component: opentelemetry-collector
+      app.kubernetes.io/name: llama-stack
   endpoints:
-  - port: prometheus
+  - port: http
     interval: 30s
     path: /metrics
     scheme: http

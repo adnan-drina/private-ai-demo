@@ -61,18 +61,14 @@ data:
         # Milvus in private-ai-demo - optimized with HNSW index
         # Reference: https://llama-stack.readthedocs.io/en/v0.2.11/providers/vector_io/milvus.html
         # Reference: https://milvus.io/docs/schema-hands-on.md
-        # Schema: VarChar PK (stored_chunk_id), vector (HNSW indexed), dynamic fields
-        # FIXED: Disabled auto_id to accept custom string IDs from ingestion pipeline
+        # Schema: Int64 PK (auto_id=true), vector (HNSW indexed), dynamic fields
         - provider_id: milvus-shared
           provider_type: remote::milvus
           config:
-            token: ""
             uri: "tcp://milvus-standalone.private-ai-demo.svc.cluster.local:19530"
-            # Field mappings - Use custom string IDs
-            # Override default schema to accept stored_chunk_id as string PK
-            id_field: "stored_chunk_id"
-            text_field: "content"
-            auto_id: false  # CRITICAL: Accept custom string IDs instead of auto-generating integers
+            # Field mappings - LET PROVIDER OWN THE SCHEMA
+            # Provider creates: chunk_id (PK), vector, chunk_content (JSON)
+            # Do NOT override text_field or id_field - provider manages these
             embedding_dimension: 768
             metric_type: "L2"
             # Search params aligned with HNSW index (M=16, efConstruction=200)
@@ -88,9 +84,6 @@ data:
                 provider_vector_db_id: red_hat_docs
               - vector_db_id: eu_ai_act
                 provider_vector_db_id: eu_ai_act
-            kvstore:
-              type: sqlite
-              path: /data/milvus_kv.db
       
       agents:
         # Inline agent provider for RAG
@@ -105,64 +98,30 @@ data:
               type: sqlite
               namespace: null
               db_path: /data/responses_store.db
-    
+      
       safety:
         # Inline safety provider (required by agents)
         - provider_id: inline-safety
           provider_type: inline::llama-guard
           config: {}
-        # TrustyAI Guardrails orchestrator (remote safety provider)
-        - provider_id: trustyai_fms
-          provider_type: remote::trustyai_fms
-          module: "llama_stack_provider_trustyai_fms"
-          config:
-            orchestrator_url: "https://guardrails-route-private-ai-demo.apps.cluster-gmgrr.gmgrr.sandbox5294.opentlc.com"
-            verify_ssl: false
-            shields:
-              regex_guardrail:
-                type: content
-                detectors:
-                  regex:
-                    detector_params:
-                      regex:
-                        - email
-                        - ssn
-                        - credit_card
-                        - us-phone-number
-              toxicity_guardrail:
-                type: content
-                detectors:
-                  hf_toxicity:
-                    detector_params:
-                      detector_id: hap
-                      threshold: 0.5
-    
+      
       telemetry:
         # SQLite telemetry for local storage
         - provider_id: meta-reference
           provider_type: inline::meta-reference
           config:
-            service_name: llama-stack
             sqlite_db_path: /data/telemetry.db
-            sinks:
-              - console
-              - otel_trace
-              - otel_metric
-            otel_exporter_otlp_endpoint: http://otel-collector-collector.private-ai-demo.svc:4318
-    
-      files:
-        - provider_id: s3-files
-          provider_type: remote::s3
-          config:
-            bucket_name: "llama-files"
-            region_name: "us-east-1"
-            endpoint_url: "http://minio.model-storage.svc:9000"
-            verify_ssl: false
-            force_path_style: true
-            metadata_store:
-              type: sqlite
-              db_path: /data/sqlite/files_metadata.db
-    
+        
+        # OpenTelemetry for distributed tracing and metrics
+        # Note: Requires OpenTelemetry instrumentation in the Llama Stack image
+        # This is configured via OTEL_* environment variables in the deployment
+        # - provider_id: opentelemetry
+        #   provider_type: inline::opentelemetry
+        #   config:
+        #     service_name: llama-stack
+        #     exporter_type: otlp
+        #     endpoint: http://tempo-distributor.openshift-distributed-tracing.svc:4317
+      
       tool_runtime:
         # RAG runtime tool provider (required for agent RAG)
         # RAG runtime uses vector_io provider to access Milvus
@@ -173,8 +132,7 @@ data:
             # default_vector_db_id: ""                # Empty - Playground selects explicitly
             top_k: 5                                  # retrieve top 5 chunks
             similarity_threshold: 0.0                # no filtering (start permissive)
-            files_provider_id: s3-files
-    
+        
         # Model Context Protocol provider for external tools
         - provider_id: model-context-protocol
           provider_type: remote::model-context-protocol
@@ -240,20 +198,24 @@ data:
         provider_id: milvus-shared
     
     tool_groups:
-    # Built-in RAG tool group (required for Agent RAG)
-    - toolgroup_id: builtin::rag
-      provider_id: rag-runtime
-    # OpenShift MCP server (pod logs, events, namespaces)
-    - toolgroup_id: mcp::openshift
-      provider_id: model-context-protocol
-      mcp_endpoint:
-        uri: "http://openshift-mcp.private-ai-demo.svc:8000/sse"
-    
-    shields:
-      - shield_id: regex_guardrail
-        provider_id: trustyai_fms
-      - shield_id: toxicity_guardrail
-        provider_id: trustyai_fms
+      # Built-in RAG tool group (required for Agent RAG)
+      - toolgroup_id: builtin::rag
+        provider_id: rag-runtime
+      
+      # MCP Servers - TEMPORARILY DISABLED
+      # TODO: Enable after implementing SSE endpoints in MCP servers
+      # Current MCP servers use simple HTTP, but Llama Stack requires SSE
+      # Will be fixed in Phase 3
+      
+      # - toolgroup_id: mcp::database
+      #   provider_id: model-context-protocol
+      #   mcp_endpoint:
+      #     uri: "http://database-mcp.private-ai-demo.svc.cluster.local:8080/sse"
+      
+      # - toolgroup_id: mcp::slack
+      #   provider_id: model-context-protocol
+      #   mcp_endpoint:
+      #     uri: "http://slack-mcp.private-ai-demo.svc.cluster.local:8080/sse"
     
     vector_dbs:
       # Scenario-specific vector databases for RAG

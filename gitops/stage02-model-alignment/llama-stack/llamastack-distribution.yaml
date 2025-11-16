@@ -20,27 +20,18 @@ spec:
   replicas: 1
   
   server:
-    # Use latest Tech Preview CPU image (Python 3.12 +
-    # ready for TrustyAI integrations)
+    # Use Red Hat Emerging Technologies image with built-in Granite embeddings
+    # This image has inline Granite embeddings, avoiding on-demand model loading delays
     distribution:
-      image: "registry.redhat.io/rhoai/odh-llama-stack-core-rhel9:0.0-1762357606"
+      image: "quay.io/redhat-et/llama:vllm-milvus-granite-0.2.8"
     
     containerSpec:
       name: llamastack
       port: 8321
-      command:
-        - /bin/sh
-        - -c
       args:
-        - |
-          set -e
-          mkdir -p /external-providers
-          mkdir -p /data/sqlite
-          mkdir -p /data/files
-          python3 -m pip install --no-cache-dir --upgrade --target /external-providers git+https://github.com/trustyai-explainability/llama-stack-provider-trustyai-fms.git
-          export PYTHONPATH="/external-providers:${PYTHONPATH}"
-          export LLAMA_STACK_EXTERNAL_PROVIDERS_DIR="/external-providers/llama_stack_provider_trustyai_fms/providers.d"
-          exec llama stack run /opt/app-root/run.yaml
+        - --yaml-config
+        - /opt/app-root/run.yaml
+      
       env:
         # Config and writable homes
         - name: LLAMA_STACK_CONFIG
@@ -63,11 +54,6 @@ spec:
         # Milvus (gRPC)
         - name: MILVUS_URI
           value: "tcp://milvus-standalone.private-ai-demo.svc.cluster.local:19530"
-        # External providers bootstrap
-        - name: PYTHONPATH
-          value: "/external-providers:/opt/app-root/src/.local/lib/python3.12/site-packages:/opt/app-root/lib/python3.12/site-packages"
-        - name: LLAMA_STACK_EXTERNAL_PROVIDERS_DIR
-          value: "/external-providers/llama_stack_provider_trustyai_fms/providers.d"
 
         # Files (MinIO) for Files API provider
         - name: FILES_S3_ENDPOINT
@@ -90,26 +76,6 @@ spec:
             secretKeyRef:
               name: llama-files-credentials
               key: secretkey
-        - name: AWS_ACCESS_KEY_ID
-          valueFrom:
-            secretKeyRef:
-              name: llama-files-credentials
-              key: accesskey
-        - name: AWS_SECRET_ACCESS_KEY
-          valueFrom:
-            secretKeyRef:
-              name: llama-files-credentials
-              key: secretkey
-        - name: AWS_DEFAULT_REGION
-          value: "us-east-1"
-        - name: AWS_ENDPOINT_URL
-          value: "http://minio.model-storage.svc:9000"
-        - name: AWS_S3_FORCE_PATH_STYLE
-          value: "true"
-        - name: AWS_EC2_METADATA_DISABLED
-          value: "true"
-        - name: AWS_VERIFY_SSL
-          value: "false"
       
       resources:
         requests:
@@ -132,8 +98,6 @@ spec:
         - name: config
           configMap:
             name: llamastack-config
-        - name: external-providers
-          emptyDir: {}
       
       volumeMounts:
         - name: data
@@ -142,5 +106,3 @@ spec:
           mountPath: /opt/app-root/run.yaml
           subPath: run.yaml
           readOnly: true
-        - name: external-providers
-          mountPath: /external-providers
